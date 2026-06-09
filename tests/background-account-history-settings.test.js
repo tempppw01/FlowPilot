@@ -78,6 +78,11 @@ test('background account history settings are normalized independently from hotm
     extractFunction('normalizeMaDaoCountry'),
     extractFunction('normalizeMaDaoOperator'),
     extractFunction('normalizeMaDaoPrice'),
+    extractFunction('normalizeSmsBowerCountryId'),
+    extractFunction('normalizeSmsBowerCountryOrder'),
+    extractFunction('normalizeSmsBowerServiceCode'),
+    extractFunction('normalizeSmsBowerProviderIds'),
+    extractFunction('normalizeSmsBowerPrice'),
     extractFunction('normalizePhonePreferredActivation'),
     extractFunction('normalizePhoneVerificationReplacementLimit'),
     extractFunction('normalizePhoneCodeWaitSeconds'),
@@ -133,10 +138,15 @@ const PHONE_SMS_PROVIDER_HERO_SMS = 'hero-sms';
 const PHONE_SMS_PROVIDER_FIVE_SIM = '5sim';
 const PHONE_SMS_PROVIDER_NEXSMS = 'nexsms';
 const PHONE_SMS_PROVIDER_MADAO = 'madao';
-const DEFAULT_PHONE_SMS_PROVIDER_ORDER = ['hero-sms', '5sim', 'nexsms', 'madao'];
+const PHONE_SMS_PROVIDER_SMSBOWER = 'smsbower';
+const DEFAULT_PHONE_SMS_PROVIDER_ORDER = ['hero-sms', '5sim', 'nexsms', 'madao', 'smsbower'];
 const DEFAULT_PHONE_SMS_PROVIDER = PHONE_SMS_PROVIDER_HERO_SMS;
 const DEFAULT_MADAO_BASE_URL = 'http://127.0.0.1:7822';
 const DEFAULT_MADAO_MODE = 'routing_plan';
+const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
+const DEFAULT_SMSBOWER_COUNTRY_ORDER = [187];
+const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
+const DEFAULT_SMSBOWER_MAX_PRICE = '0.134';
 const SIGNUP_METHOD_EMAIL = 'email';
 const SIGNUP_METHOD_PHONE = 'phone';
 const DEFAULT_SIGNUP_METHOD = SIGNUP_METHOD_EMAIL;
@@ -279,6 +289,7 @@ return {
   assert.equal(api.normalizePersistentSettingValue('phoneSmsProvider', '5SIM'), '5sim');
   assert.equal(api.normalizePersistentSettingValue('phoneSmsProvider', 'NEXSMS'), 'nexsms');
   assert.equal(api.normalizePersistentSettingValue('phoneSmsProvider', 'MaDao'), 'madao');
+  assert.equal(api.normalizePersistentSettingValue('phoneSmsProvider', 'SMSBower'), 'smsbower');
   assert.equal(api.normalizePersistentSettingValue('phoneSmsProvider', 'unknown'), 'hero-sms');
   assert.deepStrictEqual(
     api.normalizePersistentSettingValue('phoneSmsProviderOrder', ['madao', 'nexsms', '5sim', 'nexsms']),
@@ -379,6 +390,12 @@ return {
   assert.equal(api.normalizePersistentSettingValue('madaoReusePhone', 0), false);
   assert.equal(api.normalizePersistentSettingValue('madaoMinPrice', '0.123456'), '0.1235');
   assert.equal(api.normalizePersistentSettingValue('madaoMaxPrice', '-1'), '');
+  assert.equal(api.normalizePersistentSettingValue('smsbowerApiKey', ' demo-smsbower '), ' demo-smsbower ');
+  assert.equal(api.normalizePersistentSettingValue('smsbowerServiceCode', ' DR! '), 'dr');
+  assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [187, '52', 187]), [187, 52]);
+  assert.equal(api.normalizePersistentSettingValue('smsbowerProviderIds', '3170, abc, 3001'), '3170,3001');
+  assert.equal(api.normalizePersistentSettingValue('smsbowerMinPrice', '0.123456'), '0.1235');
+  assert.equal(api.normalizePersistentSettingValue('smsbowerMaxPrice', ''), '0.134');
   const rangePayload = api.buildPersistentSettingsPayload({
     heroSmsMinPrice: '0.023456',
     fiveSimMinPrice: '0.0789',

@@ -315,6 +315,7 @@
       completeNodeFromBackground,
       fetchImpl = typeof fetch === 'function' ? fetch.bind(globalThis) : null,
       getState = async () => ({}),
+      markCurrentRegistrationAccountUsed = null,
       maybeSubmitFlowContribution = async () => ({ ok: true, skipped: true, reason: 'not_configured' }),
       setState = async () => {},
     } = deps;
@@ -398,6 +399,15 @@
               lastUploadedAt: uploadedAt,
             },
           });
+          if (typeof markCurrentRegistrationAccountUsed === 'function') {
+            await markCurrentRegistrationAccountUsed({
+              ...currentState,
+              ...payload,
+            }, {
+              logPrefix: 'Kiro 凭证上传成功',
+              level: 'ok',
+            });
+          }
           await log(`步骤 9：贡献上传完成，状态：${contributionResult.message || '贡献上传成功'}`, 'ok', nodeId);
           await completeNodeFromBackground(nodeId, payload);
           return;
@@ -465,6 +475,15 @@
             lastUploadedAt: uploadedAt,
           },
         });
+        if (typeof markCurrentRegistrationAccountUsed === 'function') {
+          await markCurrentRegistrationAccountUsed({
+            ...currentState,
+            ...payload,
+          }, {
+            logPrefix: 'Kiro 凭证上传成功',
+            level: 'ok',
+          });
+        }
         await log(`步骤 9：kiro.rs 上传完成，状态：${uploadResult.message || '上传成功'}`, 'ok', nodeId);
         await completeNodeFromBackground(nodeId, payload);
       } catch (error) {

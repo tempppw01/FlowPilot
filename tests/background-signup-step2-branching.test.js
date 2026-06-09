@@ -1,4 +1,4 @@
-﻿const test = require('node:test');
+const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
@@ -90,6 +90,84 @@ test('step 2 keeps password flow when landing on password page', async () => {
       },
     },
   ]);
+});
+
+test('step 2 cancels SMSBower Gmail temp mail and retries when OpenAI redirects to Google login', async () => {
+  const completedPayloads = [];
+  const logs = [];
+  const discarded = [];
+  const submittedEmails = [];
+  const entryCalls = [];
+  let currentState = {
+    mailProvider: 'smsbower-mail',
+    email: 'first@gmail.com',
+  };
+
+  const executor = step2Api.createStep2Executor({
+    addLog: async (message, level = 'info') => {
+      logs.push({ message, level });
+    },
+    chrome: { tabs: { update: async () => {} } },
+    completeNodeFromBackground: async (step, payload) => {
+      completedPayloads.push({ step, payload });
+    },
+    ensureContentScriptReadyOnTab: async () => {},
+    ensureSignupEntryPageReady: async () => {
+      entryCalls.push('entry');
+      return { tabId: 12 };
+    },
+    ensureSignupPostEmailPageReadyInTab: async () => {
+      if (submittedEmails.length === 1) {
+        return {
+          state: 'google_login_page',
+          url: 'https://accounts.google.com/v3/signin/identifier',
+        };
+      }
+      return {
+        state: 'password_page',
+        url: 'https://auth.openai.com/create-account/password',
+      };
+    },
+    getState: async () => currentState,
+    getTabId: async () => 12,
+    isTabAlive: async () => true,
+    resolveSignupEmailForFlow: async (state) => {
+      const email = state.email || currentState.email;
+      submittedEmails.push(email);
+      return email;
+    },
+    discardSignupEmailForRetry: async (_state, email, details) => {
+      discarded.push({ email, details });
+      currentState = {
+        ...currentState,
+        email: 'second@gmail.com',
+      };
+      return { discarded: true };
+    },
+    sendToContentScriptResilient: async () => ({ submitted: true }),
+    OPENAI_AUTH_INJECT_FILES: [],
+  });
+
+  await executor.executeStep2(currentState);
+
+  assert.deepStrictEqual(submittedEmails, ['first@gmail.com', 'second@gmail.com']);
+  assert.deepStrictEqual(discarded.map((item) => item.email), ['first@gmail.com']);
+  assert.equal(discarded[0].details.reason, 'google_login_redirect');
+  assert.deepStrictEqual(entryCalls, ['entry']);
+  assert.deepStrictEqual(completedPayloads, [
+    {
+      step: 'submit-signup-email',
+      payload: {
+        email: 'second@gmail.com',
+        accountIdentifierType: 'email',
+        accountIdentifier: 'second@gmail.com',
+        nextSignupState: 'password_page',
+        nextSignupUrl: 'https://auth.openai.com/create-account/password',
+        skippedPasswordStep: false,
+      },
+    },
+  ]);
+  assert.equal(logs.some((item) => /Google 登录页/.test(item.message)), true);
 });
 
 test('step 2 uses phone activation when resolved signup method is phone', async () => {
@@ -648,6 +726,53 @@ test('signup flow helper recognizes email verification page as post-email landin
   });
   assert.equal(ensureCalls, 1);
   assert.equal(passwordReadyChecks, 0);
+});
+
+test('signup flow helper recognizes Google login as rejected post-email landing page', async () => {
+  let ensureCalls = 0;
+
+  const helpers = signupFlowApi.createSignupFlowHelpers({
+    buildGeneratedAliasEmail: () => '',
+    chrome: {
+      tabs: {
+        get: async () => ({
+          id: 24,
+          url: 'https://accounts.google.com/v3/signin/identifier',
+        }),
+      },
+    },
+    ensureContentScriptReadyOnTab: async () => {
+      ensureCalls += 1;
+    },
+    ensureHotmailAccountForFlow: async () => ({}),
+    ensureLuckmailPurchaseForFlow: async () => ({}),
+    isGeneratedAliasProvider: () => false,
+    isHotmailProvider: () => false,
+    isLuckmailProvider: () => false,
+    isSignupEmailVerificationPageUrl: (url) => /\/email-verification(?:[/?#]|$)/i.test(url || ''),
+    isSignupPasswordPageUrl: (url) => /\/create-account\/password(?:[/?#]|$)/i.test(url || ''),
+    reuseOrCreateTab: async () => 24,
+    sendToContentScriptResilient: async () => {
+      throw new Error('Google login page should not require OpenAI auth content script');
+    },
+    setEmailState: async () => {},
+    SIGNUP_ENTRY_URL: 'https://chatgpt.com/',
+    OPENAI_AUTH_INJECT_FILES: [],
+    waitForTabUrlMatch: async (_tabId, predicate) => {
+      const url = 'https://accounts.google.com/v3/signin/identifier';
+      return predicate(url) ? { id: 24, url } : null;
+    },
+  });
+
+  const result = await helpers.ensureSignupPostEmailPageReadyInTab(24, 2);
+
+  assert.deepStrictEqual(result, {
+    ready: true,
+    state: 'google_login_page',
+    url: 'https://accounts.google.com/v3/signin/identifier',
+    externalProvider: 'google',
+  });
+  assert.equal(ensureCalls, 0);
 });
 
 test('signup flow helper waits for the signup entry tab to settle for step 2 before probing the entry page', async () => {

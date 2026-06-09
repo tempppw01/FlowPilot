@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   HOTMAIL_PROVIDER,
+  SMSBOWER_MAIL_PROVIDER,
   YYDS_MAIL_PROVIDER,
   getIcloudForwardMailConfig,
   getIcloudForwardMailProviderOptions,
@@ -16,6 +17,7 @@ test('normalizeMailProvider accepts 126 and falls back to 163', () => {
   assert.equal(normalizeMailProvider('126'), '126');
   assert.equal(normalizeMailProvider('163-vip'), '163-vip');
   assert.equal(normalizeMailProvider(YYDS_MAIL_PROVIDER), YYDS_MAIL_PROVIDER);
+  assert.equal(normalizeMailProvider(SMSBOWER_MAIL_PROVIDER), SMSBOWER_MAIL_PROVIDER);
   assert.equal(normalizeMailProvider('unknown-provider'), '163');
 });
 
@@ -46,6 +48,16 @@ test('getMailProviderConfig preserves the YYDS Mail provider sentinel', () => {
     {
       provider: YYDS_MAIL_PROVIDER,
       label: 'YYDS Mail',
+    }
+  );
+});
+
+test('getMailProviderConfig preserves the SMSBower TempMail provider sentinel', () => {
+  assert.deepEqual(
+    getMailProviderConfig({ mailProvider: SMSBOWER_MAIL_PROVIDER }),
+    {
+      provider: SMSBOWER_MAIL_PROVIDER,
+      label: 'SMSBower TempMail',
     }
   );
 });

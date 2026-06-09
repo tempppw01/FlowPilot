@@ -7,6 +7,7 @@
   const PROVIDER_NEXSMS = 'nexsms';
   const PROVIDER_MADAO = 'madao';
   const PROVIDER_CUSTOM_URL = 'custom-url';
+  const PROVIDER_SMSBOWER = 'smsbower';
   const DEFAULT_PROVIDER = PROVIDER_HERO_SMS;
   const DEFAULT_PROVIDER_ORDER = Object.freeze([
     PROVIDER_HERO_SMS,
@@ -14,6 +15,7 @@
     PROVIDER_NEXSMS,
     PROVIDER_MADAO,
     PROVIDER_CUSTOM_URL,
+    PROVIDER_SMSBOWER,
   ]);
   const PROVIDER_DEFINITIONS = Object.freeze({
     [PROVIDER_HERO_SMS]: Object.freeze({
@@ -40,6 +42,11 @@
       id: PROVIDER_CUSTOM_URL,
       label: '自定义 URL 接码',
       moduleKey: 'PhoneSmsCustomUrlProvider',
+    }),
+    [PROVIDER_SMSBOWER]: Object.freeze({
+      id: PROVIDER_SMSBOWER,
+      label: 'SMSBower',
+      moduleKey: 'PhoneSmsBowerProvider',
     }),
   });
 
@@ -141,6 +148,7 @@
     PROVIDER_NEXSMS,
     PROVIDER_MADAO,
     PROVIDER_CUSTOM_URL,
+    PROVIDER_SMSBOWER,
     DEFAULT_PROVIDER,
     DEFAULT_PROVIDER_ORDER,
     PROVIDER_DEFINITIONS,

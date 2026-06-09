@@ -450,6 +450,7 @@
             <option value="hotmail-api">Hotmail（账号池）</option>
             <option value="luckmail-api">LuckMail（API 购邮）</option>
             <option value="yyds-mail">YYDS Mail</option>
+            <option value="smsbower-mail">SMSBower TempMail</option>
             <option value="icloud">iCloud 邮箱</option>
             <option value="163">163 邮箱 (mail.163.com) 版本老旧，请自行维护使用</option>
             <option value="163-vip">163 VIP 邮箱 (vip.163.com) 版本老旧，请自行维护使用</option>
@@ -498,6 +499,7 @@
           <option value="icloud">iCloud 隐私邮箱</option>
           <option value="cloudflare-temp-email">Cloudflare Temp Email（推荐）</option>
           <option value="cloudmail">Cloud Mail</option>
+          <option value="smsbower-mail">SMSBower TempMail</option>
         </select>
       </div>
       <div class="data-row data-check-row" id="row-custom-email-pool" style="display:none;">
@@ -829,6 +831,44 @@
         <span class="data-label">Base URL</span>
         <input type="text" id="input-yyds-mail-base-url" class="data-input mono"
           placeholder="https://maliapi.215.im/v1" />
+      </div>
+    </div>
+    <div id="smsbower-mail-section" class="data-card hotmail-card" style="display:none;">
+      <div class="section-mini-header">
+        <div class="section-mini-copy">
+          <span class="section-label">SMSBower TempMail</span>
+          <span class="data-value">自动购买临时邮箱并通过 API 获取验证码</span>
+        </div>
+      </div>
+      <div class="data-row">
+        <span class="data-label">API Key</span>
+        <div class="input-with-icon">
+          <input type="password" id="input-smsbower-mail-api-key" class="data-input data-input-with-icon mono"
+            placeholder="请输入 SMSBower API Key" />
+          <button id="btn-toggle-smsbower-mail-api-key" class="input-icon-btn" type="button"
+            data-password-toggle="input-smsbower-mail-api-key" data-show-label="显示 SMSBower API Key"
+            data-hide-label="隐藏 SMSBower API Key" aria-label="显示 SMSBower API Key" title="显示 SMSBower API Key"></button>
+        </div>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Base URL</span>
+        <input type="text" id="input-smsbower-mail-base-url" class="data-input mono"
+          placeholder="https://smsbower.page/api/mail" />
+      </div>
+      <div class="data-row">
+        <span class="data-label">服务代码</span>
+        <input type="text" id="input-smsbower-mail-service-code" class="data-input mono"
+          placeholder="dr" />
+      </div>
+      <div class="data-row">
+        <span class="data-label">域名</span>
+        <input type="text" id="input-smsbower-mail-domain" class="data-input mono"
+          placeholder="gmail.com" />
+      </div>
+      <div class="data-row">
+        <span class="data-label">最高价格</span>
+        <input type="text" id="input-smsbower-mail-max-price" class="data-input mono"
+          placeholder="0.134" />
       </div>
     </div>
     <div id="hotmail-section" class="data-card hotmail-card" style="display:none;">
@@ -1381,22 +1421,24 @@
                 <option value="nexsms">NexSMS</option>
                 <option value="madao">MaDao</option>
                 <option value="custom-url">自定义 URL 接码</option>
+                <option value="smsbower">SMSBower</option>
               </select>
             </div>
             <div class="data-row" id="row-phone-sms-provider-order" style="display:none;">
               <span class="data-label">服务商顺序</span>
               <div class="data-inline hero-sms-country-stack">
-                <select id="select-phone-sms-provider-order" class="data-input mono" multiple size="4" style="display:none;">
+                <select id="select-phone-sms-provider-order" class="data-input mono" multiple size="5" style="display:none;">
                   <option value="hero-sms" selected>HeroSMS</option>
                   <option value="5sim" selected>5sim</option>
                   <option value="nexsms" selected>NexSMS</option>
                   <option value="madao" selected>MaDao</option>
                   <option value="custom-url" selected>自定义 URL 接码</option>
+                  <option value="smsbower" selected>SMSBower</option>
                 </select>
                 <div class="hero-sms-country-mainline">
                   <div id="phone-sms-provider-order-menu-shell" class="hero-sms-country-menu">
                     <button id="btn-phone-sms-provider-order-menu" class="btn btn-outline btn-sm hero-sms-country-menu-btn" type="button" aria-haspopup="listbox" aria-expanded="false">
-                      HeroSMS / 5sim / NexSMS / MaDao (4/4)
+                      HeroSMS / 5sim / NexSMS / MaDao / 自定义 URL 接码 / SMSBower (6/6)
                     </button>
                     <div id="phone-sms-provider-order-menu" class="hero-sms-country-menu-dropdown" role="listbox" aria-multiselectable="true" hidden></div>
                   </div>
@@ -1636,6 +1678,60 @@
                 <textarea id="input-custom-url-sms-pool" class="data-input mono" rows="5"
                   placeholder="每行一条：手机号----取码URL&#10;例如 16292387346----https://app.yuntl.cc/apisms/xxxx" autocomplete="off" spellcheck="false"></textarea>
                 <span class="data-value hero-sms-country-note">每行「手机号----取码URL」，按顺序轮流使用，用完一轮从头复用。</span>
+              </div>
+            </div>
+            <div class="data-row" id="row-smsbower-api-key" style="display:none;">
+              <span class="data-label">SMSBower API</span>
+              <div class="input-with-icon">
+                <input type="password" id="input-smsbower-api-key" class="data-input data-input-with-icon mono"
+                  placeholder="请输入 SMSBower API Key" />
+                <button id="btn-toggle-smsbower-api-key" class="input-icon-btn" type="button"
+                  data-password-toggle="input-smsbower-api-key" data-show-label="显示 SMSBower API Key"
+                  data-hide-label="隐藏 SMSBower API Key" aria-label="显示 SMSBower API Key" title="显示 SMSBower API Key"></button>
+              </div>
+            </div>
+            <div class="data-row" id="row-smsbower-service-code" style="display:none;">
+              <span class="data-label">服务代码</span>
+              <input type="text" id="input-smsbower-service-code" class="data-input mono"
+                placeholder="dr" />
+            </div>
+            <div class="data-row" id="row-smsbower-country-order" style="display:none;">
+              <span class="data-label">国家优先级</span>
+              <div class="data-inline hero-sms-country-stack">
+                <input type="text" id="input-smsbower-country-order" class="data-input mono"
+                  placeholder="187" />
+                <span class="data-value hero-sms-country-note">美国为 187；多个国家用逗号分隔。</span>
+              </div>
+            </div>
+            <div class="data-row" id="row-smsbower-provider-ids" style="display:none;">
+              <span class="data-label">线路 ID</span>
+              <div class="data-inline hero-sms-country-stack">
+                <input type="text" id="input-smsbower-provider-ids" class="data-input mono"
+                  placeholder="3170" />
+                <span class="data-value hero-sms-country-note">默认 3170，对应美国黄金号码。</span>
+              </div>
+            </div>
+            <div class="data-row" id="row-smsbower-price-range" style="display:none;">
+              <span class="data-label">SMSBower 价格</span>
+              <div class="data-inline hero-sms-price-preview-stack">
+                <div class="hero-sms-price-controls-grid">
+                  <div class="hero-sms-settings-topic hero-sms-price-topic">
+                    <span class="hero-sms-settings-topic-title">买号价格</span>
+                    <span class="hero-sms-settings-topic-note">默认使用美国黄金 OpenAI 线路 0.134$。</span>
+                  </div>
+                  <div class="hero-sms-price-control">
+                    <span class="hero-sms-settings-caption">最低购买价</span>
+                    <div class="setting-controls">
+                      <input type="number" id="input-smsbower-min-price" class="data-input auto-delay-input mono hero-sms-max-price-input" placeholder="可空" min="0" step="0.0001" title="接码最低购买价；可空（空=不设下限）" />
+                    </div>
+                  </div>
+                  <div class="hero-sms-price-control">
+                    <span class="hero-sms-settings-caption">价格上限</span>
+                    <div class="setting-controls">
+                      <input type="number" id="input-smsbower-max-price" class="data-input auto-delay-input mono hero-sms-max-price-input" placeholder="0.134" min="0" step="0.0001" title="接码价格上限；可空（空=使用默认 0.134）" />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="data-row" id="row-hero-sms-max-price" style="display:none;">
@@ -1939,12 +2035,14 @@
   <script src="../phone-sms/providers/nexsms.js"></script>
   <script src="../phone-sms/providers/madao.js"></script>
   <script src="../phone-sms/providers/custom-url.js"></script>
+  <script src="../phone-sms/providers/smsbower.js"></script>
   <script src="../phone-sms/providers/registry.js"></script>
   <script src="../icloud-utils.js"></script>
   <script src="../mail-provider-utils.js"></script>
   <script src="../hotmail-utils.js"></script>
   <script src="../luckmail-utils.js"></script>
   <script src="../yyds-mail-utils.js"></script>
+  <script src="../smsbower-mail-utils.js"></script>
   <script src="../flows/openai/index.js"></script>
   <script src="../flows/openai/workflow.js"></script>
   <script src="../flows/kiro/index.js"></script>

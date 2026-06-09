@@ -771,7 +771,7 @@
       return KIRO_REGISTER_EXISTING_ACCOUNT_STATES.includes(cleanString(pageState));
     }
 
-    function resolveKiroRegisterEmail(currentState = {}, _pageState = {}, fallbackEmail = '') {
+    function resolveKiroRegisterEmail(currentState = {}, pageState = {}, fallbackEmail = '') {
       const runtimeState = readKiroRuntime(currentState);
       return cleanString(
         fallbackEmail
@@ -779,6 +779,9 @@
         || currentState?.registrationEmailState?.current
         || runtimeState?.register?.email
         || currentState?.registrationEmailState?.previous
+        || runtimeState?.register?.email
+        || pageState?.email
+        || pageState?.accountEmail
       ).toLowerCase();
     }
 

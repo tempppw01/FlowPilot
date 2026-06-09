@@ -24,6 +24,7 @@ importScripts(
   'phone-sms/providers/nexsms.js',
   'phone-sms/providers/madao.js',
   'phone-sms/providers/custom-url.js',
+  'phone-sms/providers/smsbower.js',
   'phone-sms/providers/registry.js',
   'background/phone-verification-flow.js',
   'background/account-run-history.js',
@@ -92,6 +93,8 @@ importScripts(
   'background/cloudmail-provider.js',
   'yyds-mail-utils.js',
   'background/yyds-mail-provider.js',
+  'smsbower-mail-utils.js',
+  'background/smsbower-mail-provider.js',
   'icloud-utils.js',
   'mail-provider-utils.js',
   'content/activation-utils.js'
@@ -371,6 +374,28 @@ const {
   normalizeYydsMailMessages,
 } = self.YydsMailUtils;
 const {
+  DEFAULT_SMSBOWER_MAIL_BASE_URL,
+  DEFAULT_SMSBOWER_MAIL_DOMAIN,
+  DEFAULT_SMSBOWER_MAIL_MAX_PRICE,
+  DEFAULT_SMSBOWER_MAIL_SERVICE_CODE,
+  SMSBOWER_MAIL_PROVIDER,
+  describeSmsBowerMailPayload,
+  extractSmsBowerMailCode,
+  isSmsBowerMailPendingCode,
+  isSmsBowerMailSuccess,
+  joinSmsBowerMailUrl,
+  normalizeSmsBowerMailActivation,
+  normalizeSmsBowerMailAddress,
+  normalizeSmsBowerMailAlias,
+  normalizeSmsBowerMailApiKey,
+  normalizeSmsBowerMailBaseUrl,
+  normalizeSmsBowerMailCurrentActivation,
+  normalizeSmsBowerMailDomain,
+  normalizeSmsBowerMailMaxPrice,
+  normalizeSmsBowerMailServiceCode,
+  parseSmsBowerMailPayload,
+} = self.SmsBowerMailUtils;
+const {
   findIcloudAliasByEmail,
   getConfiguredIcloudHostPreference,
   getIcloudHostHintFromMessage,
@@ -545,6 +570,7 @@ const CLOUDFLARE_TEMP_EMAIL_GENERATOR = 'cloudflare-temp-email';
 const CLOUD_MAIL_PROVIDER = 'cloudmail';
 const CLOUD_MAIL_GENERATOR = 'cloudmail';
 const YYDS_MAIL_GENERATOR = YYDS_MAIL_PROVIDER;
+const SMSBOWER_MAIL_GENERATOR = SMSBOWER_MAIL_PROVIDER;
 const CUSTOM_EMAIL_POOL_GENERATOR = 'custom-pool';
 const HOTMAIL_MAILBOXES = ['INBOX', 'Junk'];
 const STOP_ERROR_MESSAGE = '流程已被用户停止。';
@@ -687,12 +713,16 @@ const PHONE_SMS_PROVIDER_HERO_SMS = PHONE_SMS_PROVIDER_HERO;
 const PHONE_SMS_PROVIDER_FIVE_SIM = PHONE_SMS_PROVIDER_5SIM;
 const PHONE_SMS_PROVIDER_NEXSMS = 'nexsms';
 const PHONE_SMS_PROVIDER_MADAO = 'madao';
+const PHONE_SMS_PROVIDER_CUSTOM_URL = 'custom-url';
+const PHONE_SMS_PROVIDER_SMSBOWER = 'smsbower';
 const DEFAULT_PHONE_SMS_PROVIDER = PHONE_SMS_PROVIDER_HERO;
 const DEFAULT_PHONE_SMS_PROVIDER_ORDER = Object.freeze([
   PHONE_SMS_PROVIDER_HERO,
   PHONE_SMS_PROVIDER_5SIM,
   PHONE_SMS_PROVIDER_NEXSMS,
   PHONE_SMS_PROVIDER_MADAO,
+  PHONE_SMS_PROVIDER_CUSTOM_URL,
+  PHONE_SMS_PROVIDER_SMSBOWER,
 ]);
 const DEFAULT_FIVE_SIM_BASE_URL = 'https://5sim.net/v1';
 const DEFAULT_FIVE_SIM_PRODUCT = 'openai';
@@ -703,6 +733,10 @@ const DEFAULT_NEX_SMS_SERVICE_CODE = 'ot';
 const DEFAULT_NEX_SMS_COUNTRY_ORDER = Object.freeze([1]);
 const DEFAULT_MADAO_BASE_URL = 'http://127.0.0.1:7822';
 const DEFAULT_MADAO_MODE = 'routing_plan';
+const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
+const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([187]);
+const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
+const DEFAULT_SMSBOWER_MAX_PRICE = '0.134';
 const DEFAULT_HERO_SMS_REUSE_ENABLED = true;
 const HERO_SMS_ACQUIRE_PRIORITY_COUNTRY = 'country';
 const HERO_SMS_ACQUIRE_PRIORITY_PRICE = 'price';
@@ -1407,6 +1441,12 @@ const PERSISTED_SETTING_DEFAULTS = {
   cloudMailDomains: [],
   yydsMailApiKey: '',
   yydsMailBaseUrl: DEFAULT_YYDS_MAIL_BASE_URL,
+  smsbowerMailApiKey: '',
+  smsbowerMailBaseUrl: DEFAULT_SMSBOWER_MAIL_BASE_URL,
+  smsbowerMailServiceCode: DEFAULT_SMSBOWER_MAIL_SERVICE_CODE,
+  smsbowerMailDomain: DEFAULT_SMSBOWER_MAIL_DOMAIN,
+  smsbowerMailMaxPrice: DEFAULT_SMSBOWER_MAIL_MAX_PRICE,
+  smsbowerMailAlias: '',
   hotmailAccounts: [],
   mail2925Accounts: [],
   paypalAccounts: [],
@@ -1446,6 +1486,12 @@ const PERSISTED_SETTING_DEFAULTS = {
   madaoMaxPrice: '',
   customUrlSmsPool: '',
   customUrlSmsPoolCursor: 0,
+  smsbowerApiKey: '',
+  smsbowerServiceCode: DEFAULT_SMSBOWER_SERVICE_CODE,
+  smsbowerCountryOrder: [...DEFAULT_SMSBOWER_COUNTRY_ORDER],
+  smsbowerProviderIds: DEFAULT_SMSBOWER_PROVIDER_IDS,
+  smsbowerMinPrice: '',
+  smsbowerMaxPrice: DEFAULT_SMSBOWER_MAX_PRICE,
   phonePreferredActivation: null,
 };
 
@@ -1839,6 +1885,15 @@ function normalizePhoneSmsProvider(value = '') {
   }
   if (normalized === PHONE_SMS_PROVIDER_MADAO) {
     return PHONE_SMS_PROVIDER_MADAO;
+  }
+  const customUrlProvider = typeof PHONE_SMS_PROVIDER_CUSTOM_URL !== 'undefined'
+    ? PHONE_SMS_PROVIDER_CUSTOM_URL
+    : 'custom-url';
+  if (normalized === customUrlProvider) {
+    return customUrlProvider;
+  }
+  if (normalized === PHONE_SMS_PROVIDER_SMSBOWER) {
+    return PHONE_SMS_PROVIDER_SMSBOWER;
   }
   return PHONE_SMS_PROVIDER_HERO_SMS;
 }
@@ -2249,6 +2304,71 @@ function normalizeMaDaoOperator(value = '') {
     .replace(/[^a-z0-9_-]+/g, '');
 }
 
+function normalizeSmsBowerCountryId(value, fallback = DEFAULT_SMSBOWER_COUNTRY_ORDER[0]) {
+  const parsed = Math.floor(Number(value));
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  const fallbackParsed = Math.floor(Number(fallback));
+  if (Number.isFinite(fallbackParsed) && fallbackParsed > 0) {
+    return fallbackParsed;
+  }
+  return DEFAULT_SMSBOWER_COUNTRY_ORDER[0];
+}
+
+function normalizeSmsBowerCountryOrder(value = []) {
+  const source = Array.isArray(value)
+    ? value
+    : String(value || '')
+      .split(/[\r\n,，;；]+/)
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean);
+  const normalized = [];
+  const seen = new Set();
+  source.forEach((entry) => {
+    const countryId = normalizeSmsBowerCountryId(
+      entry && typeof entry === 'object' && !Array.isArray(entry)
+        ? (entry.id || entry.countryId || entry.country || '')
+        : entry,
+      0
+    );
+    if (!countryId || seen.has(countryId)) {
+      return;
+    }
+    seen.add(countryId);
+    normalized.push(countryId);
+  });
+  return normalized.slice(0, 10);
+}
+
+function normalizeSmsBowerServiceCode(value = '', fallback = DEFAULT_SMSBOWER_SERVICE_CODE) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '');
+  if (normalized) {
+    return normalized;
+  }
+  const fallbackNormalized = String(fallback || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '');
+  return fallbackNormalized || DEFAULT_SMSBOWER_SERVICE_CODE;
+}
+
+function normalizeSmsBowerProviderIds(value = '', fallback = DEFAULT_SMSBOWER_PROVIDER_IDS) {
+  const normalized = String(value || '')
+    .split(/[\s,，;；|]+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => /^\d+$/.test(entry))
+    .join(',');
+  return normalized || String(fallback || '').trim();
+}
+
+function normalizeSmsBowerPrice(value = '') {
+  return normalizeHeroSmsMaxPrice(value);
+}
+
 function normalizePhonePreferredActivation(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
@@ -2537,6 +2657,9 @@ function normalizeEmailGenerator(value = '') {
   const yydsMailGenerator = typeof YYDS_MAIL_GENERATOR === 'string'
     ? YYDS_MAIL_GENERATOR
     : 'yyds-mail';
+  const smsbowerMailGenerator = typeof SMSBOWER_MAIL_GENERATOR === 'string'
+    ? SMSBOWER_MAIL_GENERATOR
+    : 'smsbower-mail';
   if (normalized === 'custom' || normalized === 'manual') {
     return 'custom';
   }
@@ -2553,6 +2676,7 @@ function normalizeEmailGenerator(value = '') {
   if (normalized === CLOUDFLARE_TEMP_EMAIL_GENERATOR) return CLOUDFLARE_TEMP_EMAIL_GENERATOR;
   if (normalized === 'cloudmail') return 'cloudmail';
   if (normalized === yydsMailGenerator) return yydsMailGenerator;
+  if (normalized === smsbowerMailGenerator) return smsbowerMailGenerator;
   return 'duck';
 }
 
@@ -2736,6 +2860,15 @@ async function markCurrentRegistrationAccountUsed(state = {}, options = {}) {
     }
   }
 
+  if (typeof isSmsBowerMailProvider === 'function' && isSmsBowerMailProvider(latestState)) {
+    const currentActivation = normalizeSmsBowerMailCurrentActivation(latestState.currentSmsBowerMailActivation);
+    if (currentActivation?.address) {
+      await clearSmsBowerMailRuntimeState({ clearEmail: true });
+      await addLog(`${reasonPrefix}：SMSBower TempMail 邮箱 ${currentActivation.address} 运行态已清空。`, options.level || 'warn');
+      updated = true;
+    }
+  }
+
   if (String(latestState.mailProvider || '').trim().toLowerCase() === '2925' && latestState.currentMail2925AccountId) {
     await patchMail2925Account(latestState.currentMail2925AccountId, {
       lastUsedAt: Date.now(),
@@ -2791,6 +2924,9 @@ function normalizeMailProvider(value = '') {
   const yydsMailProvider = typeof YYDS_MAIL_PROVIDER === 'string'
     ? YYDS_MAIL_PROVIDER
     : 'yyds-mail';
+  const smsbowerMailProviderId = typeof SMSBOWER_MAIL_PROVIDER === 'string'
+    ? SMSBOWER_MAIL_PROVIDER
+    : 'smsbower-mail';
   switch (normalized) {
     case 'custom':
     case ICLOUD_PROVIDER:
@@ -2800,6 +2936,7 @@ function normalizeMailProvider(value = '') {
     case CLOUDFLARE_TEMP_EMAIL_PROVIDER:
     case CLOUD_MAIL_PROVIDER:
     case yydsMailProvider:
+    case smsbowerMailProviderId:
     case '163':
     case '163-vip':
     case '126':
@@ -3118,6 +3255,41 @@ const {
   fetchYydsMailAddress,
   pollYydsMailVerificationCode,
 } = yydsMailProvider;
+const smsbowerMailProvider = self.MultiPageBackgroundSmsBowerMailProvider.createSmsBowerMailProvider({
+  addLog,
+  DEFAULT_SMSBOWER_MAIL_BASE_URL,
+  DEFAULT_SMSBOWER_MAIL_DOMAIN,
+  DEFAULT_SMSBOWER_MAIL_MAX_PRICE,
+  DEFAULT_SMSBOWER_MAIL_SERVICE_CODE,
+  describeSmsBowerMailPayload,
+  extractSmsBowerMailCode,
+  getState,
+  isSmsBowerMailPendingCode,
+  isSmsBowerMailSuccess,
+  joinSmsBowerMailUrl,
+  normalizeSmsBowerMailActivation,
+  normalizeSmsBowerMailAddress,
+  normalizeSmsBowerMailAlias,
+  normalizeSmsBowerMailApiKey,
+  normalizeSmsBowerMailBaseUrl,
+  normalizeSmsBowerMailCurrentActivation,
+  normalizeSmsBowerMailDomain,
+  normalizeSmsBowerMailMaxPrice,
+  normalizeSmsBowerMailServiceCode,
+  parseSmsBowerMailPayload,
+  persistRegistrationEmailState,
+  setEmailState,
+  setState,
+  sleepWithStop,
+  throwIfStopped,
+  SMSBOWER_MAIL_PROVIDER,
+});
+const {
+  cancelSmsBowerMailActivationForRetry,
+  clearSmsBowerMailRuntimeState,
+  fetchSmsBowerMailAddress,
+  pollSmsBowerMailVerificationCode,
+} = smsbowerMailProvider;
 
 function normalizeSub2ApiGroupNames(value = '') {
   const source = Array.isArray(value)
@@ -3541,6 +3713,18 @@ function normalizePersistentSettingValue(key, value) {
       return normalizeYydsMailApiKey(value);
     case 'yydsMailBaseUrl':
       return normalizeYydsMailBaseUrl(value);
+    case 'smsbowerMailApiKey':
+      return normalizeSmsBowerMailApiKey(value);
+    case 'smsbowerMailBaseUrl':
+      return normalizeSmsBowerMailBaseUrl(value);
+    case 'smsbowerMailServiceCode':
+      return normalizeSmsBowerMailServiceCode(value);
+    case 'smsbowerMailDomain':
+      return normalizeSmsBowerMailDomain(value);
+    case 'smsbowerMailMaxPrice':
+      return normalizeSmsBowerMailMaxPrice(value || DEFAULT_SMSBOWER_MAIL_MAX_PRICE) || DEFAULT_SMSBOWER_MAIL_MAX_PRICE;
+    case 'smsbowerMailAlias':
+      return normalizeSmsBowerMailAlias(value);
     case 'hotmailAccounts':
       return normalizeHotmailAccounts(value);
     case 'mail2925Accounts':
@@ -3622,6 +3806,18 @@ function normalizePersistentSettingValue(key, value) {
       const cursor = Math.floor(Number(value));
       return Number.isFinite(cursor) && cursor > 0 ? cursor : 0;
     }
+    case 'smsbowerApiKey':
+      return String(value || '');
+    case 'smsbowerServiceCode':
+      return normalizeSmsBowerServiceCode(value);
+    case 'smsbowerCountryOrder':
+      return normalizeSmsBowerCountryOrder(value);
+    case 'smsbowerProviderIds':
+      return normalizeSmsBowerProviderIds(value);
+    case 'smsbowerMinPrice':
+      return normalizeSmsBowerPrice(value);
+    case 'smsbowerMaxPrice':
+      return normalizeSmsBowerPrice(value || DEFAULT_SMSBOWER_MAX_PRICE) || DEFAULT_SMSBOWER_MAX_PRICE;
     case 'phonePreferredActivation':
       return normalizePhonePreferredActivation(value);
     default:
@@ -5075,6 +5271,12 @@ async function resetState() {
       'luckmailPreserveTagName',
       'yydsMailApiKey',
       'yydsMailBaseUrl',
+      'smsbowerMailApiKey',
+      'smsbowerMailBaseUrl',
+      'smsbowerMailServiceCode',
+      'smsbowerMailDomain',
+      'smsbowerMailMaxPrice',
+      'smsbowerMailAlias',
       'preferredIcloudHost',
       'automationWindowId',
       ...CONTRIBUTION_RUNTIME_KEYS,
@@ -5123,6 +5325,42 @@ async function resetState() {
   )
     ? prev.freeReusablePhoneActivation
     : null;
+  const normalizeSmsBowerMailApiKeySafe = typeof normalizeSmsBowerMailApiKey === 'function'
+    ? normalizeSmsBowerMailApiKey
+    : ((value = '') => String(value || '').trim());
+  const defaultSmsBowerMailBaseUrl = typeof DEFAULT_SMSBOWER_MAIL_BASE_URL !== 'undefined'
+    ? DEFAULT_SMSBOWER_MAIL_BASE_URL
+    : 'https://smsbower.page/api/mail';
+  const defaultSmsBowerMailServiceCode = typeof DEFAULT_SMSBOWER_MAIL_SERVICE_CODE !== 'undefined'
+    ? DEFAULT_SMSBOWER_MAIL_SERVICE_CODE
+    : 'dr';
+  const defaultSmsBowerMailDomain = typeof DEFAULT_SMSBOWER_MAIL_DOMAIN !== 'undefined'
+    ? DEFAULT_SMSBOWER_MAIL_DOMAIN
+    : 'gmail.com';
+  const defaultSmsBowerMailMaxPrice = typeof DEFAULT_SMSBOWER_MAIL_MAX_PRICE !== 'undefined'
+    ? DEFAULT_SMSBOWER_MAIL_MAX_PRICE
+    : '0.134';
+  const normalizeSmsBowerMailBaseUrlSafe = typeof normalizeSmsBowerMailBaseUrl === 'function'
+    ? normalizeSmsBowerMailBaseUrl
+    : ((value = '') => String(value || '').trim() || defaultSmsBowerMailBaseUrl);
+  const normalizeSmsBowerMailServiceCodeSafe = typeof normalizeSmsBowerMailServiceCode === 'function'
+    ? normalizeSmsBowerMailServiceCode
+    : ((value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '') || defaultSmsBowerMailServiceCode);
+  const normalizeSmsBowerMailDomainSafe = typeof normalizeSmsBowerMailDomain === 'function'
+    ? normalizeSmsBowerMailDomain
+    : ((value = '') => {
+      const normalized = String(value || '').trim().toLowerCase();
+      return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(normalized) ? normalized : defaultSmsBowerMailDomain;
+    });
+  const normalizeSmsBowerMailMaxPriceSafe = typeof normalizeSmsBowerMailMaxPrice === 'function'
+    ? normalizeSmsBowerMailMaxPrice
+    : ((value = '') => {
+      const numeric = Number(String(value ?? '').trim());
+      return Number.isFinite(numeric) && numeric > 0 ? String(Math.round(numeric * 10000) / 10000) : defaultSmsBowerMailMaxPrice;
+    });
+  const normalizeSmsBowerMailAliasSafe = typeof normalizeSmsBowerMailAlias === 'function'
+    ? normalizeSmsBowerMailAlias
+    : ((value = '') => String(value || '').trim().toLowerCase());
   await chrome.storage.session.clear();
   const resetPayload = buildStatePatchWithRuntimeState({}, {
     ...DEFAULT_STATE,
@@ -5146,6 +5384,13 @@ async function resetState() {
     yydsMailApiKey: normalizeYydsMailApiKey(prev.yydsMailApiKey ?? persistedSettings.yydsMailApiKey),
     yydsMailBaseUrl: normalizeYydsMailBaseUrl(prev.yydsMailBaseUrl ?? persistedSettings.yydsMailBaseUrl),
     currentYydsMailInbox: null,
+    smsbowerMailApiKey: normalizeSmsBowerMailApiKeySafe(prev.smsbowerMailApiKey ?? persistedSettings.smsbowerMailApiKey),
+    smsbowerMailBaseUrl: normalizeSmsBowerMailBaseUrlSafe(prev.smsbowerMailBaseUrl ?? persistedSettings.smsbowerMailBaseUrl),
+    smsbowerMailServiceCode: normalizeSmsBowerMailServiceCodeSafe(prev.smsbowerMailServiceCode ?? persistedSettings.smsbowerMailServiceCode),
+    smsbowerMailDomain: normalizeSmsBowerMailDomainSafe(prev.smsbowerMailDomain ?? persistedSettings.smsbowerMailDomain),
+    smsbowerMailMaxPrice: normalizeSmsBowerMailMaxPriceSafe(prev.smsbowerMailMaxPrice ?? persistedSettings.smsbowerMailMaxPrice) || defaultSmsBowerMailMaxPrice,
+    smsbowerMailAlias: normalizeSmsBowerMailAliasSafe(prev.smsbowerMailAlias ?? persistedSettings.smsbowerMailAlias),
+    currentSmsBowerMailActivation: null,
     ...clearStep5ProfileStatePatch(),
     // Keep reusable phone activation across round resets so the same number can be reactivated up to maxUses.
     reusablePhoneActivation,
@@ -5293,6 +5538,16 @@ function isYydsMailProvider(stateOrProvider) {
     ? YYDS_MAIL_PROVIDER
     : 'yyds-mail';
   return provider === yydsMailProvider;
+}
+
+function isSmsBowerMailProvider(stateOrProvider) {
+  const provider = typeof stateOrProvider === 'string'
+    ? stateOrProvider
+    : stateOrProvider?.mailProvider;
+  const smsbowerMailProvider = typeof SMSBOWER_MAIL_PROVIDER === 'string'
+    ? SMSBOWER_MAIL_PROVIDER
+    : 'smsbower-mail';
+  return provider === smsbowerMailProvider;
 }
 
 function isCustomMailProvider(stateOrProvider) {
@@ -9507,6 +9762,7 @@ function getSourceLabel(source) {
     'luckmail-api': 'LuckMail（API 购邮）',
     'cloudflare-temp-email': 'Cloudflare Temp Email',
     'cloudmail': 'Cloud Mail',
+    'smsbower-mail': 'SMSBower TempMail',
     'plus-checkout': 'Plus Checkout',
     'paypal-flow': 'PayPal 授权页',
     'unknown-source': '未知来源',
@@ -12090,6 +12346,7 @@ function getEmailGeneratorLabel(generator) {
   if (generator === CLOUDFLARE_TEMP_EMAIL_GENERATOR) return 'Cloudflare Temp Email';
   if (generator === CLOUD_MAIL_GENERATOR) return 'Cloud Mail';
   if (generator === yydsMailGenerator) return 'YYDS Mail';
+  if (generator === SMSBOWER_MAIL_GENERATOR) return 'SMSBower TempMail';
   return 'Duck 邮箱';
 }
 const mail2925SessionManager = self.MultiPageBackgroundMail2925Session?.createMail2925SessionManager({
@@ -12266,20 +12523,41 @@ async function fetchDuckEmail(options = {}) {
 }
 
 async function fetchGeneratedEmail(state, options = {}) {
-  const currentState = state || await getState();
+  const baseState = state || await getState();
+  const currentState = {
+    ...baseState,
+    ...(Object.prototype.hasOwnProperty.call(options, 'smsbowerMailApiKey') ? { smsbowerMailApiKey: options.smsbowerMailApiKey } : {}),
+    ...(Object.prototype.hasOwnProperty.call(options, 'smsbowerMailBaseUrl') ? { smsbowerMailBaseUrl: options.smsbowerMailBaseUrl } : {}),
+    ...(Object.prototype.hasOwnProperty.call(options, 'smsbowerMailServiceCode') ? { smsbowerMailServiceCode: options.smsbowerMailServiceCode } : {}),
+    ...(Object.prototype.hasOwnProperty.call(options, 'smsbowerMailDomain') ? { smsbowerMailDomain: options.smsbowerMailDomain } : {}),
+    ...(Object.prototype.hasOwnProperty.call(options, 'smsbowerMailMaxPrice') ? { smsbowerMailMaxPrice: options.smsbowerMailMaxPrice } : {}),
+    ...(Object.prototype.hasOwnProperty.call(options, 'smsbowerMailAlias') ? { smsbowerMailAlias: options.smsbowerMailAlias } : {}),
+  };
   const yydsMailProvider = typeof YYDS_MAIL_PROVIDER === 'string'
     ? YYDS_MAIL_PROVIDER
     : 'yyds-mail';
   const yydsMailGenerator = typeof YYDS_MAIL_GENERATOR === 'string'
     ? YYDS_MAIL_GENERATOR
     : 'yyds-mail';
+  const smsbowerMailProvider = typeof SMSBOWER_MAIL_PROVIDER === 'string'
+    ? SMSBOWER_MAIL_PROVIDER
+    : 'smsbower-mail';
+  const smsbowerMailGenerator = typeof SMSBOWER_MAIL_GENERATOR === 'string'
+    ? SMSBOWER_MAIL_GENERATOR
+    : 'smsbower-mail';
   const requestedMailProvider = normalizeMailProvider(options.mailProvider ?? currentState.mailProvider);
   if (requestedMailProvider === yydsMailProvider) {
     return fetchYydsMailAddress(currentState, options);
   }
+  if (requestedMailProvider === smsbowerMailProvider) {
+    return fetchSmsBowerMailAddress(currentState, options);
+  }
   const generator = normalizeEmailGenerator(options.generator ?? currentState.emailGenerator);
   if (generator === yydsMailGenerator) {
     return fetchYydsMailAddress(currentState, options);
+  }
+  if (generator === smsbowerMailGenerator) {
+    return fetchSmsBowerMailAddress(currentState, options);
   }
   if (generator === CLOUD_MAIL_GENERATOR) {
     return fetchCloudMailAddress(currentState, options);
@@ -12837,6 +13115,12 @@ async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
     return email;
   }
 
+  if (isSmsBowerMailProvider(currentState)) {
+    const email = await fetchSmsBowerMailAddress(currentState, { generateNew: true });
+    await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：SMSBower TempMail 邮箱已就绪：${email}（第 ${attemptRuns} 次尝试）===`, 'ok');
+    return email;
+  }
+
   if (isGeneratedAliasProvider(currentState)) {
     if (currentState.mailProvider === GMAIL_PROVIDER) {
       if (!currentState.emailPrefix) {
@@ -12971,6 +13255,12 @@ async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
   if (isYydsMailProvider(currentState)) {
     const email = await fetchYydsMailAddress(currentState, { generateNew: true });
     await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：YYDS Mail 邮箱已就绪：${email}（第 ${attemptRuns} 次尝试）===`, 'ok');
+    return email;
+  }
+
+  if (isSmsBowerMailProvider(currentState)) {
+    const email = await fetchSmsBowerMailAddress(currentState, { generateNew: true });
+    await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：SMSBower TempMail 邮箱已就绪：${email}（第 ${attemptRuns} 次尝试）===`, 'ok');
     return email;
   }
 
@@ -13909,10 +14199,12 @@ const flowMailPollingService = self.MultiPageBackgroundFlowMailPolling?.createFl
   pollCustomMailVerificationCode,
   pollHotmailVerificationCode,
   pollLuckmailVerificationCode,
+  pollSmsBowerMailVerificationCode,
   pollYydsMailVerificationCode,
   reuseOrCreateTab,
   sendToMailContentScriptResilient,
   shouldUseCustomMailHelper,
+  SMSBOWER_MAIL_PROVIDER,
   throwIfStopped,
   YYDS_MAIL_PROVIDER,
 });
@@ -13948,12 +14240,14 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   pollCustomMailVerificationCode,
   pollHotmailVerificationCode,
   pollLuckmailVerificationCode,
+  pollSmsBowerMailVerificationCode,
   pollYydsMailVerificationCode,
   sendToContentScript,
   sendToContentScriptResilient,
   sendToMailContentScriptResilient,
   setNodeStatus,
   setState,
+  SMSBOWER_MAIL_PROVIDER,
   sleepWithStop,
   throwIfStopped,
   VERIFICATION_POLL_MAX_ROUNDS,
@@ -14030,10 +14324,21 @@ const step2Executor = self.MultiPageBackgroundStep2?.createStep2Executor({
   ensureSignupPostEmailPageReadyInTab,
   ensureSignupPostIdentityPageReadyInTab: signupFlowHelpers.ensureSignupPostIdentityPageReadyInTab,
   getTabId,
+  getState,
   isTabAlive,
   phoneVerificationHelpers,
   resolveSignupMethod,
   resolveSignupEmailForFlow,
+  discardSignupEmailForRetry: async (state, email, details = {}) => {
+    const latestState = await getState();
+    if (typeof isSmsBowerMailProvider === 'function' && isSmsBowerMailProvider(latestState)) {
+      return cancelSmsBowerMailActivationForRetry(latestState, {
+        logPrefix: `步骤 2：SMSBower TempMail ${String(email || '').trim()}`,
+        reason: details?.reason || '',
+      });
+    }
+    return { discarded: false, reason: 'unsupported_provider' };
+  },
   sendToContentScriptResilient,
   OPENAI_AUTH_INJECT_FILES,
   waitForTabStableComplete,
@@ -14078,6 +14383,7 @@ const step4Executor = self.MultiPageBackgroundStep4?.createStep4Executor({
   LUCKMAIL_PROVIDER,
   CLOUDFLARE_TEMP_EMAIL_PROVIDER,
   CLOUD_MAIL_PROVIDER,
+  SMSBOWER_MAIL_PROVIDER,
   resolveVerificationStep: verificationFlowHelpers.resolveVerificationStep,
   reuseOrCreateTab,
   sendToContentScript,
@@ -14145,6 +14451,7 @@ const step8Executor = self.MultiPageBackgroundStep8?.createStep8Executor({
   isTabAlive,
   isVerificationMailPollingError,
   LUCKMAIL_PROVIDER,
+  SMSBOWER_MAIL_PROVIDER,
   resolveVerificationStep: verificationFlowHelpers.resolveVerificationStep,
   resolveSignupEmailForFlow,
   persistRegistrationEmailState,
@@ -14354,6 +14661,7 @@ const kiroPublisher = self.MultiPageBackgroundKiroPublisherKiroRs?.createKiroRsP
   completeNodeFromBackground,
   fetchImpl: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
   getState,
+  markCurrentRegistrationAccountUsed,
   maybeSubmitFlowContribution,
   setState,
 });
@@ -14496,6 +14804,7 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
   clearGrokSsoCookies,
   clearLuckmailRuntimeState,
   clearStep5ProfileStatePatch,
+  clearSmsBowerMailRuntimeState,
   clearYydsMailRuntimeState,
   clearStopRequest,
   closeLocalhostCallbackTabs,
@@ -14580,6 +14889,7 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
   isHotmailProvider,
   isLocalhostOAuthCallbackUrl,
   isLuckmailProvider,
+  isSmsBowerMailProvider,
   isYydsMailProvider,
   isStopError,
   isTabAlive,
@@ -14781,6 +15091,9 @@ function getMailConfig(state) {
   const yydsMailProvider = typeof YYDS_MAIL_PROVIDER === 'string'
     ? YYDS_MAIL_PROVIDER
     : 'yyds-mail';
+  const smsbowerMailProviderId = typeof SMSBOWER_MAIL_PROVIDER === 'string'
+    ? SMSBOWER_MAIL_PROVIDER
+    : 'smsbower-mail';
   if (provider === 'custom') {
     return { provider: 'custom', label: '自定义邮箱' };
   }
@@ -14831,6 +15144,9 @@ function getMailConfig(state) {
   }
   if (provider === yydsMailProvider) {
     return { provider: yydsMailProvider, label: 'YYDS Mail' };
+  }
+  if (provider === smsbowerMailProviderId) {
+    return { provider: smsbowerMailProviderId, label: 'SMSBower TempMail' };
   }
   if (provider === '163') {
     return { source: 'mail-163', url: 'https://mail.163.com/js6/main.jsp?df=mail163_letter#module=mbox.ListModule%7C%7B%22fid%22%3A1%2C%22order%22%3A%22date%22%2C%22desc%22%3Atrue%7D', label: '163 邮箱' };

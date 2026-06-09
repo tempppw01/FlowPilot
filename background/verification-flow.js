@@ -1,4 +1,4 @@
-﻿(function attachBackgroundVerificationFlow(root, factory) {
+(function attachBackgroundVerificationFlow(root, factory) {
   root.MultiPageBackgroundVerificationFlow = factory();
 })(typeof self !== 'undefined' ? self : globalThis, function createBackgroundVerificationFlowModule() {
   const ICLOUD_MAIL_POLL_MIN_ATTEMPTS = 5;
@@ -33,10 +33,12 @@
       pollCustomMailVerificationCode,
       pollHotmailVerificationCode,
       pollLuckmailVerificationCode,
+      pollSmsBowerMailVerificationCode,
       pollYydsMailVerificationCode,
       sendToContentScript,
       sendToContentScriptResilient,
       sendToMailContentScriptResilient,
+      SMSBOWER_MAIL_PROVIDER = 'smsbower-mail',
       setNodeStatus,
       setState,
       sleepWithStop,
@@ -1002,6 +1004,13 @@
           ...cleanPollOverrides,
         }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
         return pollYydsMailVerificationCode(step, state, timedPoll.payload);
+      }
+      if (mail.provider === SMSBOWER_MAIL_PROVIDER) {
+        const timedPoll = await applyMailPollingTimeBudget(step, {
+          ...getVerificationPollPayload(step, state),
+          ...cleanPollOverrides,
+        }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
+        return pollSmsBowerMailVerificationCode(step, state, timedPoll.payload);
       }
 
       if (Number(pollOverrides.resendIntervalMs) > 0) {

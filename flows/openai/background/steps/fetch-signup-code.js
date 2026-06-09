@@ -20,6 +20,7 @@
       LUCKMAIL_PROVIDER,
       CLOUDFLARE_TEMP_EMAIL_PROVIDER,
       CLOUD_MAIL_PROVIDER = 'cloudmail',
+      SMSBOWER_MAIL_PROVIDER = 'smsbower-mail',
       resolveVerificationStep,
       reuseOrCreateTab,
       sendToContentScript,
@@ -67,6 +68,10 @@
       return resolveSignupMethod(state) === 'phone'
         || state?.accountIdentifierType === 'phone'
         || Boolean(state?.signupPhoneActivation);
+    }
+
+    function isNetEaseMailProvider(provider) {
+      return ['163', '163-vip', '126'].includes(String(provider || '').trim().toLowerCase());
     }
 
     async function executeSignupPhoneCodeStep(state, signupTabId) {
@@ -121,6 +126,7 @@
         || mail.provider === LUCKMAIL_PROVIDER
         || mail.provider === CLOUDFLARE_TEMP_EMAIL_PROVIDER
         || mail.provider === CLOUD_MAIL_PROVIDER
+        || mail.provider === SMSBOWER_MAIL_PROVIDER
         || shouldUseCustomMailHelper(state)
       ) {
         await addLog(`步骤 4：正在通过 ${mail.label} 轮询验证码...`);
@@ -148,7 +154,8 @@
         LUCKMAIL_PROVIDER,
         CLOUDFLARE_TEMP_EMAIL_PROVIDER,
         CLOUD_MAIL_PROVIDER,
-      ].includes(mail.provider) && !shouldUseCustomMailHelper(state);
+        SMSBOWER_MAIL_PROVIDER,
+      ].includes(mail.provider) && !isNetEaseMailProvider(mail.provider) && !shouldUseCustomMailHelper(state);
       const signupProfile = buildSignupProfileForVerificationStep();
 
       await resolveVerificationStep(4, state, mail, {
@@ -159,7 +166,7 @@
         signupProfile,
         resendIntervalMs: mail.provider === LUCKMAIL_PROVIDER
           ? 15000
-          : ((mail.provider === HOTMAIL_PROVIDER || mail.provider === '2925')
+          : ((mail.provider === HOTMAIL_PROVIDER || mail.provider === '2925' || mail.provider === SMSBOWER_MAIL_PROVIDER)
             ? 0
             : STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS),
       });

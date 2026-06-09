@@ -64,12 +64,14 @@
     const PHONE_SMS_PROVIDER_FIVE_SIM = PHONE_SMS_PROVIDER_5SIM;
     const PHONE_SMS_PROVIDER_NEXSMS = 'nexsms';
     const PHONE_SMS_PROVIDER_MADAO = 'madao';
+    const PHONE_SMS_PROVIDER_SMSBOWER = 'smsbower';
     const DEFAULT_PHONE_SMS_PROVIDER = PHONE_SMS_PROVIDER_HERO;
     const DEFAULT_PHONE_SMS_PROVIDER_ORDER = Object.freeze([
       PHONE_SMS_PROVIDER_HERO,
       PHONE_SMS_PROVIDER_5SIM,
       PHONE_SMS_PROVIDER_NEXSMS,
       PHONE_SMS_PROVIDER_MADAO,
+      PHONE_SMS_PROVIDER_SMSBOWER,
     ]);
     const MAX_PHONE_REUSABLE_POOL = 12;
     const PHONE_CODE_TIMEOUT_ERROR_PREFIX = 'PHONE_CODE_TIMEOUT::';
@@ -160,6 +162,9 @@
       }
       if (normalized === PHONE_SMS_PROVIDER_MADAO) {
         return PHONE_SMS_PROVIDER_MADAO;
+      }
+      if (normalized === PHONE_SMS_PROVIDER_SMSBOWER) {
+        return PHONE_SMS_PROVIDER_SMSBOWER;
       }
       return PHONE_SMS_PROVIDER_HERO;
     }
@@ -559,6 +564,9 @@
       }
       if (provider === PHONE_SMS_PROVIDER_MADAO) {
         return 'MaDao';
+      }
+      if (provider === PHONE_SMS_PROVIDER_SMSBOWER) {
+        return 'SMSBower';
       }
       return 'HeroSMS';
     }
@@ -1397,6 +1405,12 @@
       'nexSmsServiceCode',
       'customUrlSmsPool',
       'customUrlSmsPoolCursor',
+      'smsbowerApiKey',
+      'smsbowerServiceCode',
+      'smsbowerCountryOrder',
+      'smsbowerProviderIds',
+      'smsbowerMinPrice',
+      'smsbowerMaxPrice',
       'phoneVerificationReplacementLimit',
       'phoneCodeWaitSeconds',
       'phoneCodeTimeoutWindows',
@@ -1469,7 +1483,7 @@
       if (!text) {
         return false;
       }
-      return /no\s+numbers\s+available\s+across|no\s+free\s+phones|numbers?\s+not\s+found|no\s+numbers\s+within\s+(?:maxprice|price\s+range)|price\s+range\s+is\s+invalid|step\s*9:\s*(?:5sim|nexsms)\s+countries\s+are\s+empty|暂无可用号码|均无可用号码|无可用号码|价格区间|未选择国家|\bNO_NUMBERS\b/i.test(text);
+      return /no\s+numbers\s+available\s+across|no\s+free\s+phones|numbers?\s+not\s+found|no\s+numbers\s+within\s+(?:maxprice|price\s+range)|price\s+range\s+is\s+invalid|step\s*9:\s*(?:5sim|nexsms|smsbower)\s+countries\s+are\s+empty|暂无可用号码|均无可用号码|无可用号码|价格区间|未选择国家|\bNO_NUMBERS\b/i.test(text);
     }
 
     function resolveNoSupplyDiagnosticsContext(state = {}, providerOrder = []) {
@@ -1512,6 +1526,7 @@
         heroCountryCount: providerCountryCounts[PHONE_SMS_PROVIDER_HERO] || 0,
         fiveSimCountryCount: providerCountryCounts[PHONE_SMS_PROVIDER_5SIM] || 0,
         nexSmsCountryCount: providerCountryCounts.nexsms || 0,
+        smsBowerCountryCount: providerCountryCounts[PHONE_SMS_PROVIDER_SMSBOWER] || 0,
         minPrice,
         maxPrice,
         priceRangeInvalid: priceRange.invalidRange,
@@ -1558,6 +1573,9 @@
       }
       if ((context?.nexSmsCountryCount || 0) <= 0) {
         suggestions.push('NexSMS 至少选择 1 个国家');
+      }
+      if ((context?.smsBowerCountryCount || 0) <= 0) {
+        suggestions.push('SMSBower 至少选择 1 个国家');
       }
       if (String(context?.acquirePriority || '') === HERO_SMS_ACQUIRE_PRIORITY_COUNTRY) {
         suggestions.push('可尝试切到“价格优先”');
@@ -1613,7 +1631,7 @@
       const providerOrderText = context.order.join(' > ');
       const suggestion = formatNoSupplySuggestion(context);
       await addLog(
-        `步骤 9 诊断：无号连续失败 ${nextStreak} 次；价格区间=${priceRangeText}；最低价=${minPriceText}；最高价=${maxPriceText}；平台顺序=${providerOrderText}；国家数 HeroSMS=${context.heroCountryCount}, 5sim=${context.fiveSimCountryCount}, NexSMS=${context.nexSmsCountryCount}。建议：${suggestion}。`,
+        `步骤 9 诊断：无号连续失败 ${nextStreak} 次；价格区间=${priceRangeText}；最低价=${minPriceText}；最高价=${maxPriceText}；平台顺序=${providerOrderText}；国家数 HeroSMS=${context.heroCountryCount}, 5sim=${context.fiveSimCountryCount}, NexSMS=${context.nexSmsCountryCount}, SMSBower=${context.smsBowerCountryCount}。建议：${suggestion}。`,
         nextStreak >= 2 ? 'warn' : 'info'
       );
       return true;
@@ -2567,7 +2585,7 @@
           const providerLabel = getPhoneSmsProviderLabel(providerCandidate);
           if (
             providerCandidate !== provider
-            && /(?:step|步骤)\s*9\s*[:：]\s*(?:5sim|nexsms).*(?:countries\s+are\s+empty|未选择国家)/i.test(providerErrorMessage)
+            && /(?:step|步骤)\s*9\s*[:：]\s*(?:5sim|nexsms|smsbower).*(?:countries\s+are\s+empty|未选择国家)/i.test(providerErrorMessage)
           ) {
             skippedFallbackProviders.push(`${providerLabel}：未选择国家`);
             await addLog(

@@ -1,4 +1,4 @@
-﻿const test = require('node:test');
+const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
@@ -122,6 +122,71 @@ test('step 4 does not request a fresh code first for Cloudflare temp mail', asyn
   assert.equal(capturedOptions.filterAfterTimestamp, 700000);
   assert.equal(capturedOptions.requestFreshCodeFirst, false);
   assert.equal(capturedOptions.resendIntervalMs, 25000);
+});
+
+test('step 4 polls SMSBower TempMail through API without opening a mailbox tab', async () => {
+  let capturedOptions = null;
+  const logs = [];
+  const tabReuses = [];
+  const realDateNow = Date.now;
+  Date.now = () => 700000;
+
+  const executor = api.createStep4Executor({
+    addLog: async (message, level) => {
+      logs.push({ message, level: level || 'info' });
+    },
+    chrome: {
+      tabs: {
+        update: async () => {},
+      },
+    },
+    completeNodeFromBackground: async () => {},
+    confirmCustomVerificationStepBypass: async () => {},
+    ensureMail2925MailboxSession: async () => {},
+    getMailConfig: () => ({
+      provider: 'smsbower-mail',
+      label: 'SMSBower TempMail',
+      source: 'smsbower-mail',
+    }),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isTabAlive: async () => false,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    CLOUD_MAIL_PROVIDER: 'cloudmail',
+    SMSBOWER_MAIL_PROVIDER: 'smsbower-mail',
+    resolveVerificationStep: async (_step, _state, _mail, options) => {
+      capturedOptions = options;
+    },
+    reuseOrCreateTab: async (source, url) => {
+      tabReuses.push({ source, url });
+    },
+    sendToContentScript: async () => ({}),
+    sendToContentScriptResilient: async () => ({}),
+    isRetryableContentScriptTransportError: () => false,
+    shouldUseCustomRegistrationEmail: () => false,
+    STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS: 25000,
+    throwIfStopped: () => {},
+  });
+
+  try {
+    await executor.executeStep4({
+      email: 'smsbower@example.com',
+      password: 'secret',
+      mailProvider: 'smsbower-mail',
+    });
+  } finally {
+    Date.now = realDateNow;
+  }
+
+  assert.deepStrictEqual(tabReuses, []);
+  assert.equal(capturedOptions.filterAfterTimestamp, 700000);
+  assert.equal(capturedOptions.requestFreshCodeFirst, false);
+  assert.equal(capturedOptions.resendIntervalMs, 0);
+  assert.equal(
+    logs.some((entry) => /正在通过 SMSBower TempMail 轮询验证码/.test(entry.message)),
+    true
+  );
 });
 
 test('step 4 checks iCloud session before polling iCloud mailbox', async () => {
@@ -384,7 +449,7 @@ test('step 4 phone signup email-verification handoff polls mailbox instead of co
   ]);
   assert.equal(resolvedCalls[0].step, 4);
   assert.equal(resolvedCalls[0].mail.label, '163 邮箱');
-  assert.equal(resolvedCalls[0].options.requestFreshCodeFirst, true);
+  assert.equal(resolvedCalls[0].options.requestFreshCodeFirst, false);
   assert.equal(Object.prototype.hasOwnProperty.call(resolvedCalls[0].options, 'signupProfile'), true);
 });
 

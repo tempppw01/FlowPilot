@@ -114,6 +114,7 @@ test('kiro publisher reads latest kiro.rs key from background state instead of s
     },
   };
   const completed = [];
+  const markedUsed = [];
   const publisher = api.createKiroRsPublisher({
     addLog: async () => {},
     completeNodeFromBackground: async (nodeId, payload) => {
@@ -147,6 +148,10 @@ test('kiro publisher reads latest kiro.rs key from background state instead of s
       };
     },
     getState: async () => ({ ...liveState }),
+    markCurrentRegistrationAccountUsed: async (state, options) => {
+      markedUsed.push({ state, options });
+      return { updated: true };
+    },
     setState: async (updates = {}) => {
       liveState = { ...liveState, ...updates };
     },
@@ -181,12 +186,17 @@ test('kiro publisher reads latest kiro.rs key from background state instead of s
   );
   assert.equal(completed.length, 1);
   assert.equal(completed[0].nodeId, 'kiro-upload-credential');
+  assert.equal(markedUsed.length, 1);
+  assert.equal(markedUsed[0].options.logPrefix, 'Kiro 凭证上传成功');
+  assert.equal(markedUsed[0].options.level, 'ok');
+  assert.equal(getKiroRuntime(markedUsed[0].state).upload.status, 'uploaded');
 });
 
 test('kiro publisher routes step 9 through public contribution upload when contribution mode is enabled', async () => {
   const api = loadPublisherApi();
   const requests = [];
   const completed = [];
+  const markedUsed = [];
   let liveState = {
     activeFlowId: 'kiro',
     flowId: 'kiro',
@@ -222,6 +232,10 @@ test('kiro publisher routes step 9 through public contribution upload when contr
       throw new Error('kiro.rs upload should not be called in contribution mode');
     },
     getState: async () => ({ ...liveState }),
+    markCurrentRegistrationAccountUsed: async (state, options) => {
+      markedUsed.push({ state, options });
+      return { updated: true };
+    },
     maybeSubmitFlowContribution: async (_state, options = {}) => ({
       ok: true,
       skipped: false,
@@ -244,6 +258,10 @@ test('kiro publisher routes step 9 through public contribution upload when contr
   assert.equal(getKiroRuntime(completed[0].payload).upload.status, 'uploaded');
   assert.equal(getKiroRuntime(completed[0].payload).upload.credentialId, 'kiro-contribution-009');
   assert.equal(getKiroRuntime(completed[0].payload).upload.lastMessage, '贡献链路成功:kiro-step-9');
+  assert.equal(markedUsed.length, 1);
+  assert.equal(markedUsed[0].options.logPrefix, 'Kiro 凭证上传成功');
+  assert.equal(markedUsed[0].options.level, 'ok');
+  assert.equal(getKiroRuntime(markedUsed[0].state).upload.status, 'uploaded');
 });
 
 test('kiro publisher trims api key and includes fallback Authorization header during connection check', async () => {

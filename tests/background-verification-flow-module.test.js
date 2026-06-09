@@ -51,6 +51,40 @@ test('verification flow routes YYDS Mail provider to background poller', async (
   assert.equal(pollCalls[0].payload.maxAttempts, 1);
 });
 
+test('verification flow routes SMSBower TempMail provider to background poller', async () => {
+  const source = fs.readFileSync('background/verification-flow.js', 'utf8');
+  const globalScope = {};
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundVerificationFlow;`)(globalScope);
+  const pollCalls = [];
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async () => {},
+    buildVerificationPollPayload: () => ({ maxAttempts: 1, intervalMs: 1, targetEmail: 'fresh@gmail.com' }),
+    getState: async () => ({}),
+    getTabId: async () => 1,
+    isStopError: () => false,
+    pollSmsBowerMailVerificationCode: async (step, state, payload) => {
+      pollCalls.push({ step, state, payload });
+      return { ok: true, code: '987654', emailTimestamp: 1, mailId: '42' };
+    },
+    sendToContentScript: async () => ({}),
+    setState: async () => {},
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+    SMSBOWER_MAIL_PROVIDER: 'smsbower-mail',
+  });
+
+  const result = await helpers.pollFreshVerificationCode(
+    4,
+    { mailProvider: 'smsbower-mail' },
+    { provider: 'smsbower-mail', label: 'SMSBower TempMail' },
+    { disableTimeBudgetCap: true }
+  );
+
+  assert.equal(result.code, '987654');
+  assert.equal(pollCalls.length, 1);
+  assert.equal(pollCalls[0].payload.targetEmail, 'fresh@gmail.com');
+});
+
 test('verification flow routes custom mail provider to local helper poller', async () => {
   const source = fs.readFileSync('background/verification-flow.js', 'utf8');
   const globalScope = {};

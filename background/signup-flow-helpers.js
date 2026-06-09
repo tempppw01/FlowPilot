@@ -116,6 +116,12 @@
       return /\/(?:create-account\/profile|u\/signup\/profile|signup\/profile|about-you)(?:[/?#]|$)/i.test(parsed.pathname || '');
     }
 
+    function isGoogleAccountLoginPageUrl(rawUrl) {
+      const parsed = parseUrlSafely(rawUrl);
+      if (!parsed) return false;
+      return String(parsed.hostname || '').toLowerCase() === 'accounts.google.com';
+    }
+
     function resolveSignupPostIdentityState(rawUrl) {
       if (isSignupPasswordPageUrl(rawUrl)) {
         return 'password_page';
@@ -134,6 +140,9 @@
         : fallbackSignupProfilePageUrl(rawUrl);
       if (isProfileUrl) {
         return 'profile_page';
+      }
+      if (isGoogleAccountLoginPageUrl(rawUrl)) {
+        return 'google_login_page';
       }
       return '';
     }
@@ -170,6 +179,15 @@
         throw new Error(`注册身份提交后未能识别当前页面，既不是密码页、验证码页，也不是资料页。URL: ${landingUrl || 'unknown'}`);
       }
 
+      if (landingState === 'google_login_page') {
+        return {
+          ready: true,
+          state: landingState,
+          url: landingUrl,
+          externalProvider: 'google',
+        };
+      }
+
       if (landingState !== 'password_page' && typeof waitForTabStableComplete === 'function') {
         const stableTab = await waitForTabStableComplete(tabId, {
           timeoutMs: 45000,
@@ -184,6 +202,15 @@
             landingState = stableState;
           }
         }
+      }
+
+      if (landingState === 'google_login_page') {
+        return {
+          ready: true,
+          state: landingState,
+          url: landingUrl,
+          externalProvider: 'google',
+        };
       }
 
       await ensureContentScriptReadyOnTab('openai-auth', tabId, {

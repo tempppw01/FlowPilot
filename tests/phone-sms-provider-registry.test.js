@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const source = fs.readFileSync('phone-sms/providers/registry.js', 'utf8');
 const maDaoSource = fs.readFileSync('phone-sms/providers/madao.js', 'utf8');
 const nexSmsSource = fs.readFileSync('phone-sms/providers/nexsms.js', 'utf8');
+const smsBowerSource = fs.readFileSync('phone-sms/providers/smsbower.js', 'utf8');
 
 function loadRegistry(root = {}) {
   return new Function('self', `${source}; return self.PhoneSmsProviderRegistry;`)(root);
@@ -27,21 +28,28 @@ test('phone sms provider registry normalizes ids, order and labels consistently'
     PhoneSmsCustomUrlProvider: {
       createProvider: (deps = {}) => ({ provider: 'custom-url', deps }),
     },
+    PhoneSmsBowerProvider: {
+      createProvider: (deps = {}) => ({ provider: 'smsbower', deps }),
+    },
   });
 
-  assert.deepStrictEqual(registry.getProviderIds(), ['hero-sms', '5sim', 'nexsms', 'madao', 'custom-url']);
+  assert.deepStrictEqual(registry.getProviderIds(), ['hero-sms', '5sim', 'nexsms', 'madao', 'custom-url', 'smsbower']);
   assert.equal(registry.normalizeProviderId(' NEXSMS '), 'nexsms');
   assert.equal(registry.normalizeProviderId(' MaDao '), 'madao');
   assert.equal(registry.normalizeProviderId(' Custom-URL '), 'custom-url');
+  assert.equal(registry.normalizeProviderId(' SMSBower '), 'smsbower');
   assert.equal(registry.normalizeProviderId('unknown-provider'), 'hero-sms');
   assert.equal(registry.getProviderLabel('nexsms'), 'NexSMS');
   assert.equal(registry.getProviderLabel('madao'), 'MaDao');
   assert.equal(registry.getProviderLabel('custom-url'), '自定义 URL 接码');
+  assert.equal(registry.getProviderLabel('smsbower'), 'SMSBower');
   assert.equal(registry.getProviderDefinition('nexsms').moduleKey, 'PhoneSmsNexSmsProvider');
   assert.equal(registry.getProviderDefinition('madao').moduleKey, 'PhoneSmsMaDaoProvider');
   assert.equal(registry.getProviderDefinition('custom-url').moduleKey, 'PhoneSmsCustomUrlProvider');
+  assert.equal(registry.getProviderDefinition('smsbower').moduleKey, 'PhoneSmsBowerProvider');
   assert.deepStrictEqual(
     registry.normalizeProviderOrder([
+      { provider: 'smsbower' },
       { provider: 'madao' },
       { provider: 'nexsms' },
       { id: '5sim' },
@@ -49,7 +57,7 @@ test('phone sms provider registry normalizes ids, order and labels consistently'
       'MADAO',
       'NEXSMS',
     ]),
-    ['madao', 'nexsms', '5sim', 'hero-sms']
+    ['smsbower', 'madao', 'nexsms', '5sim', 'hero-sms']
   );
   assert.deepStrictEqual(
     registry.normalizeProviderOrder([], ['madao', 'nexsms', '5sim', 'nexsms']),
@@ -66,6 +74,10 @@ test('phone sms provider registry normalizes ids, order and labels consistently'
   assert.deepStrictEqual(
     registry.createProvider('nexsms', { foo: 3 }),
     { provider: 'nexsms', deps: { foo: 3 } }
+  );
+  assert.deepStrictEqual(
+    registry.createProvider('smsbower', { foo: 4 }),
+    { provider: 'smsbower', deps: { foo: 4 } }
   );
 });
 
@@ -102,4 +114,25 @@ test('phone sms provider registry can create the real NexSMS provider module', (
   assert.equal(typeof provider.fetchPrices, 'function');
   assert.equal(provider.normalizeCountryId('8'), 8);
   assert.equal(provider.normalizeServiceCode(' OT '), 'ot');
+});
+
+test('phone sms provider registry can create the real SMSBower provider module', () => {
+  const smsBowerModule = new Function('self', `${smsBowerSource}; return self.PhoneSmsBowerProvider;`)({});
+  const registry = loadRegistry({
+    PhoneSmsBowerProvider: smsBowerModule,
+  });
+
+  const provider = registry.createProvider('smsbower', { fetchImpl: 'demo-fetch' });
+
+  assert.equal(provider.id, 'smsbower');
+  assert.equal(provider.label, 'SMSBower');
+  assert.equal(provider.defaultProduct, 'OpenAI');
+  assert.equal(provider.defaultServiceCode, 'dr');
+  assert.equal(provider.defaultCountryId, 187);
+  assert.equal(provider.defaultProviderIds, '3170');
+  assert.equal(provider.defaultMaxPrice, '0.134');
+  assert.equal(typeof provider.fetchBalance, 'function');
+  assert.equal(typeof provider.fetchPrices, 'function');
+  assert.equal(provider.normalizeCountryId('187'), 187);
+  assert.equal(provider.normalizeServiceCode(' DR '), 'dr');
 });

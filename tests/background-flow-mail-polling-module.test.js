@@ -54,6 +54,40 @@ test('flow mail polling service dispatches API mail providers through shared hel
   assert.equal(logs.some((entry) => entry.message.includes('Hotmail')), true);
 });
 
+test('flow mail polling service dispatches SMSBower TempMail provider', async () => {
+  const api = loadFlowMailPollingApi();
+  let pollCall = null;
+  const service = api.createFlowMailPollingService({
+    addLog: async () => {},
+    buildVerificationPollPayloadForNode: (nodeId, state, overrides) => ({
+      flowId: state.activeFlowId,
+      nodeId,
+      step: 4,
+      targetEmail: 'fresh@gmail.com',
+      maxAttempts: 1,
+      intervalMs: 100,
+      ...overrides,
+    }),
+    getMailConfig: () => ({ provider: 'smsbower-mail', label: 'SMSBower TempMail' }),
+    pollSmsBowerMailVerificationCode: async (step, state, payload) => {
+      pollCall = { step, state, payload };
+      return { code: '987654', emailTimestamp: 456 };
+    },
+    SMSBOWER_MAIL_PROVIDER: 'smsbower-mail',
+  });
+
+  const result = await service.pollFlowVerificationCode({
+    flowId: 'openai',
+    nodeId: 'fetch-signup-code',
+    state: { activeFlowId: 'openai', mailProvider: 'smsbower-mail', email: 'fresh@gmail.com' },
+    step: 4,
+  });
+
+  assert.equal(result.code, '987654');
+  assert.equal(pollCall.step, 4);
+  assert.equal(pollCall.payload.targetEmail, 'fresh@gmail.com');
+});
+
 test('flow mail polling service dispatches custom helper when custom provider is in helper mode', async () => {
   const api = loadFlowMailPollingApi();
   let customCall = null;

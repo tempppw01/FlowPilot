@@ -6,6 +6,7 @@
   const DESKTOP_AUTHORIZE_CODE_RULE_ID = 'kiro-complete-desktop-authorize';
   const SUBMIT_VERIFICATION_CODE_NODE_ID = 'kiro-submit-verification-code';
   const DESKTOP_AUTHORIZE_NODE_ID = 'kiro-complete-desktop-authorize';
+  const KIRO_REGISTER_VERIFICATION_POLL_WINDOW_MS = 3 * 60 * 1000;
   const KIRO_AWS_VERIFICATION_CODE_PATTERNS = Object.freeze([
     Object.freeze({
       source: '(?:verification\\s*code|验证码|Your code is|code is)[：:\\s]*(\\d{6})',
@@ -84,6 +85,12 @@
       && cleanString(state?.mail2925Mode).toLowerCase() === 'receive';
   }
 
+  function resolvePollAttemptsForWindow(intervalMs, windowMs = KIRO_REGISTER_VERIFICATION_POLL_WINDOW_MS) {
+    const normalizedIntervalMs = Math.max(1, Math.floor(Number(intervalMs) || 3000));
+    const normalizedWindowMs = Math.max(normalizedIntervalMs, Math.floor(Number(windowMs) || normalizedIntervalMs));
+    return Math.max(1, Math.ceil(normalizedWindowMs / normalizedIntervalMs));
+  }
+
   function createKiroMailRules(deps = {}) {
     const {
       LUCKMAIL_PROVIDER = 'luckmail-api',
@@ -99,6 +106,10 @@
       const normalizedProvider = cleanString(state?.mailProvider).toLowerCase();
       const mail2925Provider = isMail2925Provider(state);
       const luckmailProvider = normalizedProvider === cleanString(LUCKMAIL_PROVIDER).toLowerCase();
+      const intervalMs = luckmailProvider
+        ? 15000
+        : (mail2925Provider ? MAIL_2925_VERIFICATION_INTERVAL_MS : 3000);
+      const registerVerificationNode = nodeId === SUBMIT_VERIFICATION_CODE_NODE_ID;
 
       return {
         flowId: 'kiro',
@@ -116,12 +127,12 @@
         targetEmail,
         targetEmailHints: buildTargetEmailHints(targetEmail),
         mail2925MatchTargetEmail: shouldMatchMail2925TargetEmail(state),
-        maxAttempts: luckmailProvider
-          ? 3
-          : (mail2925Provider ? MAIL_2925_VERIFICATION_MAX_ATTEMPTS : 5),
-        intervalMs: luckmailProvider
-          ? 15000
-          : (mail2925Provider ? MAIL_2925_VERIFICATION_INTERVAL_MS : 3000),
+        maxAttempts: registerVerificationNode
+          ? resolvePollAttemptsForWindow(intervalMs)
+          : (luckmailProvider
+            ? 3
+            : (mail2925Provider ? MAIL_2925_VERIFICATION_MAX_ATTEMPTS : 5)),
+        intervalMs,
       };
     }
 

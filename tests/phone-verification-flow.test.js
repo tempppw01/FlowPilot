@@ -7,12 +7,14 @@ const heroSmsSource = fs.readFileSync('phone-sms/providers/hero-sms.js', 'utf8')
 const fiveSimSource = fs.readFileSync('phone-sms/providers/five-sim.js', 'utf8');
 const nexSmsSource = fs.readFileSync('phone-sms/providers/nexsms.js', 'utf8');
 const maDaoSource = fs.readFileSync('phone-sms/providers/madao.js', 'utf8');
+const smsBowerSource = fs.readFileSync('phone-sms/providers/smsbower.js', 'utf8');
 const registrySource = fs.readFileSync('phone-sms/providers/registry.js', 'utf8');
 const globalScope = {};
 new Function('self', `${heroSmsSource}; return self.PhoneSmsHeroSmsProvider;`)(globalScope);
 new Function('self', `${fiveSimSource}; return self.PhoneSmsFiveSimProvider;`)(globalScope);
 new Function('self', `${nexSmsSource}; return self.PhoneSmsNexSmsProvider;`)(globalScope);
 new Function('self', `${maDaoSource}; return self.PhoneSmsMaDaoProvider;`)(globalScope);
+new Function('self', `${smsBowerSource}; return self.PhoneSmsBowerProvider;`)(globalScope);
 new Function('self', `${registrySource}; return self.PhoneSmsProviderRegistry;`)(globalScope);
 const api = new Function('self', `${source}; return self.MultiPageBackgroundPhoneVerification;`)(globalScope);
 const maDaoModule = globalScope.PhoneSmsMaDaoProvider;
@@ -204,6 +206,56 @@ test('phone verification helper creates 5sim adapter through provider registry w
   assert.equal(createCalls[0].providerId, '5sim');
   assert.equal(typeof createCalls[0].deps.fetchImpl, 'function');
   assert.equal(activation.activationId, '5sim-registry-1');
+});
+
+test('phone verification helper preserves SMSBower provider in registry fallback path', async () => {
+  const createCalls = [];
+  const root = {
+    PhoneSmsProviderRegistry: {
+      createProvider: (providerId, deps = {}) => {
+        createCalls.push({ providerId, deps });
+        return {
+          requestActivation: async (state) => ({
+            activationId: 'smsbower-registry-1',
+            phoneNumber: '+12025550123',
+            provider: state.phoneSmsProvider,
+            serviceCode: state.smsbowerServiceCode,
+            countryId: 187,
+          }),
+        };
+      },
+    },
+  };
+  const registryApi = new Function('self', `${source}; return self.MultiPageBackgroundPhoneVerification;`)(root);
+  const currentState = {
+    phoneSmsProvider: 'smsbower',
+    smsbowerApiKey: 'smsbower-key',
+    smsbowerServiceCode: 'dr',
+    smsbowerCountryOrder: [187],
+    smsbowerProviderIds: '3170',
+    smsbowerMaxPrice: '0.134',
+  };
+  const helpers = registryApi.createPhoneVerificationHelpers({
+    addLog: async () => {},
+    ensureStep8SignupPageReady: async () => {},
+    fetchImpl: async () => {
+      throw new Error('SMSBower registry adapter should own network access');
+    },
+    getState: async () => ({ ...currentState }),
+    sendToContentScriptResilient: async () => ({}),
+    setState: async () => {},
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  const activation = await helpers.requestPhoneActivation(currentState);
+
+  assert.equal(createCalls.length, 1);
+  assert.equal(createCalls[0].providerId, 'smsbower');
+  assert.equal(typeof createCalls[0].deps.fetchImpl, 'function');
+  assert.equal(activation.activationId, 'smsbower-registry-1');
+  assert.equal(activation.provider, 'smsbower');
+  assert.equal(activation.serviceCode, 'dr');
 });
 
 test('phone verification helper creates MaDao adapter through provider registry when available', async () => {

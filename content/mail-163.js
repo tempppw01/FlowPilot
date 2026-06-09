@@ -596,12 +596,13 @@ async function handlePollEmail(step, payload) {
       const mailTimestamp = getMailTimestamp(item);
       const mailMinute = normalizeMinuteTimestamp(mailTimestamp || 0);
       const passesTimeFilter = !filterAfterMinute || (mailMinute && mailMinute >= filterAfterMinute);
+      const shouldBypassOldSnapshot = Boolean(filterAfterMinute && passesTimeFilter && mailMinute > 0);
 
       if (!passesTimeFilter) {
         continue;
       }
 
-      if (!useFallback && existingMailIds.has(id)) {
+      if (!useFallback && !shouldBypassOldSnapshot && existingMailIds.has(id)) {
         continue;
       }
 
@@ -638,7 +639,7 @@ async function handlePollEmail(step, payload) {
 
         if (code && excludedCodeSet.has(code)) {
           log(`步骤 ${step}：跳过排除的验证码：${code}`, 'info');
-        } else if (code && !seenCodes.has(code)) {
+        } else if (code && (!seenCodes.has(code) || shouldBypassOldSnapshot)) {
           seenCodes.add(code);
           persistSeenCodes();
           const source = useFallback && existingMailIds.has(id) ? `回退匹配${codeSource}` : `新邮件${codeSource}`;

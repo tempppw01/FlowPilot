@@ -89,10 +89,12 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /\.\.\/phone-sms\/providers\/hero-sms\.js/);
   assert.match(html, /\.\.\/phone-sms\/providers\/five-sim\.js/);
   assert.match(html, /\.\.\/phone-sms\/providers\/madao\.js/);
+  assert.match(html, /\.\.\/phone-sms\/providers\/smsbower\.js/);
   assert.match(html, /\.\.\/phone-sms\/providers\/registry\.js/);
   assert.match(html, /<option value="hero-sms">HeroSMS<\/option>/);
   assert.match(html, /<option value="5sim">5sim<\/option>/);
   assert.match(html, /<option value="madao">MaDao<\/option>/);
+  assert.match(html, /<option value="smsbower">SMSBower<\/option>/);
   assert.match(html, /id="row-hero-sms-country"/);
   assert.match(html, /id="row-hero-sms-country-fallback"/);
   assert.match(html, /id="row-hero-sms-acquire-priority"/);
@@ -185,6 +187,17 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /id="row-madao-price-range"/);
   assert.match(html, /id="input-madao-min-price"/);
   assert.match(html, /id="input-madao-max-price"/);
+  assert.match(html, /id="row-smsbower-api-key"/);
+  assert.match(html, /id="input-smsbower-api-key"/);
+  assert.match(html, /id="row-smsbower-service-code"/);
+  assert.match(html, /id="input-smsbower-service-code"/);
+  assert.match(html, /id="row-smsbower-country-order"/);
+  assert.match(html, /id="input-smsbower-country-order"/);
+  assert.match(html, /id="row-smsbower-provider-ids"/);
+  assert.match(html, /id="input-smsbower-provider-ids"/);
+  assert.match(html, /id="row-smsbower-price-range"/);
+  assert.match(html, /id="input-smsbower-min-price"/);
+  assert.match(html, /id="input-smsbower-max-price"/);
   assert.doesNotMatch(html, /id="btn-open-madao-github"/);
   assert.doesNotMatch(html, /id="input-account-run-history-text-enabled"/);
 });
@@ -1345,6 +1358,14 @@ return {
   assert.equal(api.rowFreePhoneReuseTopic.style.display, '');
 
   api.setSelectedPhoneSmsProvider('5sim');
+  api.setLatestState({
+    signupMethod: 'email',
+    phoneSmsProvider: '5sim',
+    phoneSmsProviderOrder: ['hero-sms'],
+    phoneSmsReuseEnabled: true,
+    freePhoneReuseEnabled: true,
+    freePhoneReuseAutoEnabled: true,
+  });
   api.updatePhoneVerificationSettingsUI();
   assert.equal(api.rowFiveSimApiKey.style.display, '');
   assert.equal(api.rowFiveSimCountry.style.display, '');

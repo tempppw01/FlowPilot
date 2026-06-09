@@ -152,6 +152,17 @@ test('getMailConfig keeps provider metadata for 2925 mailboxes', () => {
   });
 });
 
+test('getMailConfig keeps provider metadata for SMSBower TempMail', () => {
+  const api = createGetMailConfigApi();
+
+  assert.deepEqual(api.getMailConfig({
+    mailProvider: 'smsbower-mail',
+  }), {
+    provider: 'smsbower-mail',
+    label: 'SMSBower TempMail',
+  });
+});
+
 test('getMailConfig uses icloud inbox config when host is com.cn and target mailbox is icloud inbox', () => {
   const api = createGetMailConfigApi();
 

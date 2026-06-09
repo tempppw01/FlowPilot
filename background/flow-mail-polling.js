@@ -85,10 +85,12 @@
       pollCustomMailVerificationCode = null,
       pollHotmailVerificationCode = null,
       pollLuckmailVerificationCode = null,
+      pollSmsBowerMailVerificationCode = null,
       pollYydsMailVerificationCode = null,
       reuseOrCreateTab = async () => null,
       sendToMailContentScriptResilient = null,
       shouldUseCustomMailHelper = null,
+      SMSBOWER_MAIL_PROVIDER = 'smsbower-mail',
       throwIfStopped = () => {},
       YYDS_MAIL_PROVIDER = 'yyds-mail',
     } = deps;
@@ -117,6 +119,10 @@
       [normalizeProviderId(YYDS_MAIL_PROVIDER), {
         label: 'YYDS Mail',
         poll: pollYydsMailVerificationCode,
+      }],
+      [normalizeProviderId(SMSBOWER_MAIL_PROVIDER), {
+        label: 'SMSBower TempMail',
+        poll: pollSmsBowerMailVerificationCode,
       }],
     ]);
 

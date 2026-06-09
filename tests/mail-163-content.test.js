@@ -400,7 +400,7 @@ return { extractVerificationCode };
   );
 });
 
-test('handlePollEmail ignores same-minute old snapshot mail before fallback', async () => {
+test('handlePollEmail accepts a time-valid same-minute mail from the initial snapshot', async () => {
   const bundle = [
     extractFunction('normalizeText'),
     extractFunction('normalizeMinuteTimestamp'),
@@ -408,9 +408,15 @@ test('handlePollEmail ignores same-minute old snapshot mail before fallback', as
     extractFunction('handlePollEmail'),
   ].join('\n');
 
-  const api = new Function(`
+const api = new Function(`
 const location = { hostname: 'mail.126.com' };
-let currentItems = [{ id: 'old-mail' }];
+let currentItems = [{
+  id: 'old-mail',
+  getAttribute(name) {
+    if (name === 'aria-label') return 'Your temporary ChatGPT verification code 911113 发件人 OpenAI';
+    return '';
+  },
+}];
 const seenCodes = new Set();
 
 function findMailItems() {
@@ -459,16 +465,96 @@ ${bundle}
 return { handlePollEmail };
 `)();
 
-  await assert.rejects(
-    () => api.handlePollEmail(4, {
-      senderFilters: ['openai'],
-      subjectFilters: ['verification'],
-      maxAttempts: 1,
-      intervalMs: 1,
-      filterAfterTimestamp: new Date(2026, 3, 22, 22, 22, 40, 0).getTime(),
-    }),
-    /未在 126 邮箱中找到新的匹配邮件/
-  );
+  const result = await api.handlePollEmail(4, {
+    senderFilters: ['openai'],
+    subjectFilters: ['verification'],
+    maxAttempts: 1,
+    intervalMs: 1,
+    filterAfterTimestamp: new Date(2026, 3, 22, 22, 22, 40, 0).getTime(),
+  });
+
+  assert.equal(result.code, '911113');
+  assert.equal(result.mailId, 'old-mail');
+});
+
+test('handlePollEmail accepts a repeated seen code when the mail is inside the time window', async () => {
+  const bundle = [
+    extractFunction('normalizeText'),
+    extractFunction('normalizeMinuteTimestamp'),
+    extractFunction('getNetEaseMailLabel'),
+    extractFunction('handlePollEmail'),
+  ].join('\n');
+
+const api = new Function(`
+const location = { hostname: 'mail.163.com' };
+let currentItems = [{
+  id: 'fresh-mail',
+  getAttribute(name) {
+    if (name === 'aria-label') return 'Your temporary ChatGPT verification code 911113 发件人 OpenAI';
+    return '';
+  },
+}];
+const seenCodes = new Set(['911113']);
+
+function findMailItems() {
+  return currentItems;
+}
+
+function getCurrentMailIds(items = []) {
+  return new Set((items.length ? items : currentItems).map((item) => item.id));
+}
+
+function getMailItemId(item) {
+  return item.id;
+}
+
+function getMailTimestamp(item) {
+  if (item.id === 'old-mail') {
+    return new Date(2026, 3, 22, 22, 21, 0, 0).getTime();
+  }
+  return new Date(2026, 3, 22, 22, 22, 0, 0).getTime();
+}
+
+function getMailSenderText() {
+  return 'OpenAI';
+}
+
+function getMailSubjectText() {
+  return 'Your temporary ChatGPT verification code';
+}
+
+function getMailRowText() {
+  return 'Your temporary ChatGPT verification code 911113 发件人 OpenAI';
+}
+
+function extractVerificationCode() {
+  return '911113';
+}
+
+async function waitForElement() {
+  return { click() {} };
+}
+async function refreshInbox() {}
+async function sleep() {}
+function log() {}
+function persistSeenCodes() {}
+function scheduleEmailCleanup() {}
+
+${bundle}
+
+return { handlePollEmail };
+`)();
+
+  const result = await api.handlePollEmail(4, {
+    senderFilters: ['openai'],
+    subjectFilters: ['verification'],
+    maxAttempts: 1,
+    intervalMs: 1,
+    filterAfterTimestamp: new Date(2026, 3, 22, 22, 22, 40, 0).getTime(),
+  });
+
+  assert.equal(result.code, '911113');
+  assert.equal(result.mailId, 'fresh-mail');
 });
 
 test('handlePollEmail accepts a new same-minute mail that appears after the snapshot', async () => {
@@ -510,7 +596,10 @@ function getMailItemId(item) {
   return item.id;
 }
 
-function getMailTimestamp() {
+function getMailTimestamp(item) {
+  if (item.id === 'old-mail') {
+    return new Date(2026, 3, 22, 22, 21, 0, 0).getTime();
+  }
   return new Date(2026, 3, 22, 22, 22, 0, 0).getTime();
 }
 

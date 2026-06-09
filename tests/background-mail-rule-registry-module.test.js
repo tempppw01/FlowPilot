@@ -211,10 +211,23 @@ test('mail rule registry exposes Kiro AWS verification poll payloads by node', (
       targetEmail: 'kiro-user@example.com',
       targetEmailHints: ['kiro-user@example.com'],
       mail2925MatchTargetEmail: true,
-      maxAttempts: 17,
+      maxAttempts: 12,
       intervalMs: 16000,
     }
   );
+
+  const smsbowerPayload = registry.buildVerificationPollPayloadForNode(
+    'kiro-submit-verification-code',
+    {
+      ...baseState,
+      mailProvider: 'smsbower-mail',
+      mail2925Mode: 'provide',
+    }
+  );
+  assert.equal(smsbowerPayload.step, 4);
+  assert.equal(smsbowerPayload.mail2925MatchTargetEmail, false);
+  assert.equal(smsbowerPayload.maxAttempts, 60);
+  assert.equal(smsbowerPayload.intervalMs, 3000);
 
   const desktopPayload = registry.buildVerificationPollPayloadForNode(
     'kiro-complete-desktop-authorize',

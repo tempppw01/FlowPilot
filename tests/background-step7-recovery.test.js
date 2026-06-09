@@ -1,4 +1,4 @@
-﻿const test = require('node:test');
+const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
@@ -94,6 +94,79 @@ test('step 8 submits login verification directly without replaying step 7', asyn
     },
   ]);
   assert.equal(calls.resolveOptions.completionStep, 8);
+});
+
+test('step 8 polls SMSBower TempMail through API without opening a mailbox tab', async () => {
+  const calls = {
+    resolveOptions: null,
+    tabReuses: [],
+    logs: [],
+    setStates: [],
+  };
+  const realDateNow = Date.now;
+  Date.now = () => 123456;
+
+  const executor = api.createStep8Executor({
+    addLog: async (message, level) => {
+      calls.logs.push({ message, level: level || 'info' });
+    },
+    chrome: {
+      tabs: {
+        update: async () => {},
+      },
+    },
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    CLOUD_MAIL_PROVIDER: 'cloudmail',
+    SMSBOWER_MAIL_PROVIDER: 'smsbower-mail',
+    confirmCustomVerificationStepBypass: async () => {},
+    ensureStep8VerificationPageReady: async () => ({ state: 'verification_page', displayedEmail: 'smsbower@example.com' }),
+    getOAuthFlowRemainingMs: async () => 5000,
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => Math.min(defaultTimeoutMs, 5000),
+    getMailConfig: () => ({
+      provider: 'smsbower-mail',
+      label: 'SMSBower TempMail',
+      source: 'smsbower-mail',
+    }),
+    getState: async () => ({ email: 'smsbower@example.com', password: 'secret' }),
+    getTabId: async (sourceName) => (sourceName === 'openai-auth' ? 1 : 2),
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isTabAlive: async () => false,
+    isVerificationMailPollingError: () => false,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    resolveVerificationStep: async (_step, _state, _mail, options) => {
+      calls.resolveOptions = options;
+    },
+    reuseOrCreateTab: async (source, url) => {
+      calls.tabReuses.push({ source, url });
+    },
+    setState: async (payload) => {
+      calls.setStates.push(payload);
+    },
+    shouldUseCustomRegistrationEmail: () => false,
+    STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS: 25000,
+    STEP7_MAIL_POLLING_RECOVERY_MAX_ATTEMPTS: 8,
+    throwIfStopped: () => {},
+  });
+
+  try {
+    await executor.executeStep8({
+      email: 'smsbower@example.com',
+      password: 'secret',
+      oauthUrl: 'https://oauth.example/latest',
+    });
+  } finally {
+    Date.now = realDateNow;
+  }
+
+  assert.deepStrictEqual(calls.tabReuses, []);
+  assert.equal(calls.resolveOptions.filterAfterTimestamp, 123456);
+  assert.equal(calls.resolveOptions.requestFreshCodeFirst, false);
+  assert.equal(calls.resolveOptions.resendIntervalMs, 0);
+  assert.equal(calls.resolveOptions.targetEmail, 'smsbower@example.com');
+  assert.equal(
+    calls.logs.some((entry) => /正在通过 SMSBower TempMail 轮询验证码/.test(entry.message)),
+    true
+  );
 });
 
 test('step 8 rejects ordinary email verification page in phone login mode', async () => {

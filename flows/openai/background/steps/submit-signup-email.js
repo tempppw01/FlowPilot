@@ -11,10 +11,12 @@
       ensureSignupPostEmailPageReadyInTab,
       ensureSignupPostIdentityPageReadyInTab = ensureSignupPostEmailPageReadyInTab,
       getTabId,
+      getState = async () => ({}),
       isTabAlive,
       phoneVerificationHelpers = null,
       resolveSignupMethod = () => 'email',
       resolveSignupEmailForFlow,
+      discardSignupEmailForRetry = null,
       sendToContentScriptResilient,
       OPENAI_AUTH_INJECT_FILES,
       waitForTabStableComplete = null,
@@ -43,6 +45,120 @@
       return isSignupEntryUnavailableErrorMessage(errorLike)
         || isSignupPhoneEntryUnavailableErrorMessage(errorLike)
         || isRetryableStep2TransportErrorMessage(errorLike);
+    }
+
+    function isLikelyLoggedInChatgptHomeUrl(rawUrl) {
+      const url = String(rawUrl || '').trim();
+      if (!url) {
+        return false;
+      }
+
+      try {
+        const parsed = new URL(url);
+        const host = String(parsed.hostname || '').toLowerCase();
+        if (!['chatgpt.com', 'www.chatgpt.com'].includes(host)) {
+          return false;
+        }
+
+        const path = String(parsed.pathname || '');
+        if (/^\/(?:auth\/|create-account\/|email-verification|log-in|add-phone)(?:[/?#]|$)/i.test(path)) {
+          return false;
+        }
+
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    function isReadySignupEntryState(state = '') {
+      const normalized = String(state || '').trim().toLowerCase();
+      return normalized === 'entry_home'
+        || normalized === 'email_entry'
+        || normalized === 'phone_entry'
+        || normalized === 'password_page';
+    }
+
+    function isGoogleLoginLandingResult(result = {}) {
+      if (String(result?.state || '').trim().toLowerCase() === 'google_login_page') {
+        return true;
+      }
+      try {
+        return String(new URL(String(result?.url || '')).hostname || '').toLowerCase() === 'accounts.google.com';
+      } catch {
+        return false;
+      }
+    }
+
+    async function getSignupEntryReadyState(tabId) {
+      if (!Number.isInteger(tabId) || typeof sendToContentScriptResilient !== 'function') {
+        return '';
+      }
+
+      try {
+        const result = await sendToContentScriptResilient('openai-auth', {
+          type: 'ENSURE_SIGNUP_ENTRY_READY',
+          step: 2,
+          source: 'background',
+          payload: {},
+        }, {
+          timeoutMs: 12000,
+          retryDelayMs: 500,
+          logMessage: '步骤 2：正在检查官网注册入口状态...',
+        });
+        if (result?.error) {
+          return '';
+        }
+        return String(result?.state || '').trim().toLowerCase();
+      } catch {
+        return '';
+      }
+    }
+
+    async function isLikelyLoggedInChatgptHomeTab(tabId) {
+      if (typeof chrome?.tabs?.get !== 'function') {
+        return false;
+      }
+
+      const readyState = await getSignupEntryReadyState(tabId);
+      if (isReadySignupEntryState(readyState)) {
+        return false;
+      }
+
+      const currentUrl = await getTabUrl(tabId);
+      return isLikelyLoggedInChatgptHomeUrl(currentUrl);
+    }
+
+    async function shouldForceAuthEntryRetry(tabId) {
+      if (!Number.isInteger(tabId)) {
+        return false;
+      }
+      return isLikelyLoggedInChatgptHomeTab(tabId);
+    }
+
+    async function getTabUrl(tabId) {
+      if (!Number.isInteger(tabId) || typeof chrome?.tabs?.get !== 'function') {
+        return '';
+      }
+
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        return String(tab?.url || '');
+      } catch {
+        return '';
+      }
+    }
+
+    async function failStep2OnLoggedInSession(tabId, reasonMessage = '') {
+      if (!(await isLikelyLoggedInChatgptHomeTab(tabId))) {
+        return false;
+      }
+
+      const reasonText = getErrorMessage(reasonMessage);
+      const reasonSuffix = reasonText ? `（触发原因：${reasonText}）` : '';
+      const message = `步骤 2：检测到当前停留在已登录 ChatGPT 首页，已阻止自动跳过步骤 3/4/5。请先执行步骤 1 清理会话后重试。${reasonSuffix}`;
+      await addLog(message, 'error');
+      throw new Error(message);
     }
 
     async function sendSignupIdentity(payload = {}, options = {}) {
@@ -275,47 +391,80 @@
     }
 
     async function executeSignupEmailEntry(state) {
-      const resolvedEmail = await resolveSignupEmailForFlow(state);
+      const maxEmailAttempts = 3;
+      let workingState = state || {};
       let signupTabId = await ensureSignupTabForStep2();
 
-      let step2Result = await submitSignupEmail(resolvedEmail, {
-        timeoutMs: 35000,
-        retryDelayMs: 700,
-        logMessage: '步骤 2：官网注册入口正在切换，等待页面恢复后继续输入邮箱...',
-      });
+      for (let emailAttempt = 1; emailAttempt <= maxEmailAttempts; emailAttempt += 1) {
+        const resolvedEmail = await resolveSignupEmailForFlow(workingState);
+        let step2Result = await submitSignupEmail(resolvedEmail, {
+          timeoutMs: 35000,
+          retryDelayMs: 700,
+          logMessage: 'Step 2: submitting signup email...',
+        });
 
-      if (step2Result?.error) {
-        const errorMessage = getErrorMessage(step2Result.error);
-        if (isStep2RecoverableErrorMessage(errorMessage)) {
-          signupTabId = await reopenSignupEntryForStep2('步骤 2：注册入口不可用或通信超时，正在重新打开官网入口后重试一次...');
-          step2Result = await submitSignupEmail(resolvedEmail, {
-            timeoutMs: 45000,
-            retryDelayMs: 700,
-            logMessage: '步骤 2：官网注册入口已重新就绪，正在重新提交邮箱...',
-          });
+        if (step2Result?.error) {
+          const errorMessage = getErrorMessage(step2Result.error);
+          if (isStep2RecoverableErrorMessage(errorMessage)) {
+            signupTabId = await reopenSignupEntryForStep2('步骤 2：注册入口不可用或通信超时，正在重新打开官网入口后重试一次...');
+            step2Result = await submitSignupEmail(resolvedEmail, {
+              timeoutMs: 45000,
+              retryDelayMs: 700,
+              logMessage: 'Step 2: signup entry is ready; retrying signup email...',
+            });
+          }
         }
+
+        if (step2Result?.error) {
+          const finalErrorMessage = getErrorMessage(step2Result.error);
+          if (isStep2RecoverableErrorMessage(finalErrorMessage)
+            && await failStep2OnLoggedInSession(signupTabId, finalErrorMessage)) {
+            return;
+          }
+          throw new Error(finalErrorMessage);
+        }
+
+        if (!step2Result?.alreadyOnPasswordPage) {
+          await addLog(`Step 2: email ${resolvedEmail} submitted; waiting for next signup page...`);
+        }
+
+        const landingResult = await ensureSignupPostEmailPageReadyInTab(signupTabId, 2, {
+          skipUrlWait: Boolean(step2Result?.alreadyOnPasswordPage),
+        });
+
+        if (isGoogleLoginLandingResult(landingResult)) {
+          await addLog(`步骤 2：邮箱 ${resolvedEmail} 被 OpenAI 跳转到 Google 登录页，判定该临时邮箱不可用于当前注册，准备取消并换新邮箱。`, 'warn');
+          const discardResult = typeof discardSignupEmailForRetry === 'function'
+            ? await discardSignupEmailForRetry(workingState, resolvedEmail, {
+                reason: 'google_login_redirect',
+                landingUrl: landingResult?.url || '',
+                attempt: emailAttempt,
+              })
+            : { discarded: false };
+          if (!discardResult?.discarded) {
+            throw new Error(`Step 2: email ${resolvedEmail} landed on Google login, but the current mail provider cannot discard and retry automatically.`);
+          }
+          if (emailAttempt >= maxEmailAttempts) {
+            throw new Error(`Step 2: ${maxEmailAttempts} emails landed on Google login; stopping automatic email retry.`);
+          }
+          await addLog(`Step 2: reopening signup entry and requesting a new email (${emailAttempt + 1}/${maxEmailAttempts})...`, 'warn');
+          signupTabId = (await ensureSignupEntryPageReady(2)).tabId;
+          workingState = typeof getState === 'function'
+            ? await getState()
+            : { ...workingState, email: '' };
+          continue;
+        }
+
+        await completeNodeFromBackground('submit-signup-email', {
+          email: resolvedEmail,
+          accountIdentifierType: 'email',
+          accountIdentifier: resolvedEmail,
+          nextSignupState: landingResult?.state || 'password_page',
+          nextSignupUrl: landingResult?.url || step2Result?.url || '',
+          skippedPasswordStep: landingResult?.state === 'verification_page',
+        });
+        return;
       }
-
-      if (step2Result?.error) {
-        throw new Error(getErrorMessage(step2Result.error));
-      }
-
-      if (!step2Result?.alreadyOnPasswordPage) {
-        await addLog(`步骤 2：邮箱 ${resolvedEmail} 已提交，正在等待页面加载并确认下一步入口...`);
-      }
-
-      const landingResult = await ensureSignupPostEmailPageReadyInTab(signupTabId, 2, {
-        skipUrlWait: Boolean(step2Result?.alreadyOnPasswordPage),
-      });
-
-      await completeNodeFromBackground('submit-signup-email', {
-        email: resolvedEmail,
-        accountIdentifierType: 'email',
-        accountIdentifier: resolvedEmail,
-        nextSignupState: landingResult?.state || 'password_page',
-        nextSignupUrl: landingResult?.url || step2Result?.url || '',
-        skippedPasswordStep: landingResult?.state === 'verification_page',
-      });
     }
 
     async function executeStep2(state) {

@@ -34,6 +34,7 @@
         'luckmail-api': 'LuckMail（API 购邮）',
         'cloudflare-temp-email': 'Cloudflare Temp Email',
         'cloudmail': 'Cloud Mail',
+        'smsbower-mail': 'SMSBower TempMail',
         'plus-checkout': 'Plus Checkout',
         'paypal-flow': 'PayPal 授权页',
         'unknown-source': '未知来源',

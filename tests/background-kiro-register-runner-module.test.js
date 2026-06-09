@@ -196,6 +196,79 @@ test('kiro submit-email can adopt an already-open registration OTP page without 
   assert.equal(sentMessages.some((message) => message.type === 'EXECUTE_NODE'), false);
 });
 
+test('kiro submit-name recovers the registration email from the AWS name page', async () => {
+  const api = loadRegisterRunnerApi();
+  const currentState = {
+    runtimeState: {
+      flowState: {
+        kiro: {
+          session: {
+            registerTabId: 104,
+          },
+          register: {
+            loginUrl: 'https://app.kiro.dev/signin',
+          },
+        },
+      },
+    },
+  };
+  const sentMessages = [];
+  const statePatches = [];
+  let completedPayload = null;
+  const runner = api.createKiroRegisterRunner({
+    addLog: async () => {},
+    chrome: {
+      tabs: {
+        get: async (tabId) => ({ id: tabId, url: 'https://us-east-1.signin.aws/platform/d/signup' }),
+        update: async () => {},
+      },
+    },
+    completeNodeFromBackground: async (_nodeId, payload) => {
+      completedPayload = payload;
+    },
+    generateRandomName: () => 'Ada Lovelace',
+    getState: async () => currentState,
+    getTabId: async () => 104,
+    isTabAlive: async () => true,
+    sendToContentScriptResilient: async (_sourceId, message) => {
+      sentMessages.push(message);
+      if (message.type === 'ENSURE_KIRO_PAGE_STATE') {
+        return {
+          state: 'name_entry',
+          url: 'https://us-east-1.signin.aws/platform/d/signup',
+          email: 'anduss797@gmail.com',
+        };
+      }
+      if (message.type === 'EXECUTE_NODE') {
+        return { submitted: true, state: 'name_submitted' };
+      }
+      if (message.type === 'ENSURE_KIRO_STATE_CHANGE') {
+        return {
+          state: 'register_otp_page',
+          url: 'https://us-east-1.signin.aws/platform/d/signup',
+          email: 'anduss797@gmail.com',
+        };
+      }
+      return {};
+    },
+    setState: async (patch) => {
+      statePatches.push(patch);
+    },
+  });
+
+  await runner.executeKiroSubmitName({ nodeId: 'kiro-submit-name', ...currentState });
+
+  assert.equal(sentMessages.some((message) => (
+    message.type === 'EXECUTE_NODE'
+      && message.nodeId === 'kiro-submit-name'
+      && message.payload?.fullName === 'Ada Lovelace'
+  )), true);
+  assert.equal(getKiroRuntime(completedPayload).register?.email, 'anduss797@gmail.com');
+  assert.equal(getKiroRuntime(completedPayload).register?.fullName, 'Ada Lovelace');
+  assert.equal(getKiroRuntime(completedPayload).register?.status, 'waiting_otp');
+  assert.equal(statePatches.some((patch) => getKiroRuntime(patch).register?.email === 'anduss797@gmail.com'), true);
+});
+
 test('kiro verification polling uses the registration email field instead of page text', async () => {
   const api = loadRegisterRunnerApi();
   const currentState = {
