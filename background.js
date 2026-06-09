@@ -13498,6 +13498,17 @@ async function runAutoSequenceFromNodeGraph(startNodeId, context = {}) {
     return title && title !== nodeId ? `${nodeId}（${title}）` : nodeId;
   };
   const getNodeIndex = (state, nodeId) => getAutoRunWorkflowNodeIds(state).indexOf(nodeId);
+  const isSmsBowerSignupMailNoCodeFailure = (error, state = {}) => {
+    const smsbowerMailProvider = typeof SMSBOWER_MAIL_PROVIDER === 'string'
+      ? SMSBOWER_MAIL_PROVIDER
+      : 'smsbower-mail';
+    if (String(state?.mailProvider || '').trim() !== smsbowerMailProvider) {
+      return false;
+    }
+    const message = getErrorMessage(error);
+    return /SMSBower TempMail/i.test(message)
+      && /验证码(?:尚未到达|未返回验证码内容)|未在 SMSBower TempMail 中找到新的匹配验证码|邮箱轮询结束，但未获取到验证码/i.test(message);
+  };
   const shouldRunNamedNode = async (nodeId) => {
     const state = await getState();
     if (typeof isNodeExecutionAllowedForState === 'function' && !isNodeExecutionAllowedForState(nodeId, state)) {
@@ -13898,6 +13909,7 @@ async function runAutoSequenceFromNodeGraph(startNodeId, context = {}) {
           const preservedState = await getState();
           const preservedEmail = String(preservedState.email || '').trim();
           const preservedPassword = String(preservedState.password || '').trim();
+          const shouldSkipStep1CookieCleanup = isSmsBowerSignupMailNoCodeFailure(err, preservedState);
           const emailSuffix = preservedEmail ? `当前邮箱：${preservedEmail}；` : '';
           await addLog(
             `节点 fetch-signup-code：执行失败，准备沿用当前邮箱回到节点 open-chatgpt 重新开始（第 ${step4RestartCount} 次重开）。${emailSuffix}原因：${getErrorMessage(err)}`,
@@ -13909,6 +13921,9 @@ async function runAutoSequenceFromNodeGraph(startNodeId, context = {}) {
           const restorePayload = {};
           if (preservedEmail) restorePayload.email = preservedEmail;
           if (preservedPassword) restorePayload.password = preservedPassword;
+          if (shouldSkipStep1CookieCleanup) {
+            restorePayload.skipStep1CookieCleanupOnce = true;
+          }
           if (Object.keys(restorePayload).length) {
             await setState(restorePayload);
           }
@@ -14311,8 +14326,10 @@ const phoneVerificationHelpers = self.MultiPageBackgroundPhoneVerification?.crea
 const step1Executor = self.MultiPageBackgroundStep1?.createStep1Executor({
   addLog,
   completeNodeFromBackground,
+  getState,
   openSignupEntryTab,
   sendToContentScriptResilient,
+  setState,
   waitForTabStableComplete,
 });
 const step2Executor = self.MultiPageBackgroundStep2?.createStep2Executor({

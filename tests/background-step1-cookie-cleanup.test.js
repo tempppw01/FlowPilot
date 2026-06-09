@@ -127,6 +127,66 @@ test('step 1 cookie cleanup skips browsingData sweep when no direct cookie is re
   assert.equal(events.browsingDataCalls.length, 0);
 });
 
+test('step 1 skips cookie cleanup once after SMSBower TempMail no-code restart', async () => {
+  const api = loadStep1Module();
+  const events = {
+    getAllCalls: 0,
+    removedCookies: 0,
+    logs: [],
+    stateUpdates: [],
+    openedSteps: [],
+  };
+  let currentState = {
+    skipStep1CookieCleanupOnce: true,
+  };
+
+  const chromeApi = {
+    cookies: {
+      getAllCookieStores: async () => [{ id: 'store-a' }],
+      getAll: async () => {
+        events.getAllCalls += 1;
+        return [{ domain: '.chatgpt.com', path: '/', name: 'session', storeId: 'store-a' }];
+      },
+      remove: async () => {
+        events.removedCookies += 1;
+        return {};
+      },
+    },
+  };
+
+  const executor = api.createStep1Executor({
+    addLog: async (message, level = 'info') => {
+      events.logs.push({ message, level });
+    },
+    chrome: chromeApi,
+    getState: async () => currentState,
+    setState: async (updates) => {
+      events.stateUpdates.push(updates);
+      currentState = { ...currentState, ...updates };
+    },
+    openSignupEntryTab: async (step) => {
+      events.openedSteps.push(step);
+      return 212;
+    },
+    sendToContentScriptResilient: async () => ({ state: 'entry_home' }),
+    waitForTabStableComplete: async (tabId) => ({ id: tabId, url: 'https://chatgpt.com/' }),
+    completeNodeFromBackground: async () => {},
+  });
+
+  await executor.executeStep1();
+
+  assert.equal(events.getAllCalls, 0);
+  assert.equal(events.removedCookies, 0);
+  assert.deepStrictEqual(events.stateUpdates, [
+    { skipStep1CookieCleanupOnce: false },
+  ]);
+  assert.deepStrictEqual(events.openedSteps, [1]);
+  assert.equal(
+    events.logs.some((entry) => /SMSBower TempMail 验证码超时后的重开/.test(entry.message)),
+    true
+  );
+});
+
 test('step 1 retries after auth login landing and re-clears cookies before reopening chatgpt home', async () => {
   const api = loadStep1Module();
   const events = {

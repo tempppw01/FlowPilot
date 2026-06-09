@@ -322,6 +322,157 @@ return {
   assert.equal(events.logs.some(({ message }) => /沿用当前邮箱回到节点 open-chatgpt 重新开始/.test(message)), true);
 });
 
+test('auto-run marks next step 1 to skip cookie cleanup after SMSBower TempMail signup no-code failure', async () => {
+  const api = new Function(`
+const AUTO_STEP_DELAYS = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0 };
+const LAST_STEP_ID = 10;
+const FINAL_OAUTH_CHAIN_START_STEP = 7;
+const SIGNUP_METHOD_PHONE = 'phone';
+const SMSBOWER_MAIL_PROVIDER = 'smsbower-mail';
+const chrome = {
+  tabs: {
+    update: async () => {},
+  },
+  runtime: {
+    sendMessage: async () => {},
+  },
+};
+
+let remainingFailures = 1;
+let currentState = {
+  email: 'smsbower@example.com',
+  password: 'Secret123!',
+  mailProvider: 'smsbower-mail',
+  stepStatuses: {
+    1: 'pending',
+    2: 'pending',
+    3: 'pending',
+    4: 'pending',
+    5: 'pending',
+    6: 'pending',
+    7: 'pending',
+    8: 'pending',
+    9: 'pending',
+    10: 'pending',
+  },
+};
+const events = {
+  steps: [],
+  invalidations: [],
+  logs: [],
+  setStateCalls: [],
+};
+
+async function addLog(message, level = 'info') {
+  events.logs.push({ message, level });
+}
+
+async function ensureAutoEmailReady() {
+  return currentState.email;
+}
+
+async function broadcastAutoRunStatus() {}
+async function ensureResolvedSignupMethodForRun() { return 'email'; }
+
+async function getState() {
+  return currentState;
+}
+
+async function setState(updates) {
+  currentState = {
+    ...currentState,
+    ...updates,
+    stepStatuses: updates.stepStatuses ? { ...updates.stepStatuses } : currentState.stepStatuses,
+  };
+  events.setStateCalls.push(updates);
+}
+
+function isStopError(error) {
+  return (error?.message || String(error || '')) === '流程已被用户停止。';
+}
+
+function isStepDoneStatus(status) {
+  return status === 'completed' || status === 'manual_completed' || status === 'skipped';
+}
+
+async function executeStepAndWait(step) {
+  events.steps.push(step);
+  if (step === 4 && remainingFailures > 0) {
+    remainingFailures -= 1;
+    throw new Error('步骤 4：SMSBower TempMail 验证码尚未到达（60/60）。');
+  }
+}
+
+async function getTabId() {
+  return 1;
+}
+
+async function invalidateDownstreamAfterStepRestart(step, options = {}) {
+  events.invalidations.push({ step, options });
+  currentState = {
+    ...currentState,
+    password: null,
+    stepStatuses: {
+      1: currentState.stepStatuses[1] || 'completed',
+      2: 'pending',
+      3: 'pending',
+      4: 'pending',
+      5: 'pending',
+      6: 'pending',
+      7: 'pending',
+      8: 'pending',
+      9: 'pending',
+      10: 'pending',
+    },
+  };
+}
+
+function getLoginAuthStateLabel(state) {
+  return state || 'unknown';
+}
+
+function getErrorMessage(error) {
+  return error?.message || String(error || '');
+}
+
+async function getLoginAuthStateFromContent() {
+  return { state: 'password_page', url: 'https://auth.openai.com/log-in' };
+}
+
+${bundle}
+
+return {
+  async run() {
+    await runAutoSequenceFromStep(1, {
+      targetRun: 1,
+      totalRuns: 1,
+      attemptRuns: 1,
+      continued: false,
+    });
+    return { events, currentState };
+  },
+};
+`)();
+
+  const { events, currentState } = await api.run();
+
+  assert.deepStrictEqual(events.invalidations, [
+    {
+      step: 1,
+      options: {
+        logLabel: '节点 fetch-signup-code 报错后准备回到 open-chatgpt 沿用当前邮箱重试（第 1 次重开）',
+      },
+    },
+  ]);
+  assert.equal(currentState.email, 'smsbower@example.com');
+  assert.equal(currentState.password, 'Secret123!');
+  assert.equal(currentState.skipStep1CookieCleanupOnce, true);
+  assert.equal(
+    events.setStateCalls.some((updates) => updates.skipStep1CookieCleanupOnce === true),
+    true
+  );
+});
+
 test('auto-run does not restart step 4 current attempt when user_already_exists is detected', async () => {
   const api = new Function(`
 const AUTO_STEP_DELAYS = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0 };

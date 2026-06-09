@@ -153,12 +153,27 @@
       addLog,
       chrome: chromeApi = globalThis.chrome,
       completeNodeFromBackground,
+      getState = async () => ({}),
       openSignupEntryTab,
       sendToContentScriptResilient = null,
+      setState = async () => {},
       waitForTabStableComplete = null,
     } = deps;
 
+    async function shouldSkipStep1CookieCleanupOnce() {
+      const state = await getState();
+      if (!state?.skipStep1CookieCleanupOnce) {
+        return false;
+      }
+      await setState({ skipStep1CookieCleanupOnce: false });
+      await addLog('步骤 1：检测到本次为 SMSBower TempMail 验证码超时后的重开，跳过打开官网前 cookie 清理。', 'warn');
+      return true;
+    }
+
     async function clearOpenAiCookiesBeforeStep1() {
+      if (await shouldSkipStep1CookieCleanupOnce()) {
+        return;
+      }
       if (!chromeApi?.cookies?.getAll || !chromeApi.cookies?.remove) {
         await addLog('步骤 1：当前浏览器不支持 cookies API，跳过打开官网前 cookie 清理。', 'warn');
         return;

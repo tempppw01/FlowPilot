@@ -118,6 +118,22 @@ test('mail rule registry exposes canonical OpenAI verification poll payloads', (
     }).nodeId,
     'fetch-signup-code'
   );
+
+  const smsbowerSignupPayload = registry.buildVerificationPollPayloadForNode('fetch-signup-code', {
+    activeFlowId: 'openai',
+    email: 'smsbower@example.com',
+    mailProvider: 'smsbower-mail',
+  });
+  assert.equal(smsbowerSignupPayload.maxAttempts, 60);
+  assert.equal(smsbowerSignupPayload.intervalMs, 1000);
+
+  const smsbowerLoginPayload = registry.buildVerificationPollPayloadForNode('fetch-login-code', {
+    activeFlowId: 'openai',
+    email: 'smsbower@example.com',
+    mailProvider: 'smsbower-mail',
+  });
+  assert.equal(smsbowerLoginPayload.maxAttempts, 5);
+  assert.equal(smsbowerLoginPayload.intervalMs, 3000);
 });
 
 test('mail rule registry rejects unknown active flow ids instead of silently using OpenAI rules', () => {

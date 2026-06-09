@@ -5,6 +5,9 @@
   const LOGIN_CODE_RULE_ID = 'openai-login-code';
   const SIGNUP_CODE_NODE_ID = 'fetch-signup-code';
   const LOGIN_CODE_NODE_ID = 'fetch-login-code';
+  const SMSBOWER_MAIL_PROVIDER = 'smsbower-mail';
+  const SMSBOWER_SIGNUP_CODE_MAX_ATTEMPTS = 60;
+  const SMSBOWER_SIGNUP_CODE_INTERVAL_MS = 1000;
   const OPENAI_CODE_PATTERNS = Object.freeze([
     Object.freeze({
       source: '(?:chatgpt\\s+log-?in\\s+code|enter\\s+this\\s+code)[^0-9]{0,24}(\\d{6})',
@@ -58,6 +61,10 @@
         && String(state?.mail2925Mode || '').trim().toLowerCase() === 'receive';
     }
 
+    function isSmsBowerMailProvider(state = {}) {
+      return String(state?.mailProvider || '').trim().toLowerCase() === SMSBOWER_MAIL_PROVIDER;
+    }
+
     function resolveVerificationNodeId(input) {
       const directNodeId = String(input?.nodeId || input || '').trim();
       if (directNodeId === SIGNUP_CODE_NODE_ID || directNodeId === LOGIN_CODE_NODE_ID) {
@@ -78,10 +85,17 @@
       const nodeId = resolveVerificationNodeId(input);
       const normalizedStep = getVisibleStepForNode(nodeId, state);
       const mail2925Provider = isMail2925Provider(state);
+      const smsbowerMailProvider = isSmsBowerMailProvider(state);
       const signupStep = nodeId === SIGNUP_CODE_NODE_ID;
       const targetEmail = signupStep
         ? state?.email
         : (String(state?.step8VerificationTargetEmail || '').trim() || state?.email);
+      const maxAttempts = mail2925Provider
+        ? MAIL_2925_VERIFICATION_MAX_ATTEMPTS
+        : (signupStep && smsbowerMailProvider ? SMSBOWER_SIGNUP_CODE_MAX_ATTEMPTS : 5);
+      const intervalMs = mail2925Provider
+        ? MAIL_2925_VERIFICATION_INTERVAL_MS
+        : (signupStep && smsbowerMailProvider ? SMSBOWER_SIGNUP_CODE_INTERVAL_MS : 3000);
 
       return {
         flowId: 'openai',
@@ -105,8 +119,8 @@
         targetEmail,
         targetEmailHints: buildTargetEmailHints(targetEmail),
         mail2925MatchTargetEmail: shouldMatchMail2925TargetEmail(state),
-        maxAttempts: mail2925Provider ? MAIL_2925_VERIFICATION_MAX_ATTEMPTS : 5,
-        intervalMs: mail2925Provider ? MAIL_2925_VERIFICATION_INTERVAL_MS : 3000,
+        maxAttempts,
+        intervalMs,
       };
     }
 
