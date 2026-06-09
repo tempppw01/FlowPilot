@@ -296,6 +296,59 @@ test('step 4 forwards skipProfileStep when prepare stage already reached logged-
   assert.equal(resolveCalls, 0);
 });
 
+test('step 4 gives signup verification prepare enough response time for page recovery', async () => {
+  let capturedPrepareOptions = null;
+  let resolveCalls = 0;
+
+  const executor = api.createStep4Executor({
+    addLog: async () => {},
+    chrome: {
+      tabs: {
+        update: async () => {},
+      },
+    },
+    completeNodeFromBackground: async () => {},
+    confirmCustomVerificationStepBypass: async () => {},
+    ensureMail2925MailboxSession: async () => {},
+    getMailConfig: () => ({
+      provider: '163',
+      label: '163 邮箱',
+      source: 'mail-163',
+      url: 'https://mail.163.com',
+    }),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isTabAlive: async () => true,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    resolveVerificationStep: async () => {
+      resolveCalls += 1;
+    },
+    reuseOrCreateTab: async () => {},
+    sendToContentScript: async (_source, message, options) => {
+      if (message.type === 'PREPARE_SIGNUP_VERIFICATION') {
+        capturedPrepareOptions = options;
+      }
+      return { ready: true };
+    },
+    sendToContentScriptResilient: async () => ({ ready: true }),
+    isRetryableContentScriptTransportError: () => false,
+    shouldUseCustomRegistrationEmail: () => false,
+    STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS: 25000,
+    throwIfStopped: () => {},
+  });
+
+  await executor.executeStep4({
+    email: 'user@example.com',
+    password: 'secret',
+  });
+
+  assert.deepStrictEqual(capturedPrepareOptions, {
+    responseTimeoutMs: 75000,
+  });
+  assert.equal(resolveCalls, 1);
+});
+
 test('step 4 phone signup branch uses SMS helper and does not poll mailbox', async () => {
   const completions = [];
   const phoneCalls = [];

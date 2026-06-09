@@ -5127,7 +5127,7 @@ async function waitForSignupVerificationTransition(timeout = 5000) {
   return inspectSignupVerificationState();
 }
 
-async function prepareSignupVerificationFlow(payload = {}, timeout = 30000) {
+async function prepareSignupVerificationFlow(payload = {}, timeout = 60000) {
   const performOperationWithDelay = typeof getOperationDelayRunner === 'function'
     ? getOperationDelayRunner()
     : async (metadata, operation) => {

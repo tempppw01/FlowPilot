@@ -227,8 +227,8 @@
           prepareLogLabel: '步骤 4 执行',
         },
       };
-      const prepareTimeoutMs = 30000;
-      const prepareResponseTimeoutMs = 30000;
+      const prepareTimeoutMs = 90000;
+      const prepareResponseTimeoutMs = 75000;
       const prepareStartAt = Date.now();
       let prepareResult = null;
 
