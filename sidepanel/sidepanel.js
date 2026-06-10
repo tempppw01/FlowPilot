@@ -739,6 +739,7 @@ const MADAO_MODE_DIRECT = 'direct';
 const DEFAULT_MADAO_MODE = MADAO_MODE_ROUTING_PLAN;
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
+  { id: 187, label: 'USA', price: '' },
   { id: 3267, label: 'Indonesia', price: '0.014' },
   { id: 3243, label: 'Colombia', price: '0.016' },
   { id: 2649, label: 'South Africa', price: '0.02' },
@@ -8356,7 +8357,9 @@ async function loadSmsBowerCountries(options = {}) {
     }
     const option = document.createElement('option');
     option.value = String(id);
-    option.textContent = `${entry.label || `Country #${id}`} (${id}) ? ${entry.price}$`;
+    option.textContent = entry.price
+      ? `${entry.label || `Country #${id}`} (${id}) ? ${entry.price}$`
+      : `${entry.label || `Country #${id}`} (${id})`;
     selectSmsBowerCountryOrder.appendChild(option);
     smsbowerCountrySearchTextById.set(id, `${entry.label || ''} ${id} ${entry.price}`.trim());
   });
