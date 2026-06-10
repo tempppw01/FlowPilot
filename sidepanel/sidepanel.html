@@ -1698,9 +1698,23 @@
             <div class="data-row" id="row-smsbower-country-order" style="display:none;">
               <span class="data-label">国家优先级</span>
               <div class="data-inline hero-sms-country-stack">
-                <input type="text" id="input-smsbower-country-order" class="data-input mono"
-                  placeholder="187" />
-                <span class="data-value hero-sms-country-note">美国为 187；多个国家用逗号分隔。</span>
+                <select id="select-smsbower-country-order" class="data-input mono" multiple size="6" style="display:none;"></select>
+                <div class="hero-sms-country-mainline">
+                  <div id="smsbower-country-order-menu-shell" class="hero-sms-country-menu">
+                    <button id="btn-smsbower-country-order-menu" class="btn btn-outline btn-sm hero-sms-country-menu-btn" type="button" aria-haspopup="listbox" aria-expanded="false">
+                      未选择 (0/0)
+                    </button>
+                    <div id="smsbower-country-order-menu" class="hero-sms-country-menu-dropdown" role="listbox" aria-multiselectable="true" hidden></div>
+                  </div>
+                </div>
+                <span class="data-value hero-sms-country-note">仅展示低于 0.14 的候选，按点击顺序生效。</span>
+              </div>
+            </div>
+            <div class="data-row" id="row-smsbower-country-order-actions" style="display:none;">
+              <span class="data-label">顺序管理</span>
+              <div class="data-inline hero-sms-country-stack">
+                <span id="display-smsbower-country-order" class="data-value data-value-fill mono country-order-list">未设置</span>
+                <button id="btn-smsbower-country-order-clear" class="btn btn-ghost btn-xs data-inline-btn" type="button">重置</button>
               </div>
             </div>
             <div class="data-row" id="row-smsbower-provider-ids" style="display:none;">

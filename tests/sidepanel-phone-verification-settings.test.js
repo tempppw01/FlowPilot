@@ -192,7 +192,14 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /id="row-smsbower-service-code"/);
   assert.match(html, /id="input-smsbower-service-code"/);
   assert.match(html, /id="row-smsbower-country-order"/);
-  assert.match(html, /id="input-smsbower-country-order"/);
+  assert.match(html, /id="select-smsbower-country-order"[^>]*multiple/);
+  assert.match(html, /id="smsbower-country-order-menu-shell"/);
+  assert.match(html, /id="btn-smsbower-country-order-menu"/);
+  assert.match(html, /id="row-smsbower-country-order-actions"/);
+  assert.match(html, /id="display-smsbower-country-order"/);
+  assert.match(html, /id="btn-smsbower-country-order-clear"/);
+  assert.match(html, /仅展示低于 0\.14 的候选/);
+  assert.doesNotMatch(html, /id="input-smsbower-country-order"/);
   assert.match(html, /id="row-smsbower-provider-ids"/);
   assert.match(html, /id="input-smsbower-provider-ids"/);
   assert.match(html, /id="row-smsbower-price-range"/);
@@ -200,6 +207,32 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /id="input-smsbower-max-price"/);
   assert.doesNotMatch(html, /id="btn-open-madao-github"/);
   assert.doesNotMatch(html, /id="input-account-run-history-text-enabled"/);
+});
+
+test('SMSBower country dropdown only exposes low-price candidates and keeps ordered summaries', () => {
+  assert.match(sidepanelSource, /const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object\.freeze\(\[/);
+  assert.match(sidepanelSource, /loadSmsBowerCountries\(\{ silent: true \}\)/);
+  assert.match(sidepanelSource, /btn-smsbower-country-order-menu/);
+  assert.match(sidepanelSource, /btn-smsbower-country-order-clear/);
+  assert.match(sidepanelSource, /smsbowerCountryOrderSelection\.length/);
+  assert.match(sidepanelSource, /getSmsBowerCountryLabelById\(countryId\)/);
+  assert.match(sidepanelSource, /getSmsBowerCountrySearchTextById\(countryId\)/);
+  assert.doesNotMatch(sidepanelSource, /0\.251/);
+  assert.doesNotMatch(sidepanelSource, /0\.536/);
+  assert.doesNotMatch(sidepanelSource, /0\.33/);
+
+  const api = new Function(`
+const btnSmsBowerCountryOrderMenu = { textContent: '' };
+const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Array.from({ length: 12 }, (_, index) => ({ id: index + 1 }));
+function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value : []; }
+function getSmsBowerCountryLabelById(id) {
+  return ({ 3267: 'Indonesia', 3243: 'Colombia', 2649: 'South Africa' }[id] || ('Country #' + id));
+}
+${extractFunction('updateSmsBowerCountryOrderMenuSummary')}
+return { btnSmsBowerCountryOrderMenu, updateSmsBowerCountryOrderMenuSummary };
+`)();
+  api.updateSmsBowerCountryOrderMenuSummary([3267, 3243, 2649]);
+  assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, 'Indonesia / Colombia / South Africa (3/12)');
 });
 
 test('sidepanel loads live SMS country lists silently during startup', () => {
@@ -214,6 +247,7 @@ test('sidepanel loads live SMS country lists silently during startup', () => {
   assert.doesNotMatch(fiveSimLoader, /console\.(?:warn|error)\('加载 5sim 国家列表失败：'/);
   assert.match(sidepanelSource, /loadHeroSmsCountries\(\{ silent: true \}\)/);
   assert.match(sidepanelSource, /loadFiveSimCountries\(\{ silent: true \}\)/);
+  assert.match(sidepanelSource, /loadSmsBowerCountries\(\{ silent: true \}\)/);
   assert.match(sidepanelSource, /await loadHeroSmsCountries\(\{ silent: true \}\);/);
   assert.doesNotMatch(sidepanelSource, /loadHeroSmsCountries\(\{ silent: true, preferFallbackOnly: true \}\)/);
   assert.doesNotMatch(sidepanelSource, /loadFiveSimCountries\(\{ silent: true, preferFallbackOnly: true \}\)/);
