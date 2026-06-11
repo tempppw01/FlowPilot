@@ -1,7 +1,8 @@
 (function attachBackgroundStep6(root, factory) {
   root.MultiPageBackgroundStep6 = factory();
 })(typeof self !== 'undefined' ? self : globalThis, function createBackgroundStep6Module() {
-  const DEFAULT_REGISTRATION_SUCCESS_WAIT_MS = 3000;
+  const DEFAULT_REGISTRATION_SUCCESS_WAIT_MIN_MS = 30000;
+  const DEFAULT_REGISTRATION_SUCCESS_WAIT_MAX_MS = 40000;
   const STEP6_COOKIE_CLEAR_DOMAINS = [
     'chatgpt.com',
     'chat.openai.com',
@@ -101,9 +102,29 @@
       chrome: chromeApi = globalThis.chrome,
       completeNodeFromBackground,
       getErrorMessage = (error) => error?.message || String(error || '未知错误'),
-      registrationSuccessWaitMs = DEFAULT_REGISTRATION_SUCCESS_WAIT_MS,
+      random = Math.random,
+      registrationSuccessWaitMs = null,
+      registrationSuccessWaitMinMs = DEFAULT_REGISTRATION_SUCCESS_WAIT_MIN_MS,
+      registrationSuccessWaitMaxMs = DEFAULT_REGISTRATION_SUCCESS_WAIT_MAX_MS,
       sleepWithStop = async (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0))),
     } = deps;
+
+    function resolveRegistrationSuccessWaitMs() {
+      if (registrationSuccessWaitMs !== null && registrationSuccessWaitMs !== undefined && registrationSuccessWaitMs !== '') {
+        const fixedWaitMs = Number(registrationSuccessWaitMs);
+        if (Number.isFinite(fixedWaitMs) && fixedWaitMs >= 0) {
+          return Math.floor(fixedWaitMs);
+        }
+      }
+      const minMs = Math.max(0, Math.floor(Number(registrationSuccessWaitMinMs) || DEFAULT_REGISTRATION_SUCCESS_WAIT_MIN_MS));
+      const maxMs = Math.max(minMs, Math.floor(Number(registrationSuccessWaitMaxMs) || DEFAULT_REGISTRATION_SUCCESS_WAIT_MAX_MS));
+      if (maxMs === minMs) {
+        return minMs;
+      }
+      const ratio = Math.max(0, Math.min(1, Number(random()) || 0));
+      const spanMs = maxMs - minMs;
+      return minMs + Math.min(spanMs, Math.floor(ratio * (spanMs + 1)));
+    }
 
     async function clearCookiesIfEnabled(state = {}) {
       if (!state?.step6CookieCleanupEnabled) {
@@ -142,7 +163,7 @@
     }
 
     async function executeStep6(state = {}) {
-      const waitMs = Math.max(0, Math.floor(Number(registrationSuccessWaitMs) || 0));
+      const waitMs = resolveRegistrationSuccessWaitMs();
       if (waitMs > 0) {
         await addLog(`步骤 6：等待 ${Math.round(waitMs / 1000)} 秒，确认注册成功并让页面稳定...`, 'info');
         await sleepWithStop(waitMs);

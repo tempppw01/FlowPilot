@@ -735,7 +735,6 @@ const DEFAULT_MADAO_BASE_URL = 'http://127.0.0.1:7822';
 const DEFAULT_MADAO_MODE = 'routing_plan';
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([
-  4,
   6,
   33,
   39,
@@ -752,7 +751,6 @@ const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([
   187,
 ]);
 const SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID = Object.freeze({
-  4: '3237',
   6: '3267',
   33: '3243,3335',
   39: '3237',
@@ -1589,7 +1587,8 @@ const SETTINGS_SCHEMA_VIEW_KEYS = Object.freeze([
 const SETTINGS_SCHEMA_VIEW_KEY_SET = new Set(SETTINGS_SCHEMA_VIEW_KEYS);
 const SETTINGS_EXPORT_SCHEMA_VERSION = 1;
 const SETTINGS_EXPORT_FILENAME_PREFIX = 'multipage-settings';
-const STEP6_REGISTRATION_SUCCESS_WAIT_MS = 20000;
+const STEP6_REGISTRATION_SUCCESS_WAIT_MIN_MS = 30000;
+const STEP6_REGISTRATION_SUCCESS_WAIT_MAX_MS = 40000;
 
 const DEFAULT_STATE = {
   flowId: DEFAULT_ACTIVE_FLOW_ID,
@@ -14528,7 +14527,8 @@ const step6Executor = self.MultiPageBackgroundStep6?.createStep6Executor({
   chrome,
   completeNodeFromBackground,
   getErrorMessage,
-  registrationSuccessWaitMs: STEP6_REGISTRATION_SUCCESS_WAIT_MS,
+  registrationSuccessWaitMinMs: STEP6_REGISTRATION_SUCCESS_WAIT_MIN_MS,
+  registrationSuccessWaitMaxMs: STEP6_REGISTRATION_SUCCESS_WAIT_MAX_MS,
   sleepWithStop,
 });
 const step7Executor = self.MultiPageBackgroundStep7?.createStep7Executor({

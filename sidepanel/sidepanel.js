@@ -740,7 +740,6 @@ const MADAO_MODE_DIRECT = 'direct';
 const DEFAULT_MADAO_MODE = MADAO_MODE_ROUTING_PLAN;
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
-  { id: 4, label: '菲律宾', englishLabel: 'Philippines', price: '0.008', providerIds: '3237' },
   { id: 6, label: '印度尼西亚', englishLabel: 'Indonesia', price: '0.014', providerIds: '3267' },
   { id: 33, label: '哥伦比亚', englishLabel: 'Colombia', price: '0.016', providerIds: '3243,3335' },
   { id: 39, label: '阿根廷', englishLabel: 'Argentina', price: '0.016', providerIds: '3237' },

@@ -17,7 +17,6 @@
   const DEFAULT_POLL_INTERVAL_MS = 5000;
   const PHONE_CODE_TIMEOUT_ERROR_PREFIX = 'PHONE_CODE_TIMEOUT::';
   const DEFAULT_COUNTRY_CANDIDATES = Object.freeze([
-    { id: 4, label: 'Philippines', providerIds: '3237' },
     { id: 6, label: 'Indonesia', providerIds: '3267' },
     { id: 33, label: 'Colombia', providerIds: '3243,3335' },
     { id: 39, label: 'Argentina', providerIds: '3237' },
@@ -48,7 +47,6 @@
   LEGACY_COUNTRY_ID_BY_PROVIDER_ID.set('3237', 52);
   const COUNTRY_BY_PHONE_PREFIX = Object.freeze([
     { prefix: '1', id: 187, iso: 'US', label: 'USA' },
-    { prefix: '63', id: 4, iso: 'PH', label: 'Philippines' },
     { prefix: '66', id: 52, iso: 'TH', label: 'Thailand' },
     { prefix: '84', id: 10, iso: 'VN', label: 'Vietnam' },
     { prefix: '62', id: 6, iso: 'ID', label: 'Indonesia' },

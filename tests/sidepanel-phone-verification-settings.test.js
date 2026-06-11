@@ -215,7 +215,7 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /label:\s*'美国'/);
   assert.match(sidepanelSource, /englishLabel:\s*'USA'/);
   assert.match(sidepanelSource, /price:\s*''/);
-  assert.match(sidepanelSource, /label:\s*'菲律宾'/);
+  assert.doesNotMatch(sidepanelSource, /label:\s*'菲律宾'/);
   assert.match(sidepanelSource, /providerIds:\s*'2738'/);
   assert.match(sidepanelSource, /DEFAULT_SMSBOWER_MAX_PRICE = '0\.1'/);
   assert.match(sidepanelSource, /loadSmsBowerCountries\(\{ silent: true \}\)/);
@@ -235,16 +235,16 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
 
   const api = new Function(`
 const btnSmsBowerCountryOrderMenu = { textContent: '' };
-const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Array.from({ length: 15 }, (_, index) => ({ id: index + 1 }));
+const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Array.from({ length: 14 }, (_, index) => ({ id: index + 1 }));
 function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value : []; }
 function getSmsBowerCountryLabelById(id) {
-  return ({ 4: '菲律宾', 6: '印度尼西亚', 33: '哥伦比亚' }[id] || ('Country #' + id));
+  return ({ 6: '印度尼西亚', 33: '哥伦比亚', 39: '阿根廷' }[id] || ('Country #' + id));
 }
 ${extractFunction('updateSmsBowerCountryOrderMenuSummary')}
 return { btnSmsBowerCountryOrderMenu, updateSmsBowerCountryOrderMenuSummary };
 `)();
-  api.updateSmsBowerCountryOrderMenuSummary([4, 6, 33]);
-  assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, '菲律宾 / 印度尼西亚 / 哥伦比亚 (3/15)');
+  api.updateSmsBowerCountryOrderMenuSummary([6, 33, 39]);
+  assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, '印度尼西亚 / 哥伦比亚 / 阿根廷 (3/14)');
 });
 
 test('SMSBower country selection auto-syncs the provider IDs field unless it has been manually overridden', () => {
