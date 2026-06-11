@@ -8353,6 +8353,9 @@ function syncSmsBowerCountrySelectionOrderFromSelect(options = {}) {
   }));
   updateSmsBowerCountryOrderSummary(selectedCountries);
   updateSmsBowerCountryOrderMenuSummary(selectedCountries);
+  syncSmsBowerProviderIdsFromCountrySelection(smsbowerCountryOrderSelection, {
+    force: Boolean(options.forceProviderIds),
+  });
   renderSmsBowerCountryOrderMenu();
   return selectedCountries;
 }
@@ -8370,9 +8373,6 @@ function applySmsBowerCountrySelection(countries = [], options = {}) {
     ensureDefault: options.ensureDefault !== false,
     enforceMax: true,
     showLimitToast: false,
-  });
-  syncSmsBowerProviderIdsFromCountrySelection(smsbowerCountryOrderSelection, {
-    force: Boolean(options.forceProviderIds),
   });
   updateHeroSmsPlatformDisplay();
   return nextCountries;
@@ -13185,7 +13185,24 @@ function applySettingsState(state) {
     applySmsBowerCountrySelection(((Array.isArray(state?.smsbowerCountryOrder) && state.smsbowerCountryOrder.length) ? state.smsbowerCountryOrder : DEFAULT_SMSBOWER_COUNTRY_ORDER), { ensureDefault: false });
   }
   if (typeof inputSmsBowerProviderIds !== 'undefined' && inputSmsBowerProviderIds) {
-    inputSmsBowerProviderIds.value = normalizeSmsBowerProviderIdsValue(state?.smsbowerProviderIds || DEFAULT_SMSBOWER_PROVIDER_IDS);
+    const restoredSmsBowerProviderIds = normalizeSmsBowerProviderIdsValue(state?.smsbowerProviderIds || '');
+    const defaultSmsBowerProviderIds = typeof DEFAULT_SMSBOWER_PROVIDER_IDS !== 'undefined'
+      ? DEFAULT_SMSBOWER_PROVIDER_IDS
+      : '3170';
+    const restoredSmsBowerCountryOrder = normalizeSmsBowerCountryOrderValue(
+      (Array.isArray(state?.smsbowerCountryOrder) && state.smsbowerCountryOrder.length)
+        ? state.smsbowerCountryOrder
+        : DEFAULT_SMSBOWER_COUNTRY_ORDER
+    );
+    const autoSmsBowerProviderIds = getSmsBowerProviderIdsForCountryOrder(restoredSmsBowerCountryOrder);
+    if (
+      restoredSmsBowerProviderIds
+      && restoredSmsBowerProviderIds !== defaultSmsBowerProviderIds
+      && restoredSmsBowerProviderIds !== autoSmsBowerProviderIds
+    ) {
+      inputSmsBowerProviderIds.value = restoredSmsBowerProviderIds;
+      smsbowerProviderIdsAutoValue = restoredSmsBowerProviderIds;
+    }
   }
   if (typeof inputSmsBowerMinPrice !== 'undefined' && inputSmsBowerMinPrice) {
     inputSmsBowerMinPrice.value = normalizeSmsBowerPriceValue(state?.smsbowerMinPrice || '');
@@ -18712,7 +18729,24 @@ function applyPhoneSmsProviderFieldsToInputs(provider = getSelectedPhoneSmsProvi
     applySmsBowerCountrySelection(((Array.isArray(state?.smsbowerCountryOrder) && state.smsbowerCountryOrder.length) ? state.smsbowerCountryOrder : DEFAULT_SMSBOWER_COUNTRY_ORDER), { ensureDefault: false });
   }
   if (typeof inputSmsBowerProviderIds !== 'undefined' && inputSmsBowerProviderIds) {
-    inputSmsBowerProviderIds.value = normalizeSmsBowerProviderIdsValue(state?.smsbowerProviderIds || DEFAULT_SMSBOWER_PROVIDER_IDS);
+    const restoredSmsBowerProviderIds = normalizeSmsBowerProviderIdsValue(state?.smsbowerProviderIds || '');
+    const defaultSmsBowerProviderIds = typeof DEFAULT_SMSBOWER_PROVIDER_IDS !== 'undefined'
+      ? DEFAULT_SMSBOWER_PROVIDER_IDS
+      : '3170';
+    const restoredSmsBowerCountryOrder = normalizeSmsBowerCountryOrderValue(
+      (Array.isArray(state?.smsbowerCountryOrder) && state.smsbowerCountryOrder.length)
+        ? state.smsbowerCountryOrder
+        : DEFAULT_SMSBOWER_COUNTRY_ORDER
+    );
+    const autoSmsBowerProviderIds = getSmsBowerProviderIdsForCountryOrder(restoredSmsBowerCountryOrder);
+    if (
+      restoredSmsBowerProviderIds
+      && restoredSmsBowerProviderIds !== defaultSmsBowerProviderIds
+      && restoredSmsBowerProviderIds !== autoSmsBowerProviderIds
+    ) {
+      inputSmsBowerProviderIds.value = restoredSmsBowerProviderIds;
+      smsbowerProviderIdsAutoValue = restoredSmsBowerProviderIds;
+    }
   }
   if (typeof inputSmsBowerMinPrice !== 'undefined' && inputSmsBowerMinPrice) {
     inputSmsBowerMinPrice.value = normalizeSmsBowerPriceValue(state?.smsbowerMinPrice || '');
@@ -20258,7 +20292,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         applySmsBowerCountrySelection(message.payload.smsbowerCountryOrder, { ensureDefault: false });
       }
       if (message.payload.smsbowerProviderIds !== undefined && inputSmsBowerProviderIds) {
-        inputSmsBowerProviderIds.value = normalizeSmsBowerProviderIdsValue(message.payload.smsbowerProviderIds);
+        const incomingSmsBowerProviderIds = normalizeSmsBowerProviderIdsValue(message.payload.smsbowerProviderIds || '');
+        const defaultSmsBowerProviderIds = typeof DEFAULT_SMSBOWER_PROVIDER_IDS !== 'undefined'
+          ? DEFAULT_SMSBOWER_PROVIDER_IDS
+          : '3170';
+        const currentSmsBowerCountryOrder = normalizeSmsBowerCountryOrderValue(
+          (Array.isArray(message.payload.smsbowerCountryOrder) && message.payload.smsbowerCountryOrder.length)
+            ? message.payload.smsbowerCountryOrder
+            : ((Array.isArray(latestState?.smsbowerCountryOrder) && latestState.smsbowerCountryOrder.length) ? latestState.smsbowerCountryOrder : DEFAULT_SMSBOWER_COUNTRY_ORDER)
+        );
+        const autoSmsBowerProviderIds = getSmsBowerProviderIdsForCountryOrder(currentSmsBowerCountryOrder);
+        if (
+          incomingSmsBowerProviderIds
+          && incomingSmsBowerProviderIds !== defaultSmsBowerProviderIds
+          && incomingSmsBowerProviderIds !== autoSmsBowerProviderIds
+        ) {
+          inputSmsBowerProviderIds.value = incomingSmsBowerProviderIds;
+          smsbowerProviderIdsAutoValue = incomingSmsBowerProviderIds;
+        }
       }
       if (message.payload.smsbowerMinPrice !== undefined && inputSmsBowerMinPrice) {
         inputSmsBowerMinPrice.value = normalizeSmsBowerPriceValue(message.payload.smsbowerMinPrice);
