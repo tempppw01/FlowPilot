@@ -198,7 +198,7 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /id="row-smsbower-country-order-actions"/);
   assert.match(html, /id="display-smsbower-country-order"/);
   assert.match(html, /id="btn-smsbower-country-order-clear"/);
-  assert.match(html, /默认保留美国 187/);
+  assert.match(html, /3170/);
   assert.doesNotMatch(html, /id="input-smsbower-country-order"/);
   assert.match(html, /id="row-smsbower-provider-ids"/);
   assert.match(html, /id="input-smsbower-provider-ids"/);
@@ -211,13 +211,17 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
 
 test('SMSBower country dropdown only exposes low-price candidates and keeps ordered summaries', () => {
   assert.match(sidepanelSource, /const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object\.freeze\(\[/);
-  assert.match(sidepanelSource, /\{ id: 187, label: 'USA', price: '' \}/);
+  assert.match(sidepanelSource, /id:\s*187/);
+  assert.match(sidepanelSource, /label:\s*'USA'/);
+  assert.match(sidepanelSource, /price:\s*''/);
   assert.match(sidepanelSource, /loadSmsBowerCountries\(\{ silent: true \}\)/);
   assert.match(sidepanelSource, /btn-smsbower-country-order-menu/);
   assert.match(sidepanelSource, /btn-smsbower-country-order-clear/);
   assert.match(sidepanelSource, /smsbowerCountryOrderSelection\.length/);
   assert.match(sidepanelSource, /getSmsBowerCountryLabelById\(countryId\)/);
   assert.match(sidepanelSource, /getSmsBowerCountrySearchTextById\(countryId\)/);
+  assert.match(sidepanelSource, /providerId: '3170'/);
+  assert.match(sidepanelSource, /getSmsBowerProviderIdsForCountryOrder\(smsBowerCountryOrderForProviderIds\)/);
   assert.doesNotMatch(sidepanelSource, /0\.251/);
   assert.doesNotMatch(sidepanelSource, /0\.536/);
   assert.doesNotMatch(sidepanelSource, /0\.33/);
@@ -234,6 +238,34 @@ return { btnSmsBowerCountryOrderMenu, updateSmsBowerCountryOrderMenuSummary };
 `)();
   api.updateSmsBowerCountryOrderMenuSummary([3267, 3243, 2649]);
   assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, 'Indonesia / Colombia / South Africa (3/13)');
+});
+
+test('SMSBower country selection auto-syncs the provider IDs field unless it has been manually overridden', () => {
+  const api = new Function(`
+let smsbowerProviderIdsAutoValue = '3170';
+const inputSmsBowerProviderIds = { value: '3170' };
+function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value : []; }
+function normalizeSmsBowerCountryIdValue(value) { return Number(value); }
+function normalizeSmsBowerProviderIdsValue(value = '') { return String(value || '').trim().replace(/[^0-9,]+/g, ''); }
+function getSmsBowerCountryItemById(id) {
+  return ({
+    187: { providerId: '3170' },
+    3267: { providerId: '3267' },
+    3243: { providerId: '3243' },
+  }[id] || null);
+}
+${extractFunction('getSmsBowerDefaultProviderIdsByCountryId')}
+${extractFunction('getSmsBowerProviderIdsForCountryOrder')}
+${extractFunction('syncSmsBowerProviderIdsFromCountrySelection')}
+return { inputSmsBowerProviderIds, syncSmsBowerProviderIdsFromCountrySelection };
+`)();
+
+  api.syncSmsBowerProviderIdsFromCountrySelection([3267]);
+  assert.equal(api.inputSmsBowerProviderIds.value, '3267');
+
+  api.inputSmsBowerProviderIds.value = '8888';
+  api.syncSmsBowerProviderIdsFromCountrySelection([3243]);
+  assert.equal(api.inputSmsBowerProviderIds.value, '8888');
 });
 
 test('sidepanel loads live SMS country lists silently during startup', () => {
