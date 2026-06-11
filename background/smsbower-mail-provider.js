@@ -163,6 +163,18 @@
       });
     }
 
+    async function requestSmsBowerMailNextCode(state, options = {}) {
+      try {
+        return await setSmsBowerMailActivationStatus(state, 3);
+      } catch (err) {
+        await addLog(
+          `${options.logPrefix || 'SMSBower TempMail'}：请求下一条验证码失败：${err.message}`,
+          options.level || 'warn'
+        );
+        throw err;
+      }
+    }
+
     async function cancelSmsBowerMailActivationForRetry(state = null, options = {}) {
       const latestState = state || await getState();
       const config = getSmsBowerMailConfig(latestState);
@@ -223,7 +235,9 @@
             const code = String(extractSmsBowerMailCode(payload) || '').trim();
             if (code && !excludeCodes.has(code)) {
               try {
-                await setSmsBowerMailActivationStatus(latestState, 3);
+                await requestSmsBowerMailNextCode(latestState, {
+                  logPrefix: 'SMSBower TempMail',
+                });
               } catch (err) {
                 await addLog(`步骤 ${step}：SMSBower TempMail 关闭激活失败：${err.message}`, 'warn');
               }
@@ -233,6 +247,15 @@
                 emailTimestamp: Date.now(),
                 mailId: activation.id,
               };
+            }
+            if (code) {
+              try {
+                await requestSmsBowerMailNextCode(latestState, {
+                  logPrefix: 'SMSBower TempMail',
+                });
+              } catch (err) {
+                await addLog(`姝ラ ${step}锛歋MSBower TempMail 宸叉嫆缁濋獙璇佺爜 ${code}，但请求下一条验证码失败：${err.message}`, 'warn');
+              }
             }
             lastError = new Error(code
               ? `步骤 ${step}：SMSBower TempMail 返回验证码 ${code} 已在排除列表中（${attempt}/${maxAttempts}）。`

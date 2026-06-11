@@ -139,6 +139,36 @@ test('pollSmsBowerMailVerificationCode reads code and closes activation', async 
   assert.ok(snapshot.calls.some((call) => call.url.includes('/setStatus?') && call.url.includes('status=3')));
 });
 
+test('pollSmsBowerMailVerificationCode requests the next code even when the current code is excluded', async () => {
+  const api = createProviderApi({
+    state: {
+      smsbowerMailApiKey: 'api-key',
+      smsbowerMailBaseUrl: 'https://smsbower.page/api/mail',
+      smsbowerMailServiceCode: 'dr',
+      smsbowerMailDomain: 'gmail.com',
+      smsbowerMailMaxPrice: '0.134',
+      currentSmsBowerMailActivation: {
+        id: '42',
+        address: 'fresh@gmail.com',
+      },
+      email: 'fresh@gmail.com',
+    },
+  });
+
+  await assert.rejects(
+    () => api.pollSmsBowerMailVerificationCode(4, null, {
+      maxAttempts: 1,
+      intervalMs: 1,
+      excludeCodes: ['987654'],
+    }),
+    /987654/
+  );
+
+  const snapshot = api.snapshot();
+  assert.ok(snapshot.calls.some((call) => call.url.includes('/getCode?') && call.url.includes('mailId=42')));
+  assert.ok(snapshot.calls.some((call) => call.url.includes('/setStatus?') && call.url.includes('status=3')));
+});
+
 test('cancelSmsBowerMailActivationForRetry closes activation and clears runtime email', async () => {
   const api = createProviderApi({
     state: {
