@@ -220,7 +220,7 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /smsbowerCountryOrderSelection\.length/);
   assert.match(sidepanelSource, /getSmsBowerCountryLabelById\(countryId\)/);
   assert.match(sidepanelSource, /getSmsBowerCountrySearchTextById\(countryId\)/);
-  assert.match(sidepanelSource, /providerId: '3170'/);
+  assert.match(sidepanelSource, /providerIds: '3170'/);
   assert.match(sidepanelSource, /getSmsBowerProviderIdsForCountryOrder\(smsBowerCountryOrderForProviderIds\)/);
   assert.match(sidepanelSource, /syncSmsBowerProviderIdsFromCountrySelection\(smsbowerCountryOrderSelection,/);
   assert.doesNotMatch(sidepanelSource, /let\s+smsbowerProviderIdsAutoValue\s*=\s*DEFAULT_SMSBOWER_PROVIDER_IDS/);
@@ -231,16 +231,16 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
 
   const api = new Function(`
 const btnSmsBowerCountryOrderMenu = { textContent: '' };
-const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Array.from({ length: 13 }, (_, index) => ({ id: index + 1 }));
+const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Array.from({ length: 10 }, (_, index) => ({ id: index + 1 }));
 function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value : []; }
 function getSmsBowerCountryLabelById(id) {
-  return ({ 3267: 'Indonesia', 3243: 'Colombia', 2649: 'South Africa' }[id] || ('Country #' + id));
+  return ({ 6: 'Indonesia', 33: 'Colombia', 31: 'South Africa' }[id] || ('Country #' + id));
 }
 ${extractFunction('updateSmsBowerCountryOrderMenuSummary')}
 return { btnSmsBowerCountryOrderMenu, updateSmsBowerCountryOrderMenuSummary };
 `)();
-  api.updateSmsBowerCountryOrderMenuSummary([3267, 3243, 2649]);
-  assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, 'Indonesia / Colombia / South Africa (3/13)');
+  api.updateSmsBowerCountryOrderMenuSummary([6, 33, 31]);
+  assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, 'Indonesia / Colombia / South Africa (3/10)');
 });
 
 test('SMSBower country selection auto-syncs the provider IDs field unless it has been manually overridden', () => {
@@ -252,9 +252,9 @@ function normalizeSmsBowerCountryIdValue(value) { return Number(value); }
 function normalizeSmsBowerProviderIdsValue(value = '') { return String(value || '').trim().replace(/[^0-9,]+/g, ''); }
 function getSmsBowerCountryItemById(id) {
   return ({
-    187: { providerId: '3170' },
-    3267: { providerId: '3267' },
-    3243: { providerId: '3243' },
+    187: { providerIds: '3170' },
+    6: { providerIds: '3267' },
+    33: { providerIds: '3243' },
   }[id] || null);
 }
 ${extractFunction('getSmsBowerDefaultProviderIdsByCountryId')}
@@ -263,11 +263,11 @@ ${extractFunction('syncSmsBowerProviderIdsFromCountrySelection')}
 return { inputSmsBowerProviderIds, syncSmsBowerProviderIdsFromCountrySelection };
 `)();
 
-  api.syncSmsBowerProviderIdsFromCountrySelection([3267]);
+  api.syncSmsBowerProviderIdsFromCountrySelection([6]);
   assert.equal(api.inputSmsBowerProviderIds.value, '3267');
 
   api.inputSmsBowerProviderIds.value = '8888';
-  api.syncSmsBowerProviderIdsFromCountrySelection([3243]);
+  api.syncSmsBowerProviderIdsFromCountrySelection([33]);
   assert.equal(api.inputSmsBowerProviderIds.value, '8888');
 });
 

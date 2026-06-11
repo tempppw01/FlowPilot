@@ -735,20 +735,44 @@ const DEFAULT_MADAO_BASE_URL = 'http://127.0.0.1:7822';
 const DEFAULT_MADAO_MODE = 'routing_plan';
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([
-  3267,
-  3243,
-  2649,
-  3234,
-  2920,
-  3160,
-  2974,
-  3316,
-  2266,
-  3237,
-  3398,
-  2377,
+  6,
+  33,
+  31,
+  151,
+  10,
+  73,
+  19,
+  52,
+  53,
   187,
 ]);
+const SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID = Object.freeze({
+  6: '3267',
+  33: '3243',
+  31: '2649',
+  151: '3234,2974',
+  10: '2920,3160',
+  73: '3316,3398',
+  19: '2266',
+  52: '3237',
+  53: '2377',
+  187: '3170',
+});
+const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
+  3267: 6,
+  3243: 33,
+  2649: 31,
+  3234: 151,
+  2974: 151,
+  2920: 10,
+  3160: 10,
+  3316: 73,
+  3398: 73,
+  2266: 19,
+  3237: 52,
+  2377: 53,
+  3170: 187,
+});
 const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
 const DEFAULT_SMSBOWER_MAX_PRICE = '0.134';
 const DEFAULT_HERO_SMS_REUSE_ENABLED = true;
@@ -2330,6 +2354,18 @@ function normalizeSmsBowerCountryId(value, fallback = DEFAULT_SMSBOWER_COUNTRY_O
   return DEFAULT_SMSBOWER_COUNTRY_ORDER[0];
 }
 
+function resolveSmsBowerCountryId(value, fallback = DEFAULT_SMSBOWER_COUNTRY_ORDER[0]) {
+  const countryId = normalizeSmsBowerCountryId(value, 0);
+  if (countryId && Object.prototype.hasOwnProperty.call(SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID, countryId)) {
+    return countryId;
+  }
+  const legacyCountryId = SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID[String(countryId || '').trim()];
+  if (legacyCountryId) {
+    return legacyCountryId;
+  }
+  return normalizeSmsBowerCountryId(countryId || fallback, fallback);
+}
+
 function normalizeSmsBowerCountryOrder(value = []) {
   const source = Array.isArray(value)
     ? value
@@ -2340,7 +2376,7 @@ function normalizeSmsBowerCountryOrder(value = []) {
   const normalized = [];
   const seen = new Set();
   source.forEach((entry) => {
-    const countryId = normalizeSmsBowerCountryId(
+    const countryId = resolveSmsBowerCountryId(
       entry && typeof entry === 'object' && !Array.isArray(entry)
         ? (entry.id || entry.countryId || entry.country || '')
         : entry,
@@ -2361,14 +2397,19 @@ function getSmsBowerProviderIdsForCountryOrder(countryOrder = []) {
   const seen = new Set();
   normalizedCountryOrder.forEach((countryId) => {
     const providerId = normalizeSmsBowerProviderIds(
-      countryId === 187 ? '3170' : String(countryId),
+      SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID[countryId] || (countryId === 187 ? '3170' : ''),
       ''
     );
     if (!providerId || seen.has(providerId)) {
       return;
     }
-    seen.add(providerId);
-    providerIds.push(providerId);
+    providerId.split(',').forEach((entryProviderId) => {
+      if (!entryProviderId || seen.has(entryProviderId)) {
+        return;
+      }
+      seen.add(entryProviderId);
+      providerIds.push(entryProviderId);
+    });
   });
   return providerIds.join(',');
 }

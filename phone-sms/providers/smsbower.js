@@ -17,26 +17,40 @@
   const DEFAULT_POLL_INTERVAL_MS = 5000;
   const PHONE_CODE_TIMEOUT_ERROR_PREFIX = 'PHONE_CODE_TIMEOUT::';
   const DEFAULT_COUNTRY_CANDIDATES = Object.freeze([
-    { id: 3267, label: 'Indonesia' },
-    { id: 3243, label: 'Colombia' },
-    { id: 2649, label: 'South Africa' },
-    { id: 3234, label: 'Chile' },
-    { id: 2920, label: 'Vietnam' },
-    { id: 3160, label: 'Vietnam' },
-    { id: 2974, label: 'Chile' },
-    { id: 3316, label: 'Brazil' },
-    { id: 2266, label: 'Nigeria' },
-    { id: 3237, label: 'Thailand' },
-    { id: 3398, label: 'Brazil' },
-    { id: 2377, label: 'Saudi Arabia' },
-    { id: 187, label: 'USA' },
+    { id: 6, label: 'Indonesia', providerIds: '3267' },
+    { id: 33, label: 'Colombia', providerIds: '3243' },
+    { id: 31, label: 'South Africa', providerIds: '2649' },
+    { id: 151, label: 'Chile', providerIds: '3234,2974' },
+    { id: 10, label: 'Vietnam', providerIds: '2920,3160' },
+    { id: 73, label: 'Brazil', providerIds: '3316,3398' },
+    { id: 19, label: 'Nigeria', providerIds: '2266' },
+    { id: 52, label: 'Thailand', providerIds: '3237' },
+    { id: 53, label: 'Saudi Arabia', providerIds: '2377' },
+    { id: 187, label: 'USA', providerIds: '3170' },
   ]);
   const DEFAULT_COUNTRY_LABELS_BY_ID = new Map(DEFAULT_COUNTRY_CANDIDATES.map((entry) => [entry.id, entry.label]));
+  const DEFAULT_PROVIDER_IDS_BY_COUNTRY_ID = new Map(DEFAULT_COUNTRY_CANDIDATES.map((entry) => [
+    entry.id,
+    normalizeSmsBowerProviderIds(entry.providerIds, ''),
+  ]));
+  const LEGACY_COUNTRY_ID_BY_PROVIDER_ID = new Map();
+  DEFAULT_COUNTRY_CANDIDATES.forEach((entry) => {
+    normalizeSmsBowerProviderIds(entry.providerIds, '')
+      .split(',')
+      .filter(Boolean)
+      .forEach((providerId) => LEGACY_COUNTRY_ID_BY_PROVIDER_ID.set(providerId, entry.id));
+  });
   const COUNTRY_BY_PHONE_PREFIX = Object.freeze([
     { prefix: '1', id: 187, iso: 'US', label: 'USA' },
     { prefix: '66', id: 52, iso: 'TH', label: 'Thailand' },
     { prefix: '84', id: 10, iso: 'VN', label: 'Vietnam' },
     { prefix: '62', id: 6, iso: 'ID', label: 'Indonesia' },
+    { prefix: '966', id: 53, iso: 'SA', label: 'Saudi Arabia' },
+    { prefix: '234', id: 19, iso: 'NG', label: 'Nigeria' },
+    { prefix: '57', id: 33, iso: 'CO', label: 'Colombia' },
+    { prefix: '56', id: 151, iso: 'CL', label: 'Chile' },
+    { prefix: '55', id: 73, iso: 'BR', label: 'Brazil' },
+    { prefix: '27', id: 31, iso: 'ZA', label: 'South Africa' },
     { prefix: '44', id: 16, iso: 'GB', label: 'United Kingdom' },
     { prefix: '81', id: 151, iso: 'JP', label: 'Japan' },
     { prefix: '49', id: 43, iso: 'DE', label: 'Germany' },
@@ -67,6 +81,18 @@
   function normalizeCountryKey(value) {
     const countryId = normalizeSmsBowerCountryId(value, 0);
     return countryId > 0 ? String(countryId) : '';
+  }
+
+  function resolveSmsBowerCountryId(value, fallback = DEFAULT_COUNTRY_ID) {
+    const countryId = normalizeSmsBowerCountryId(value, 0);
+    if (countryId && DEFAULT_PROVIDER_IDS_BY_COUNTRY_ID.has(countryId)) {
+      return countryId;
+    }
+    const legacyCountryId = LEGACY_COUNTRY_ID_BY_PROVIDER_ID.get(String(countryId || '').trim());
+    if (legacyCountryId) {
+      return legacyCountryId;
+    }
+    return normalizeSmsBowerCountryId(countryId || fallback, fallback);
   }
 
   function normalizeSmsBowerServiceCode(value = '', fallback = DEFAULT_SERVICE_CODE) {
@@ -121,12 +147,12 @@
       let id = 0;
       let label = '';
       if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
-        id = normalizeOptionalSmsBowerCountryId(entry.id ?? entry.countryId ?? entry.country);
+        id = resolveSmsBowerCountryId(entry.id ?? entry.countryId ?? entry.country, 0);
         label = String((entry.label ?? entry.countryLabel) || '').trim();
       } else {
         const text = String(entry || '').trim();
         const structured = text.match(/^(\d+)\s*(?:[:|/-]\s*(.+))?$/);
-        id = normalizeOptionalSmsBowerCountryId(structured?.[1] || text);
+        id = resolveSmsBowerCountryId(structured?.[1] || text, 0);
         label = String(structured?.[2] || '').trim();
       }
       if (!id || seen.has(id)) {
@@ -458,7 +484,7 @@
     const providerIds = [];
     const seen = new Set();
     normalizedCountryOrder.forEach((entry) => {
-      const countryId = normalizeSmsBowerCountryId(
+      const countryId = resolveSmsBowerCountryId(
         entry && typeof entry === 'object' && !Array.isArray(entry)
           ? (entry.id ?? entry.countryId ?? entry.country)
           : entry,
@@ -468,16 +494,38 @@
         return;
       }
       const providerId = normalizeSmsBowerProviderIds(
-        countryId === DEFAULT_COUNTRY_ID ? DEFAULT_PROVIDER_IDS : String(countryId),
+        getProviderIdsForCountryId(countryId),
         ''
       );
       if (!providerId || seen.has(providerId)) {
         return;
       }
-      seen.add(providerId);
-      providerIds.push(providerId);
+      providerId.split(',').forEach((entryProviderId) => {
+        if (!entryProviderId || seen.has(entryProviderId)) {
+          return;
+        }
+        seen.add(entryProviderId);
+        providerIds.push(entryProviderId);
+      });
     });
     return providerIds.join(',');
+  }
+
+  function getProviderIdsForCountryId(countryId) {
+    const normalizedCountryId = resolveSmsBowerCountryId(countryId, 0);
+    return normalizeSmsBowerProviderIds(
+      DEFAULT_PROVIDER_IDS_BY_COUNTRY_ID.get(normalizedCountryId) || (normalizedCountryId === DEFAULT_COUNTRY_ID ? DEFAULT_PROVIDER_IDS : ''),
+      ''
+    );
+  }
+
+  function hasOnlyAutoSmsBowerProviderIds(providerIds = '', autoProviderIds = '') {
+    const configured = normalizeSmsBowerProviderIds(providerIds, '');
+    if (!configured) {
+      return true;
+    }
+    const autoSet = new Set(normalizeSmsBowerProviderIds(autoProviderIds, '').split(',').filter(Boolean));
+    return configured.split(',').filter(Boolean).every((providerId) => autoSet.has(providerId));
   }
 
   function formatPriceRangeText(minPriceLimit = null, maxPriceLimit = null) {
@@ -535,11 +583,11 @@
     if (priceRange.invalidRange) {
       throw new Error(`SMSBower 价格区间无效：最低购买价 ${priceRange.minPriceLimit} 高于价格上限 ${priceRange.maxPriceLimit}。`);
     }
-    const resolvedProviderIds = (
-      config.providerIds && config.providerIds !== DEFAULT_PROVIDER_IDS
-        ? config.providerIds
-        : getProviderIdsForCountryOrder(countryCandidates) || config.providerIds
-    );
+    const autoProviderIds = getProviderIdsForCountryOrder(countryCandidates) || DEFAULT_PROVIDER_IDS;
+    const useManualProviderIds = !hasOnlyAutoSmsBowerProviderIds(config.providerIds, autoProviderIds);
+    const resolvedProviderIds = useManualProviderIds
+      ? config.providerIds
+      : autoProviderIds;
     const maxAcquireRounds = Math.max(1, Math.min(10, Math.floor(Number(state?.smsbowerActivationRetryRounds) || DEFAULT_ACQUIRE_RETRY_ROUNDS)));
     const retryDelayMs = Math.max(500, Math.min(30000, Math.floor(Number(state?.smsbowerActivationRetryDelayMs) || DEFAULT_ACQUIRE_RETRY_DELAY_MS)));
     let finalNoNumbersByCountry = [];
@@ -554,15 +602,18 @@
         deps.throwIfStopped?.();
         const countryId = normalizeSmsBowerCountryId(countryConfig?.id, DEFAULT_COUNTRY_ID);
         const countryLabel = normalizeSmsBowerCountryLabel(countryConfig?.label, `Country #${countryId}`);
-        const countryAttempt = (payloadOrError) => formatSmsBowerAcquireFailure(countryLabel, countryId, resolvedProviderIds, payloadOrError);
+        const countryProviderIds = useManualProviderIds
+          ? resolvedProviderIds
+          : (getProviderIdsForCountryId(countryId) || resolvedProviderIds);
+        const countryAttempt = (payloadOrError) => formatSmsBowerAcquireFailure(countryLabel, countryId, countryProviderIds, payloadOrError);
         try {
           const query = {
             action: 'getNumber',
             service: config.serviceCode,
             country: countryId,
           };
-          if (resolvedProviderIds) {
-            query.providerIds = resolvedProviderIds;
+          if (countryProviderIds) {
+            query.providerIds = countryProviderIds;
           }
           const maxPrice = normalizeSmsBowerPrice(state?.smsbowerMaxPrice || DEFAULT_MAX_PRICE);
           if (maxPrice) {
@@ -574,7 +625,7 @@
             countryLabel,
             serviceCode: config.serviceCode,
             selectedPrice: maxPrice,
-            providerIds: resolvedProviderIds,
+            providerIds: countryProviderIds,
           });
           if (activation) {
             return activation;
@@ -595,7 +646,7 @@
           finalLastError = new Error(failure.message);
           finalLastError.countryId = countryId;
           finalLastError.countryLabel = countryLabel;
-          finalLastError.providerIds = resolvedProviderIds;
+          finalLastError.providerIds = countryProviderIds;
           finalLastError.failureReason = failure.failure.reason;
           if (typeof deps.addLog === 'function') {
             await deps.addLog(`步骤 9：${failure.message}`, 'warn');
@@ -619,7 +670,7 @@
           finalLastError.status = error?.status;
           finalLastError.countryId = countryId;
           finalLastError.countryLabel = countryLabel;
-          finalLastError.providerIds = resolvedProviderIds;
+          finalLastError.providerIds = countryProviderIds;
           finalLastError.failureReason = failure.failure.reason;
           if (typeof deps.addLog === 'function') {
             await deps.addLog(`步骤 9：${failure.message}`, 'warn');

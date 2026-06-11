@@ -99,6 +99,7 @@ test('background account history settings are normalized independently from hotm
     extractFunction('normalizeFiveSimOperator'),
     extractFunction('normalizeFiveSimMaxPrice'),
     extractFunction('normalizeFiveSimCountryFallback'),
+    extractFunction('resolveSmsBowerCountryId'),
     extractFunction('normalizeSub2ApiGroupNames'),
     extractFunction('normalizeBoundedIntegerSetting'),
     extractFunction('normalizeLocalHttpBaseUrl'),
@@ -145,7 +146,34 @@ const DEFAULT_PHONE_SMS_PROVIDER = PHONE_SMS_PROVIDER_HERO_SMS;
 const DEFAULT_MADAO_BASE_URL = 'http://127.0.0.1:7822';
 const DEFAULT_MADAO_MODE = 'routing_plan';
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
-const DEFAULT_SMSBOWER_COUNTRY_ORDER = [3267, 3243, 2649, 3234, 2920, 3160, 2974, 3316, 2266, 3237, 3398, 2377, 187];
+const DEFAULT_SMSBOWER_COUNTRY_ORDER = [6, 33, 31, 151, 10, 73, 19, 52, 53, 187];
+const SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID = {
+  6: '3267',
+  33: '3243',
+  31: '2649',
+  151: '3234,2974',
+  10: '2920,3160',
+  73: '3316,3398',
+  19: '2266',
+  52: '3237',
+  53: '2377',
+  187: '3170',
+};
+const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = {
+  3267: 6,
+  3243: 33,
+  2649: 31,
+  3234: 151,
+  2974: 151,
+  2920: 10,
+  3160: 10,
+  3316: 73,
+  3398: 73,
+  2266: 19,
+  3237: 52,
+  2377: 53,
+  3170: 187,
+};
 const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
 const DEFAULT_SMSBOWER_MAX_PRICE = '0.134';
 const SIGNUP_METHOD_EMAIL = 'email';
@@ -208,7 +236,7 @@ const PERSISTED_SETTING_DEFAULTS = {
   mailProvider: '163',
   heroSmsMinPrice: '',
   fiveSimMinPrice: '',
-  smsbowerCountryOrder: [3267, 3243, 2649, 3234, 2920, 3160, 2974, 3316, 2266, 3237, 3398, 2377, 187],
+  smsbowerCountryOrder: [6, 33, 31, 151, 10, 73, 19, 52, 53, 187],
   smsbowerProviderIds: '3170',
   smsbowerMinPrice: '',
   smsbowerMaxPrice: '0.134',
@@ -398,17 +426,18 @@ return {
   assert.equal(api.normalizePersistentSettingValue('smsbowerApiKey', ' demo-smsbower '), ' demo-smsbower ');
   assert.equal(api.normalizePersistentSettingValue('smsbowerServiceCode', ' DR! '), 'dr');
   assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [187, '52', 187]), [187, 52]);
+  assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [3237, 3316, 187]), [52, 73, 187]);
   assert.equal(api.normalizePersistentSettingValue('smsbowerProviderIds', '3170, abc, 3001'), '3170,3001');
   assert.equal(api.normalizePersistentSettingValue('smsbowerMinPrice', '0.123456'), '0.1235');
   assert.equal(api.normalizePersistentSettingValue('smsbowerMaxPrice', ''), '0.134');
   const smsBowerOrderPayload = api.buildPersistentSettingsPayload({
-    smsbowerCountryOrder: [3267, 3243, 187],
+    smsbowerCountryOrder: [6, 33, 187],
     smsbowerProviderIds: '3170',
   });
-  assert.deepStrictEqual(smsBowerOrderPayload.smsbowerCountryOrder, [3267, 3243, 187]);
+  assert.deepStrictEqual(smsBowerOrderPayload.smsbowerCountryOrder, [6, 33, 187]);
   assert.equal(smsBowerOrderPayload.smsbowerProviderIds, '3267,3243,3170');
   const smsBowerManualProviderPayload = api.buildPersistentSettingsPayload({
-    smsbowerCountryOrder: [3267, 3243, 187],
+    smsbowerCountryOrder: [6, 33, 187],
     smsbowerProviderIds: '9999',
   });
   assert.equal(smsBowerManualProviderPayload.smsbowerProviderIds, '9999');

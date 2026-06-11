@@ -740,19 +740,16 @@ const MADAO_MODE_DIRECT = 'direct';
 const DEFAULT_MADAO_MODE = MADAO_MODE_ROUTING_PLAN;
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
-  { id: 3267, label: 'Indonesia', price: '0.014', providerId: '3267' },
-  { id: 3243, label: 'Colombia', price: '0.016', providerId: '3243' },
-  { id: 2649, label: 'South Africa', price: '0.02', providerId: '2649' },
-  { id: 3234, label: 'Chile', price: '0.027', providerId: '3234' },
-  { id: 2920, label: 'Vietnam', price: '0.028', providerId: '2920' },
-  { id: 3160, label: 'Vietnam', price: '0.031', providerId: '3160' },
-  { id: 2974, label: 'Chile', price: '0.047', providerId: '2974' },
-  { id: 3316, label: 'Brazil', price: '0.052', providerId: '3316' },
-  { id: 2266, label: 'Nigeria', price: '0.054', providerId: '2266' },
-  { id: 3237, label: 'Thailand', price: '0.054', providerId: '3237' },
-  { id: 3398, label: 'Brazil', price: '0.058', providerId: '3398' },
-  { id: 2377, label: 'Saudi Arabia', price: '0.064', providerId: '2377' },
-  { id: 187, label: 'USA', price: '', providerId: '3170' },
+  { id: 6, label: 'Indonesia', price: '0.014', providerIds: '3267' },
+  { id: 33, label: 'Colombia', price: '0.016', providerIds: '3243' },
+  { id: 31, label: 'South Africa', price: '0.02', providerIds: '2649' },
+  { id: 151, label: 'Chile', price: '0.027', providerIds: '3234,2974' },
+  { id: 10, label: 'Vietnam', price: '0.028', providerIds: '2920,3160' },
+  { id: 73, label: 'Brazil', price: '0.052', providerIds: '3316,3398' },
+  { id: 19, label: 'Nigeria', price: '0.054', providerIds: '2266' },
+  { id: 52, label: 'Thailand', price: '0.054', providerIds: '3237' },
+  { id: 53, label: 'Saudi Arabia', price: '0.064', providerIds: '2377' },
+  { id: 187, label: 'USA', price: '', providerIds: '3170' },
 ]);
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze(SMSBOWER_LOW_PRICE_COUNTRY_ITEMS.map((item) => item.id));
 const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
@@ -6946,6 +6943,23 @@ function normalizeSmsBowerCountryIdValue(value, fallback = DEFAULT_SMSBOWER_COUN
   return DEFAULT_SMSBOWER_COUNTRY_ORDER[0];
 }
 
+function resolveSmsBowerCountryIdValue(value, fallback = DEFAULT_SMSBOWER_COUNTRY_ORDER[0]) {
+  const countryId = normalizeSmsBowerCountryIdValue(value, 0);
+  if (countryId && SMSBOWER_LOW_PRICE_COUNTRY_ITEMS.some((item) => normalizeSmsBowerCountryIdValue(item.id, 0) === countryId)) {
+    return countryId;
+  }
+  const legacyProviderId = String(countryId || '').trim();
+  const legacyMatch = SMSBOWER_LOW_PRICE_COUNTRY_ITEMS.find((item) => (
+    normalizeSmsBowerProviderIdsValue(item.providerIds || item.providerId || '')
+      .split(',')
+      .includes(legacyProviderId)
+  ));
+  if (legacyMatch) {
+    return normalizeSmsBowerCountryIdValue(legacyMatch.id, fallback);
+  }
+  return normalizeSmsBowerCountryIdValue(countryId || fallback, fallback);
+}
+
 function normalizeSmsBowerCountryOrderValue(value = []) {
   const source = Array.isArray(value)
     ? value
@@ -6956,7 +6970,7 @@ function normalizeSmsBowerCountryOrderValue(value = []) {
   const normalized = [];
   const seen = new Set();
   source.forEach((entry) => {
-    const countryId = normalizeSmsBowerCountryIdValue(
+    const countryId = resolveSmsBowerCountryIdValue(
       entry && typeof entry === 'object' && !Array.isArray(entry)
         ? (entry.id || entry.countryId || entry.country || '')
         : entry,
@@ -7026,7 +7040,7 @@ function getSmsBowerDefaultProviderIdsByCountryId(id) {
     return '';
   }
   const item = getSmsBowerCountryItemById(countryId);
-  return normalizeSmsBowerProviderIdsValue(item?.providerId || (countryId === 187 ? '3170' : String(countryId)));
+  return normalizeSmsBowerProviderIdsValue(item?.providerIds || item?.providerId || (countryId === 187 ? '3170' : ''));
 }
 
 function getSmsBowerProviderIdsForCountryOrder(countryOrder = []) {
@@ -7041,8 +7055,13 @@ function getSmsBowerProviderIdsForCountryOrder(countryOrder = []) {
     if (!providerId || seen.has(providerId)) {
       return;
     }
-    seen.add(providerId);
-    providerIds.push(providerId);
+    providerId.split(',').forEach((entryProviderId) => {
+      if (!entryProviderId || seen.has(entryProviderId)) {
+        return;
+      }
+      seen.add(entryProviderId);
+      providerIds.push(entryProviderId);
+    });
   });
   return providerIds.join(',') || defaultProviderIds;
 }
