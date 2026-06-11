@@ -9,7 +9,7 @@
   const DEFAULT_COUNTRY_ID = 187;
   const DEFAULT_COUNTRY_LABEL = 'USA';
   const DEFAULT_PROVIDER_IDS = '3170';
-  const DEFAULT_MAX_PRICE = '0.134';
+  const DEFAULT_MAX_PRICE = '0.1';
   const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
   const DEFAULT_ACQUIRE_RETRY_ROUNDS = 3;
   const DEFAULT_ACQUIRE_RETRY_DELAY_MS = 2000;
@@ -17,15 +17,20 @@
   const DEFAULT_POLL_INTERVAL_MS = 5000;
   const PHONE_CODE_TIMEOUT_ERROR_PREFIX = 'PHONE_CODE_TIMEOUT::';
   const DEFAULT_COUNTRY_CANDIDATES = Object.freeze([
+    { id: 4, label: 'Philippines', providerIds: '3237' },
     { id: 6, label: 'Indonesia', providerIds: '3267' },
-    { id: 33, label: 'Colombia', providerIds: '3243' },
+    { id: 33, label: 'Colombia', providerIds: '3243,3335' },
+    { id: 39, label: 'Argentina', providerIds: '3237' },
     { id: 31, label: 'South Africa', providerIds: '2649' },
+    { id: 16, label: 'United Kingdom', providerIds: '3237' },
     { id: 151, label: 'Chile', providerIds: '3234,2974' },
-    { id: 10, label: 'Vietnam', providerIds: '2920,3160' },
+    { id: 10, label: 'Vietnam', providerIds: '3160' },
     { id: 73, label: 'Brazil', providerIds: '3316,3398' },
     { id: 19, label: 'Nigeria', providerIds: '2266' },
     { id: 52, label: 'Thailand', providerIds: '3237' },
+    { id: 43, label: 'Germany', providerIds: '3237' },
     { id: 53, label: 'Saudi Arabia', providerIds: '2377' },
+    { id: 46, label: 'Sweden', providerIds: '2738' },
     { id: 187, label: 'USA', providerIds: '3170' },
   ]);
   const DEFAULT_COUNTRY_LABELS_BY_ID = new Map(DEFAULT_COUNTRY_CANDIDATES.map((entry) => [entry.id, entry.label]));
@@ -40,8 +45,10 @@
       .filter(Boolean)
       .forEach((providerId) => LEGACY_COUNTRY_ID_BY_PROVIDER_ID.set(providerId, entry.id));
   });
+  LEGACY_COUNTRY_ID_BY_PROVIDER_ID.set('3237', 52);
   const COUNTRY_BY_PHONE_PREFIX = Object.freeze([
     { prefix: '1', id: 187, iso: 'US', label: 'USA' },
+    { prefix: '63', id: 4, iso: 'PH', label: 'Philippines' },
     { prefix: '66', id: 52, iso: 'TH', label: 'Thailand' },
     { prefix: '84', id: 10, iso: 'VN', label: 'Vietnam' },
     { prefix: '62', id: 6, iso: 'ID', label: 'Indonesia' },
@@ -52,9 +59,9 @@
     { prefix: '55', id: 73, iso: 'BR', label: 'Brazil' },
     { prefix: '27', id: 31, iso: 'ZA', label: 'South Africa' },
     { prefix: '44', id: 16, iso: 'GB', label: 'United Kingdom' },
-    { prefix: '81', id: 151, iso: 'JP', label: 'Japan' },
+    { prefix: '54', id: 39, iso: 'AR', label: 'Argentina' },
+    { prefix: '46', id: 46, iso: 'SE', label: 'Sweden' },
     { prefix: '49', id: 43, iso: 'DE', label: 'Germany' },
-    { prefix: '33', id: 73, iso: 'FR', label: 'France' },
   ]);
 
   function normalizeSmsBowerCountryId(value, fallback = DEFAULT_COUNTRY_ID) {

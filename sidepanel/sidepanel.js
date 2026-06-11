@@ -740,20 +740,25 @@ const MADAO_MODE_DIRECT = 'direct';
 const DEFAULT_MADAO_MODE = MADAO_MODE_ROUTING_PLAN;
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
-  { id: 6, label: 'Indonesia', price: '0.014', providerIds: '3267' },
-  { id: 33, label: 'Colombia', price: '0.016', providerIds: '3243' },
-  { id: 31, label: 'South Africa', price: '0.02', providerIds: '2649' },
-  { id: 151, label: 'Chile', price: '0.027', providerIds: '3234,2974' },
-  { id: 10, label: 'Vietnam', price: '0.028', providerIds: '2920,3160' },
-  { id: 73, label: 'Brazil', price: '0.052', providerIds: '3316,3398' },
-  { id: 19, label: 'Nigeria', price: '0.054', providerIds: '2266' },
-  { id: 52, label: 'Thailand', price: '0.054', providerIds: '3237' },
-  { id: 53, label: 'Saudi Arabia', price: '0.064', providerIds: '2377' },
-  { id: 187, label: 'USA', price: '', providerIds: '3170' },
+  { id: 4, label: '菲律宾', englishLabel: 'Philippines', price: '0.008', providerIds: '3237' },
+  { id: 6, label: '印度尼西亚', englishLabel: 'Indonesia', price: '0.014', providerIds: '3267' },
+  { id: 33, label: '哥伦比亚', englishLabel: 'Colombia', price: '0.016', providerIds: '3243,3335' },
+  { id: 39, label: '阿根廷', englishLabel: 'Argentina', price: '0.016', providerIds: '3237' },
+  { id: 31, label: '南非', englishLabel: 'South Africa', price: '0.02', providerIds: '2649' },
+  { id: 16, label: '英国', englishLabel: 'United Kingdom', price: '0.027', providerIds: '3237' },
+  { id: 151, label: '智利', englishLabel: 'Chile', price: '0.027', providerIds: '3234,2974' },
+  { id: 10, label: '越南', englishLabel: 'Vietnam', price: '0.031', providerIds: '3160' },
+  { id: 73, label: '巴西', englishLabel: 'Brazil', price: '0.052', providerIds: '3316,3398' },
+  { id: 19, label: '尼日利亚', englishLabel: 'Nigeria', price: '0.054', providerIds: '2266' },
+  { id: 52, label: '泰国', englishLabel: 'Thailand', price: '0.054', providerIds: '3237' },
+  { id: 43, label: '德国', englishLabel: 'Germany', price: '0.056', providerIds: '3237' },
+  { id: 53, label: '沙特阿拉伯', englishLabel: 'Saudi Arabia', price: '0.064', providerIds: '2377' },
+  { id: 46, label: '瑞典', englishLabel: 'Sweden', price: '0.075', providerIds: '2738' },
+  { id: 187, label: '美国', englishLabel: 'USA', price: '', providerIds: '3170' },
 ]);
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze(SMSBOWER_LOW_PRICE_COUNTRY_ITEMS.map((item) => item.id));
 const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
-const DEFAULT_SMSBOWER_MAX_PRICE = '0.134';
+const DEFAULT_SMSBOWER_MAX_PRICE = '0.1';
 let maDaoRoutingPlanOptions = [];
 let maDaoProviderOptions = [];
 let maDaoCountryOptions = [];
@@ -4938,8 +4943,8 @@ function collectSettingsPayload() {
     ? normalizeSmsBowerPriceSafe(inputSmsBowerMinPrice.value)
     : normalizeSmsBowerPriceSafe(latestState?.smsbowerMinPrice || '');
   const smsBowerMaxPriceValue = typeof inputSmsBowerMaxPrice !== 'undefined' && inputSmsBowerMaxPrice
-    ? (normalizeSmsBowerPriceSafe(inputSmsBowerMaxPrice.value) || '0.134')
-    : (normalizeSmsBowerPriceSafe(latestState?.smsbowerMaxPrice || '') || '0.134');
+    ? (normalizeSmsBowerPriceSafe(inputSmsBowerMaxPrice.value) || DEFAULT_SMSBOWER_MAX_PRICE)
+    : (normalizeSmsBowerPriceSafe(latestState?.smsbowerMaxPrice || '') || DEFAULT_SMSBOWER_MAX_PRICE);
   const defaultHeroSmsReuseEnabled = typeof DEFAULT_HERO_SMS_REUSE_ENABLED !== 'undefined'
     ? DEFAULT_HERO_SMS_REUSE_ENABLED
     : true;
@@ -7029,6 +7034,8 @@ function getSmsBowerCountrySearchTextById(id) {
   const item = getSmsBowerCountryItemById(countryId);
   return String([
     item?.label,
+    item?.englishLabel,
+    item?.providerIds,
     countryId,
     item?.price,
   ].filter(Boolean).join(' ')).trim();
@@ -8467,10 +8474,10 @@ async function loadSmsBowerCountries(options = {}) {
     const option = document.createElement('option');
     option.value = String(id);
     option.textContent = entry.price
-      ? `${entry.label || `Country #${id}`} (${id}) ? ${entry.price}$`
+      ? `${entry.label || `Country #${id}`} (${id}) ≤ ${entry.price}$`
       : `${entry.label || `Country #${id}`} (${id})`;
     selectSmsBowerCountryOrder.appendChild(option);
-    smsbowerCountrySearchTextById.set(id, `${entry.label || ''} ${id} ${entry.price}`.trim());
+    smsbowerCountrySearchTextById.set(id, `${entry.label || ''} ${entry.englishLabel || ''} ${entry.providerIds || ''} ${id} ${entry.price}`.trim());
   });
   const sourceOrder = previousOrder.length ? previousOrder : ((Array.isArray(latestState?.smsbowerCountryOrder) && latestState.smsbowerCountryOrder.length) ? latestState.smsbowerCountryOrder : DEFAULT_SMSBOWER_COUNTRY_ORDER);
   applySmsBowerCountrySelection(sourceOrder, {

@@ -18,7 +18,7 @@ test('SMSBower provider requests the lowest-price country order by default', asy
         ok: true,
         status: 200,
         async text() {
-          return 'ACCESS_NUMBER:176292:+14075045913';
+          return 'ACCESS_NUMBER:176292:+639123456789';
         },
       };
     },
@@ -29,24 +29,24 @@ test('SMSBower provider requests the lowest-price country order by default', asy
   });
 
   const parsedUrl = new URL(requests[0].url);
-  const defaultCountryOrder = [6, 33, 31, 151, 10, 73, 19, 52, 53, 187];
-  const expectedProviderIds = '3267,3243,2649,3234,2974,2920,3160,3316,3398,2266,3237,2377,3170';
+  const defaultCountryOrder = [4, 6, 33, 39, 31, 16, 151, 10, 73, 19, 52, 43, 53, 46, 187];
+  assert.deepStrictEqual(provider.resolveCountryCandidates({}).map((entry) => entry.id), defaultCountryOrder);
   assert.equal(parsedUrl.hostname, 'smsbower.page');
   assert.equal(parsedUrl.searchParams.get('action'), 'getNumber');
   assert.equal(parsedUrl.searchParams.get('api_key'), 'key-1');
   assert.equal(parsedUrl.searchParams.get('service'), 'dr');
-  assert.equal(parsedUrl.searchParams.get('country'), '6');
-  assert.equal(parsedUrl.searchParams.get('providerIds'), '3267');
-  assert.equal(parsedUrl.searchParams.get('maxPrice'), '0.134');
+  assert.equal(parsedUrl.searchParams.get('country'), '4');
+  assert.equal(parsedUrl.searchParams.get('providerIds'), '3237');
+  assert.equal(parsedUrl.searchParams.get('maxPrice'), '0.1');
   assert.deepStrictEqual(activation, {
     activationId: '176292',
-    phoneNumber: '+14075045913',
+    phoneNumber: '+639123456789',
     provider: 'smsbower',
     serviceCode: 'dr',
-    countryId: 6,
-    countryLabel: 'Indonesia',
-    selectedPrice: '0.134',
-    providerIds: '3267',
+    countryId: 4,
+    countryLabel: 'Philippines',
+    selectedPrice: '0.1',
+    providerIds: '3237',
     successfulUses: 0,
     maxUses: 1,
   });
@@ -199,10 +199,10 @@ test('SMSBower provider derives provider IDs from the selected country order whe
 
   const parsedUrl = requests[0];
   assert.equal(parsedUrl.searchParams.get('country'), '33');
-  assert.equal(parsedUrl.searchParams.get('providerIds'), '3243');
+  assert.equal(parsedUrl.searchParams.get('providerIds'), '3243,3335');
   assert.equal(activation.countryId, 33);
   assert.equal(activation.countryLabel, 'Colombia');
-  assert.equal(activation.providerIds, '3243');
+  assert.equal(activation.providerIds, '3243,3335');
 });
 
 test('SMSBower provider cancels activation with status 8', async () => {

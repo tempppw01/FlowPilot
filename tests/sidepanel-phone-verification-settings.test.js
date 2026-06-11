@@ -212,8 +212,12 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
 test('SMSBower country dropdown only exposes low-price candidates and keeps ordered summaries', () => {
   assert.match(sidepanelSource, /const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object\.freeze\(\[/);
   assert.match(sidepanelSource, /id:\s*187/);
-  assert.match(sidepanelSource, /label:\s*'USA'/);
+  assert.match(sidepanelSource, /label:\s*'美国'/);
+  assert.match(sidepanelSource, /englishLabel:\s*'USA'/);
   assert.match(sidepanelSource, /price:\s*''/);
+  assert.match(sidepanelSource, /label:\s*'菲律宾'/);
+  assert.match(sidepanelSource, /providerIds:\s*'2738'/);
+  assert.match(sidepanelSource, /DEFAULT_SMSBOWER_MAX_PRICE = '0\.1'/);
   assert.match(sidepanelSource, /loadSmsBowerCountries\(\{ silent: true \}\)/);
   assert.match(sidepanelSource, /btn-smsbower-country-order-menu/);
   assert.match(sidepanelSource, /btn-smsbower-country-order-clear/);
@@ -231,16 +235,16 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
 
   const api = new Function(`
 const btnSmsBowerCountryOrderMenu = { textContent: '' };
-const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Array.from({ length: 10 }, (_, index) => ({ id: index + 1 }));
+const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Array.from({ length: 15 }, (_, index) => ({ id: index + 1 }));
 function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value : []; }
 function getSmsBowerCountryLabelById(id) {
-  return ({ 6: 'Indonesia', 33: 'Colombia', 31: 'South Africa' }[id] || ('Country #' + id));
+  return ({ 4: '菲律宾', 6: '印度尼西亚', 33: '哥伦比亚' }[id] || ('Country #' + id));
 }
 ${extractFunction('updateSmsBowerCountryOrderMenuSummary')}
 return { btnSmsBowerCountryOrderMenu, updateSmsBowerCountryOrderMenuSummary };
 `)();
-  api.updateSmsBowerCountryOrderMenuSummary([6, 33, 31]);
-  assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, 'Indonesia / Colombia / South Africa (3/10)');
+  api.updateSmsBowerCountryOrderMenuSummary([4, 6, 33]);
+  assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, '菲律宾 / 印度尼西亚 / 哥伦比亚 (3/15)');
 });
 
 test('SMSBower country selection auto-syncs the provider IDs field unless it has been manually overridden', () => {
@@ -254,7 +258,7 @@ function getSmsBowerCountryItemById(id) {
   return ({
     187: { providerIds: '3170' },
     6: { providerIds: '3267' },
-    33: { providerIds: '3243' },
+    33: { providerIds: '3243,3335' },
   }[id] || null);
 }
 ${extractFunction('getSmsBowerDefaultProviderIdsByCountryId')}
@@ -265,6 +269,9 @@ return { inputSmsBowerProviderIds, syncSmsBowerProviderIdsFromCountrySelection }
 
   api.syncSmsBowerProviderIdsFromCountrySelection([6]);
   assert.equal(api.inputSmsBowerProviderIds.value, '3267');
+
+  api.syncSmsBowerProviderIdsFromCountrySelection([33]);
+  assert.equal(api.inputSmsBowerProviderIds.value, '3243,3335');
 
   api.inputSmsBowerProviderIds.value = '8888';
   api.syncSmsBowerProviderIdsFromCountrySelection([33]);
@@ -1690,6 +1697,7 @@ const DEFAULT_MADAO_BASE_URL = 'http://127.0.0.1:7822';
 const MADAO_MODE_ROUTING_PLAN = 'routing_plan';
 const MADAO_MODE_DIRECT = 'direct';
 const DEFAULT_MADAO_MODE = MADAO_MODE_ROUTING_PLAN;
+const DEFAULT_SMSBOWER_MAX_PRICE = '0.1';
 const SIGNUP_METHOD_EMAIL = 'email';
 const SIGNUP_METHOD_PHONE = 'phone';
 const DEFAULT_SIGNUP_METHOD = SIGNUP_METHOD_EMAIL;

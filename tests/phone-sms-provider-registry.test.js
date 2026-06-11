@@ -130,7 +130,7 @@ test('phone sms provider registry can create the real SMSBower provider module',
   assert.equal(provider.defaultServiceCode, 'dr');
   assert.equal(provider.defaultCountryId, 187);
   assert.equal(provider.defaultProviderIds, '3170');
-  assert.equal(provider.defaultMaxPrice, '0.134');
+  assert.equal(provider.defaultMaxPrice, '0.1');
   assert.equal(typeof provider.fetchBalance, 'function');
   assert.equal(typeof provider.fetchPrices, 'function');
   assert.equal(provider.normalizeCountryId('187'), 187);
