@@ -222,6 +222,7 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /getSmsBowerCountrySearchTextById\(countryId\)/);
   assert.match(sidepanelSource, /providerId: '3170'/);
   assert.match(sidepanelSource, /getSmsBowerProviderIdsForCountryOrder\(smsBowerCountryOrderForProviderIds\)/);
+  assert.doesNotMatch(sidepanelSource, /let\s+smsbowerProviderIdsAutoValue\s*=\s*DEFAULT_SMSBOWER_PROVIDER_IDS/);
   assert.doesNotMatch(sidepanelSource, /0\.251/);
   assert.doesNotMatch(sidepanelSource, /0\.536/);
   assert.doesNotMatch(sidepanelSource, /0\.33/);
