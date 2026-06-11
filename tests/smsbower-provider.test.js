@@ -52,6 +52,63 @@ test('SMSBower provider requests the lowest-price country order by default', asy
   });
 });
 
+test('SMSBower provider logs Brazil failures with country and providerId context before falling back to USA', async () => {
+  const requests = [];
+  const logs = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    addLog: async (message, level) => {
+      logs.push({ message, level });
+    },
+    fetchImpl: async (url) => {
+      const parsedUrl = new URL(url);
+      requests.push(parsedUrl);
+      const action = parsedUrl.searchParams.get('action');
+      const country = parsedUrl.searchParams.get('country');
+      if (action !== 'getNumber') {
+        throw new Error(`Unexpected SMSBower action: ${action}`);
+      }
+      if (country === '3316') {
+        throw new TypeError('Failed to fetch');
+      }
+      if (country === '187') {
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return 'ACCESS_NUMBER:176293:+12025550123';
+          },
+        };
+      }
+      throw new Error(`Unexpected SMSBower country: ${country}`);
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [3316, 187],
+  });
+
+  assert.equal(requests[0].searchParams.get('country'), '3316');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3316,3170');
+  assert.equal(requests[1].searchParams.get('country'), '187');
+  assert.equal(requests[1].searchParams.get('providerIds'), '3316,3170');
+  assert.equal(activation.countryId, 187);
+  assert.equal(activation.countryLabel, 'USA');
+  assert.equal(activation.providerIds, '3316,3170');
+  assert.equal(
+    logs.some((entry) => (
+      entry.level === 'warn'
+      && /Brazil/.test(entry.message)
+      && /3316/.test(entry.message)
+      && /网络请求失败/.test(entry.message)
+      && /Failed to fetch/.test(entry.message)
+      && /providerIds=3316,3170/.test(entry.message)
+    )),
+    true
+  );
+});
+
 test('SMSBower provider polls STATUS_OK and completes activation', async () => {
   const requests = [];
   const module = loadModule();

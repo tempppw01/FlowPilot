@@ -696,6 +696,12 @@
       if (normalizePhoneSmsProvider(providerId) === PHONE_SMS_PROVIDER_HERO && /^HeroSMS\s+.+失败：/.test(text)) {
         return text.replace(/^HeroSMS\s+/, '').trim();
       }
+      if (normalizePhoneSmsProvider(providerId) === PHONE_SMS_PROVIDER_SMSBOWER) {
+        const smsBowerText = text.replace(/^SMSBower\s+/, '').trim();
+        if (/获取号码失败|暂无可用号码|请求超时|网络请求失败|API Key 无效|余额不足/i.test(smsBowerText)) {
+          return smsBowerText;
+        }
+      }
       if (/countries\s+are\s+empty|未选择国家/i.test(text)) {
         return '未选择国家，请先在接码设置中至少选择 1 个国家';
       }

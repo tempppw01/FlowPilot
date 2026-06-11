@@ -9009,6 +9009,51 @@ test('phone verification helper localizes HeroSMS BAD_KEY acquisition failure', 
   );
 });
 
+test('phone verification helper preserves SMSBower country-specific acquire failures', async () => {
+  let currentState = {
+    phoneSmsProvider: 'smsbower',
+    smsbowerApiKey: 'demo-key',
+    smsbowerCountryOrder: [3316],
+    smsbowerProviderIds: '3316',
+    smsbowerMaxPrice: '0.134',
+    currentPhoneActivation: null,
+    reusablePhoneActivation: null,
+    phoneVerificationReplacementLimit: 1,
+  };
+
+  const helpers = api.createPhoneVerificationHelpers({
+    addLog: async () => {},
+    ensureStep8SignupPageReady: async () => {},
+    fetchImpl: async (url) => {
+      const parsedUrl = new URL(url);
+      const action = parsedUrl.searchParams.get('action');
+      if (action === 'getNumber') {
+        throw new TypeError('Failed to fetch');
+      }
+      throw new Error(`Unexpected SMSBower action: ${action}`);
+    },
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => defaultTimeoutMs,
+    getState: async () => ({ ...currentState }),
+    sendToContentScriptResilient: async (_source, message) => {
+      throw new Error(`Unexpected content-script message: ${message.type}`);
+    },
+    setState: async (updates) => {
+      currentState = { ...currentState, ...updates };
+    },
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  await assert.rejects(
+    helpers.requestPhoneActivation(currentState),
+    (error) => {
+      assert.match(error.message, /SMSBower.*Brazil（3316）获取号码失败：网络请求失败（Failed to fetch）；providerIds=3316/);
+      assert.doesNotMatch(error.message, /获取手机号失败：$/);
+      return true;
+    }
+  );
+});
+
 test('phone verification helper routes 5sim buy, check, and finish by current activation provider', async () => {
   const requests = [];
   let currentState = {

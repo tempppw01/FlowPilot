@@ -201,6 +201,51 @@
     return /\bNO_NUMBERS\b|\bNO_BALANCE_FORWARD\b|\bNO_ACTIVATION\b|no\s+numbers|not\s+available/i.test(text);
   }
 
+  function classifySmsBowerAcquireFailure(payloadOrError) {
+    const payload = payloadOrError && typeof payloadOrError === 'object' && Object.prototype.hasOwnProperty.call(payloadOrError, 'payload')
+      ? payloadOrError.payload
+      : payloadOrError;
+    const message = payloadOrError && typeof payloadOrError === 'object' && Object.prototype.hasOwnProperty.call(payloadOrError, 'message')
+      ? payloadOrError.message
+      : '';
+    const payloadText = describePayload(payload);
+    const messageText = describePayload(message);
+    const combinedText = [payloadText, messageText].filter(Boolean).join(' ').trim();
+    const detail = payloadText || messageText || '';
+
+    if (isNoNumbersPayload(payload ?? payloadOrError)) {
+      return { reason: '暂无可用号码', detail, isNoNumbers: true, isTerminal: false };
+    }
+    if (/\bBAD_KEY\b|\bINVALID_KEY\b|\bWRONG_KEY\b/i.test(combinedText)) {
+      return { reason: 'API Key 无效', detail, isNoNumbers: false, isTerminal: true };
+    }
+    if (/\bNO_BALANCE\b|\bNOT_ENOUGH_BALANCE\b|余额不足|insufficient\s+balance|not\s+enough\s+balance/i.test(combinedText)) {
+      return { reason: '余额不足', detail, isNoNumbers: false, isTerminal: true };
+    }
+    if (/timeout|超时|aborterror|etimedout|request\s+timed\s+out/i.test(combinedText)) {
+      return { reason: '请求超时', detail, isNoNumbers: false, isTerminal: false };
+    }
+    if (/failed\s+to\s+fetch|networkerror|network\s+request\s+failed|fetch\s+failed|econnreset|enotfound|eai_again|socket\s+hang\s+up/i.test(combinedText)) {
+      return { reason: '网络请求失败', detail, isNoNumbers: false, isTerminal: false };
+    }
+    if (isTerminalError(combinedText)) {
+      return { reason: 'API 返回终止错误', detail, isNoNumbers: false, isTerminal: true };
+    }
+    return { reason: '获取失败', detail, isNoNumbers: false, isTerminal: false };
+  }
+
+  function formatSmsBowerAcquireFailure(countryLabel, countryId, providerIds, payloadOrError) {
+    const failure = classifySmsBowerAcquireFailure(payloadOrError);
+    const location = `${String(countryLabel || 'Unknown country').trim()}（${String(countryId || '').trim()}）`;
+    const statusText = failure.isNoNumbers ? '暂无可用号码' : `获取号码失败：${failure.reason}`;
+    const detailText = failure.detail ? `（${failure.detail}）` : '';
+    const providerText = providerIds ? `；providerIds=${providerIds}` : '';
+    return {
+      failure,
+      message: `SMSBower ${location}${statusText}${detailText}${providerText}`,
+    };
+  }
+
   function resolveConfig(state = {}, deps = {}) {
     return {
       apiKey: String(state?.smsbowerApiKey || '').trim(),
@@ -509,6 +554,7 @@
         deps.throwIfStopped?.();
         const countryId = normalizeSmsBowerCountryId(countryConfig?.id, DEFAULT_COUNTRY_ID);
         const countryLabel = normalizeSmsBowerCountryLabel(countryConfig?.label, `Country #${countryId}`);
+        const countryAttempt = (payloadOrError) => formatSmsBowerAcquireFailure(countryLabel, countryId, resolvedProviderIds, payloadOrError);
         try {
           const query = {
             action: 'getNumber',
@@ -533,20 +579,54 @@
           if (activation) {
             return activation;
           }
-          if (isNoNumbersPayload(payload)) {
-            noNumbersByCountry.push(`${countryLabel}: ${describePayload(payload) || '暂无可用号码'}`);
+
+          const failure = countryAttempt(payload);
+          const failureSummary = failure.message.startsWith('SMSBower ')
+            ? failure.message.slice(9)
+            : failure.message;
+          if (failure.failure.isNoNumbers) {
+            noNumbersByCountry.push(failureSummary);
+            if (typeof deps.addLog === 'function') {
+              await deps.addLog(`步骤 9：${failure.message}`, 'warn');
+            }
             continue;
           }
-          finalLastError = new Error(`SMSBower 获取手机号失败：${describePayload(payload) || '未返回手机号'}`);
+
+          finalLastError = new Error(failure.message);
+          finalLastError.countryId = countryId;
+          finalLastError.countryLabel = countryLabel;
+          finalLastError.providerIds = resolvedProviderIds;
+          finalLastError.failureReason = failure.failure.reason;
+          if (typeof deps.addLog === 'function') {
+            await deps.addLog(`步骤 9：${failure.message}`, 'warn');
+          }
         } catch (error) {
-          if (isTerminalError(error?.payload || error?.message)) {
-            throw error;
-          }
-          if (isNoNumbersPayload(error?.payload || error?.message)) {
-            noNumbersByCountry.push(`${countryLabel}: ${describePayload(error?.payload || error?.message) || '暂无可用号码'}`);
+          const failure = countryAttempt(error);
+          const failureSummary = failure.message.startsWith('SMSBower ')
+            ? failure.message.slice(9)
+            : failure.message;
+          if (failure.failure.isNoNumbers || isNoNumbersPayload(error?.payload || error?.message)) {
+            noNumbersByCountry.push(failureSummary);
+            if (typeof deps.addLog === 'function') {
+              await deps.addLog(`步骤 9：${failure.message}`, 'warn');
+            }
             continue;
           }
-          finalLastError = error;
+
+          finalLastError = new Error(failure.message);
+          finalLastError.cause = error;
+          finalLastError.payload = error?.payload;
+          finalLastError.status = error?.status;
+          finalLastError.countryId = countryId;
+          finalLastError.countryLabel = countryLabel;
+          finalLastError.providerIds = resolvedProviderIds;
+          finalLastError.failureReason = failure.failure.reason;
+          if (typeof deps.addLog === 'function') {
+            await deps.addLog(`步骤 9：${failure.message}`, 'warn');
+          }
+          if (failure.failure.isTerminal) {
+            throw finalLastError;
+          }
         }
       }
       finalNoNumbersByCountry = noNumbersByCountry;
@@ -571,7 +651,6 @@
     }
     throw new Error('SMSBower 获取手机号失败。');
   }
-
   function extractVerificationCode(value = '') {
     const text = String(value || '').trim().replace(/^STATUS_OK:\s*/i, '');
     if (!text) {
