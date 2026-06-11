@@ -3056,6 +3056,15 @@
             throw error;
           }
 
+          if (normalizedActivation.provider === PHONE_SMS_PROVIDER_SMSBOWER) {
+            await addLog(
+              `步骤 9：SMSBower 号码 ${normalizedActivation.phoneNumber} 在 ${waitSeconds} 秒内未收到短信，将返回步骤 7 刷新 OAuth 并获取新号码。`,
+              'warn'
+            );
+            await clearPhoneRuntimeCountdown();
+            throw buildPhoneRestartStep7Error(normalizedActivation.phoneNumber);
+          }
+
           if (windowIndex < timeoutWindows) {
             await addLog(
               `步骤 9：号码 ${normalizedActivation.phoneNumber} 在 ${waitSeconds} 秒内未收到短信，正在请求再次发送。`,
@@ -4558,7 +4567,7 @@
           await cancelPhoneActivation(await getState(), activation);
         }
         await clearCurrentActivation();
-        throw sanitizePhoneRestartStep7Error(sanitizePhoneCodeTimeoutError(error));
+        throw sanitizePhoneCodeTimeoutError(error);
       } finally {
         activePhoneVerificationLogStep = previousLogStep;
         activePhoneVerificationLogStepKey = previousLogStepKey;

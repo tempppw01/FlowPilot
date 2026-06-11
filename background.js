@@ -9964,7 +9964,8 @@ function getErrorMessage(error) {
   }
   return String(typeof error === 'string' ? error : error?.message || '')
     .replace(/^GPC_PAGE_FLOW_ENDED::/i, '')
-    .replace(/^AUTO_RUN_STEP_IDLE_RESTART::/i, '');
+    .replace(/^AUTO_RUN_STEP_IDLE_RESTART::/i, '')
+    .replace(/^PHONE_RESTART_STEP7::/i, '');
 }
 
 function isCloudflareSecurityBlockedError(error) {
@@ -15592,8 +15593,10 @@ async function getPostStep6AutoRestartDecision(step, error) {
   };
 
   const normalizedStep = Number(step);
+  const rawErrorMessage = String(typeof error === 'string' ? error : error?.message || error || '');
   const errorMessage = getErrorMessage(error);
-  const shouldForceRestartFromStep7 = /restart step 7 with a new number/i.test(errorMessage);
+  const shouldForceRestartFromStep7 = /^PHONE_RESTART_STEP7::/i.test(rawErrorMessage)
+    || /restart step 7 with a new number|从步骤\s*7\s*重新获取新号码/i.test(errorMessage);
   const latestState = await getState();
   const explicitAuthChainStartStep = findStepIdByKeyForState('oauth-login', latestState);
   const authChainStartStep = typeof getAuthChainStartStepId === 'function'
@@ -15671,22 +15674,22 @@ async function getPostStep6AutoRestartDecision(step, error) {
     };
   }
 
-  if (isPhoneVerificationLocalFailure(errorMessage)) {
+  if (shouldForceRestartFromStep7) {
     return {
-      shouldRestart: false,
-      blockedByAddPhone: true,
-      forcedByPhoneVerificationTimeout: false,
+      shouldRestart: true,
+      blockedByAddPhone: false,
+      forcedByPhoneVerificationTimeout: true,
       restartStep: authChainStartStep,
       errorMessage,
       authState: null,
     };
   }
 
-  if (shouldForceRestartFromStep7) {
+  if (isPhoneVerificationLocalFailure(errorMessage)) {
     return {
-      shouldRestart: true,
-      blockedByAddPhone: false,
-      forcedByPhoneVerificationTimeout: true,
+      shouldRestart: false,
+      blockedByAddPhone: true,
+      forcedByPhoneVerificationTimeout: false,
       restartStep: authChainStartStep,
       errorMessage,
       authState: null,

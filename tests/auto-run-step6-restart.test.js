@@ -377,7 +377,7 @@ function getLoginAuthStateLabel(state) {
   return state || 'unknown';
 }
 function getErrorMessage(error) {
-  return error?.message || String(error || '');
+  return String(error?.message || error || '').replace(/^PHONE_RESTART_STEP7::/i, '');
 }
 function normalizePlusPaymentMethod(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
@@ -589,6 +589,22 @@ test('auto-run does not restart step 7 when phone verification exhausted replace
   assert.equal(result.events.invalidations.length, 0);
   assert.deepStrictEqual(result.events.steps, [7, 8, 9]);
   assert.ok(!result.events.logs.some(({ message }) => /回到步骤 7 重新开始授权流程/.test(message)));
+});
+
+test('auto-run restarts oauth-login when phone verification asks to refresh OAuth for a new number', async () => {
+  const harness = createHarness({
+    failureStep: 9,
+    failureBudget: 1,
+    failureMessage: 'PHONE_RESTART_STEP7::手机验证重发后仍未收到短信，请从步骤 7 重新获取新号码。 当前号码：668686858708。',
+    authState: { state: 'phone_verification_page', url: 'https://auth.openai.com/phone-verification' },
+  });
+
+  const events = await harness.run();
+
+  assert.deepStrictEqual(events.steps, [7, 8, 9, 7, 8, 9, 10]);
+  assert.equal(events.invalidations.length, 1);
+  assert.ok(events.logs.some(({ message }) => /回到节点 oauth-login 重新开始授权流程/.test(message)));
+  assert.ok(!events.logs.some(({ message }) => /PHONE_RESTART_STEP7::/.test(message)));
 });
 
 test('auto-run restarts bound-email phone verification failures up to the email-mode cap', async () => {

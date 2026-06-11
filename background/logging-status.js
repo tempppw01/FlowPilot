@@ -92,7 +92,8 @@
     function getErrorMessage(error) {
       return String(typeof error === 'string' ? error : error?.message || '')
         .replace(/^GPC_PAGE_FLOW_ENDED::/i, '')
-        .replace(/^AUTO_RUN_STEP_IDLE_RESTART::/i, '');
+        .replace(/^AUTO_RUN_STEP_IDLE_RESTART::/i, '')
+        .replace(/^PHONE_RESTART_STEP7::/i, '');
     }
 
     function isVerificationMailPollingError(error) {
