@@ -16,6 +16,22 @@
   const DEFAULT_POLL_TIMEOUT_MS = 180000;
   const DEFAULT_POLL_INTERVAL_MS = 5000;
   const PHONE_CODE_TIMEOUT_ERROR_PREFIX = 'PHONE_CODE_TIMEOUT::';
+  const DEFAULT_COUNTRY_CANDIDATES = Object.freeze([
+    { id: 3267, label: 'Indonesia' },
+    { id: 3243, label: 'Colombia' },
+    { id: 2649, label: 'South Africa' },
+    { id: 3234, label: 'Chile' },
+    { id: 2920, label: 'Vietnam' },
+    { id: 3160, label: 'Vietnam' },
+    { id: 2974, label: 'Chile' },
+    { id: 3316, label: 'Brazil' },
+    { id: 2266, label: 'Nigeria' },
+    { id: 3237, label: 'Thailand' },
+    { id: 3398, label: 'Brazil' },
+    { id: 2377, label: 'Saudi Arabia' },
+    { id: 187, label: 'USA' },
+  ]);
+  const DEFAULT_COUNTRY_LABELS_BY_ID = new Map(DEFAULT_COUNTRY_CANDIDATES.map((entry) => [entry.id, entry.label]));
   const COUNTRY_BY_PHONE_PREFIX = Object.freeze([
     { prefix: '1', id: 187, iso: 'US', label: 'USA' },
     { prefix: '66', id: 52, iso: 'TH', label: 'Thailand' },
@@ -248,12 +264,33 @@
   function resolveCountryCandidates(state = {}) {
     const candidates = normalizeSmsBowerCountryOrder(state?.smsbowerCountryOrder);
     if (candidates.length) {
-      return candidates;
+      return candidates.map((entry) => {
+        const countryId = normalizeSmsBowerCountryId(
+          entry && typeof entry === 'object' && !Array.isArray(entry)
+            ? (entry.id ?? entry.countryId ?? entry.country)
+            : entry,
+          DEFAULT_COUNTRY_ID
+        );
+        const fallbackLabel = DEFAULT_COUNTRY_LABELS_BY_ID.get(countryId)
+          || (countryId === DEFAULT_COUNTRY_ID ? DEFAULT_COUNTRY_LABEL : `Country #${countryId}`);
+        const rawLabel = normalizeSmsBowerCountryLabel(
+          entry && typeof entry === 'object' && !Array.isArray(entry)
+            ? (entry.label ?? entry.countryLabel ?? '')
+            : '',
+          ''
+        );
+        return {
+          id: countryId,
+          label: rawLabel && !/^Country\s+#\d+$/i.test(rawLabel)
+            ? rawLabel
+            : fallbackLabel,
+        };
+      });
     }
-    return [{
-      id: normalizeSmsBowerCountryId(state?.smsbowerCountryId, DEFAULT_COUNTRY_ID),
-      label: normalizeSmsBowerCountryLabel(state?.smsbowerCountryLabel, DEFAULT_COUNTRY_LABEL),
-    }];
+    return DEFAULT_COUNTRY_CANDIDATES.map((entry) => ({
+      id: normalizeSmsBowerCountryId(entry.id, DEFAULT_COUNTRY_ID),
+      label: normalizeSmsBowerCountryLabel(entry.label, DEFAULT_COUNTRY_LABEL),
+    }));
   }
 
   function resolveCountryLabel(state = {}, countryId = DEFAULT_COUNTRY_ID) {
@@ -371,6 +408,33 @@
     };
   }
 
+  function getProviderIdsForCountryOrder(countryOrder = []) {
+    const normalizedCountryOrder = Array.isArray(countryOrder) ? countryOrder : [];
+    const providerIds = [];
+    const seen = new Set();
+    normalizedCountryOrder.forEach((entry) => {
+      const countryId = normalizeSmsBowerCountryId(
+        entry && typeof entry === 'object' && !Array.isArray(entry)
+          ? (entry.id ?? entry.countryId ?? entry.country)
+          : entry,
+        0
+      );
+      if (!countryId) {
+        return;
+      }
+      const providerId = normalizeSmsBowerProviderIds(
+        countryId === DEFAULT_COUNTRY_ID ? DEFAULT_PROVIDER_IDS : String(countryId),
+        ''
+      );
+      if (!providerId || seen.has(providerId)) {
+        return;
+      }
+      seen.add(providerId);
+      providerIds.push(providerId);
+    });
+    return providerIds.join(',');
+  }
+
   function formatPriceRangeText(minPriceLimit = null, maxPriceLimit = null) {
     const minPrice = normalizeSmsBowerPrice(minPriceLimit);
     const maxPrice = normalizeSmsBowerPrice(maxPriceLimit);
@@ -426,6 +490,11 @@
     if (priceRange.invalidRange) {
       throw new Error(`SMSBower 价格区间无效：最低购买价 ${priceRange.minPriceLimit} 高于价格上限 ${priceRange.maxPriceLimit}。`);
     }
+    const resolvedProviderIds = (
+      config.providerIds && config.providerIds !== DEFAULT_PROVIDER_IDS
+        ? config.providerIds
+        : getProviderIdsForCountryOrder(countryCandidates) || config.providerIds
+    );
     const maxAcquireRounds = Math.max(1, Math.min(10, Math.floor(Number(state?.smsbowerActivationRetryRounds) || DEFAULT_ACQUIRE_RETRY_ROUNDS)));
     const retryDelayMs = Math.max(500, Math.min(30000, Math.floor(Number(state?.smsbowerActivationRetryDelayMs) || DEFAULT_ACQUIRE_RETRY_DELAY_MS)));
     let finalNoNumbersByCountry = [];
@@ -446,8 +515,8 @@
             service: config.serviceCode,
             country: countryId,
           };
-          if (config.providerIds) {
-            query.providerIds = config.providerIds;
+          if (resolvedProviderIds) {
+            query.providerIds = resolvedProviderIds;
           }
           const maxPrice = normalizeSmsBowerPrice(state?.smsbowerMaxPrice || DEFAULT_MAX_PRICE);
           if (maxPrice) {
@@ -459,7 +528,7 @@
             countryLabel,
             serviceCode: config.serviceCode,
             selectedPrice: maxPrice,
-            providerIds: config.providerIds,
+            providerIds: resolvedProviderIds,
           });
           if (activation) {
             return activation;

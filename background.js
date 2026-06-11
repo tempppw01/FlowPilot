@@ -734,7 +734,21 @@ const DEFAULT_NEX_SMS_COUNTRY_ORDER = Object.freeze([1]);
 const DEFAULT_MADAO_BASE_URL = 'http://127.0.0.1:7822';
 const DEFAULT_MADAO_MODE = 'routing_plan';
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
-const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([187]);
+const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([
+  3267,
+  3243,
+  2649,
+  3234,
+  2920,
+  3160,
+  2974,
+  3316,
+  2266,
+  3237,
+  3398,
+  2377,
+  187,
+]);
 const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
 const DEFAULT_SMSBOWER_MAX_PRICE = '0.134';
 const DEFAULT_HERO_SMS_REUSE_ENABLED = true;
@@ -2341,6 +2355,24 @@ function normalizeSmsBowerCountryOrder(value = []) {
   return normalized.slice(0, 10);
 }
 
+function getSmsBowerProviderIdsForCountryOrder(countryOrder = []) {
+  const normalizedCountryOrder = normalizeSmsBowerCountryOrder(countryOrder);
+  const providerIds = [];
+  const seen = new Set();
+  normalizedCountryOrder.forEach((countryId) => {
+    const providerId = normalizeSmsBowerProviderIds(
+      countryId === 187 ? '3170' : String(countryId),
+      ''
+    );
+    if (!providerId || seen.has(providerId)) {
+      return;
+    }
+    seen.add(providerId);
+    providerIds.push(providerId);
+  });
+  return providerIds.join(',');
+}
+
 function normalizeSmsBowerServiceCode(value = '', fallback = DEFAULT_SMSBOWER_SERVICE_CODE) {
   const normalized = String(value || '')
     .trim()
@@ -3923,6 +3955,23 @@ function buildPersistentSettingsPayload(input = {}, options = {}) {
     payload.sub2apiGroupNames = groupNames.length
       ? groupNames
       : [...DEFAULT_SUB2API_GROUP_NAMES];
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(payload, 'smsbowerCountryOrder')
+    || Object.prototype.hasOwnProperty.call(payload, 'smsbowerProviderIds')
+  ) {
+    const autoProviderIds = getSmsBowerProviderIdsForCountryOrder(payload.smsbowerCountryOrder || []);
+    const normalizedProviderIds = normalizeSmsBowerProviderIds(payload.smsbowerProviderIds);
+    if (
+      autoProviderIds
+      && (
+        !normalizedProviderIds
+        || normalizedProviderIds === DEFAULT_SMSBOWER_PROVIDER_IDS
+        || normalizedProviderIds === autoProviderIds
+      )
+    ) {
+      payload.smsbowerProviderIds = autoProviderIds;
+    }
   }
   const nextSignupConstraintState = {
     ...PERSISTED_SETTING_DEFAULTS,

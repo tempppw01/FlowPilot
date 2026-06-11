@@ -740,7 +740,6 @@ const MADAO_MODE_DIRECT = 'direct';
 const DEFAULT_MADAO_MODE = MADAO_MODE_ROUTING_PLAN;
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
-  { id: 187, label: 'USA', price: '', providerId: '3170' },
   { id: 3267, label: 'Indonesia', price: '0.014', providerId: '3267' },
   { id: 3243, label: 'Colombia', price: '0.016', providerId: '3243' },
   { id: 2649, label: 'South Africa', price: '0.02', providerId: '2649' },
@@ -753,6 +752,7 @@ const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
   { id: 3237, label: 'Thailand', price: '0.054', providerId: '3237' },
   { id: 3398, label: 'Brazil', price: '0.058', providerId: '3398' },
   { id: 2377, label: 'Saudi Arabia', price: '0.064', providerId: '2377' },
+  { id: 187, label: 'USA', price: '', providerId: '3170' },
 ]);
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze(SMSBOWER_LOW_PRICE_COUNTRY_ITEMS.map((item) => item.id));
 const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
