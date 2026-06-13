@@ -2,6 +2,8 @@
   root.MultiPageBackgroundStep8 = factory();
 })(typeof self !== 'undefined' ? self : globalThis, function createBackgroundStep8Module() {
   const MAIL_2925_FILTER_LOOKBACK_MS = 10 * 60 * 1000;
+  const SMSBOWER_LOGIN_CODE_STALE_ERROR_PREFIX = 'SMSBOWER_LOGIN_CODE_STALE::';
+  const RESTART_CURRENT_ATTEMPT_ERROR_PREFIX = 'RESTART_CURRENT_ATTEMPT::';
 
   function createStep8Executor(deps = {}) {
     const {
@@ -837,6 +839,11 @@
       return /STEP8_RESTART_STEP7::/i.test(message);
     }
 
+    function isSmsBowerLoginCodeStaleError(error) {
+      const message = String(error?.message || error || '');
+      return message.includes(SMSBOWER_LOGIN_CODE_STALE_ERROR_PREFIX);
+    }
+
     async function executeStep8(state) {
       let currentState = state;
       let mailPollingAttempt = 1;
@@ -866,6 +873,19 @@
           const authLoginStep = getAuthLoginStepForState(currentState, visibleStep);
           let currentError = err;
           let retryWithoutStep7 = false;
+
+          if (isSmsBowerLoginCodeStaleError(currentError)) {
+            const reason = String(currentError?.message || currentError || '')
+              .replace(SMSBOWER_LOGIN_CODE_STALE_ERROR_PREFIX, '')
+              .trim();
+            await addLog(
+              `步骤 ${visibleStep}：SMSBower TempMail 登录验证码被拒，判断为注册阶段旧验证码，放弃当前账号并重新进入注册新号阶段。${reason}`,
+              'warn'
+            );
+            throw new Error(
+              `${RESTART_CURRENT_ATTEMPT_ERROR_PREFIX}步骤 ${visibleStep}：SMSBower TempMail 登录阶段拿到注册旧验证码，当前账号登录不可继续，已要求重新注册新号。${reason}`
+            );
+          }
 
           const isMailPollingError = isVerificationMailPollingError(err);
           if (isMailPollingError && !isStep8RestartStep7Error(err)) {

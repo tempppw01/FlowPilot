@@ -686,7 +686,7 @@
         let reuseExistingProgress = resumingCurrentRound;
         const currentRoundState = await getState();
         const keepSameEmailUntilAddPhone = autoRunSkipFailures && shouldKeepCustomMailProviderPoolEmail(currentRoundState);
-        const maxAttemptsForRound = autoRunSkipFailures
+        let maxAttemptsForRound = autoRunSkipFailures
           ? (keepSameEmailUntilAddPhone ? Number.MAX_SAFE_INTEGER : AUTO_RUN_MAX_RETRIES_PER_ROUND + 1)
           : Math.max(1, attemptRun);
 
@@ -843,6 +843,12 @@
               && isStep4Route405RecoveryLimitFailure(err);
             const blockedByKiroProxy = typeof isKiroProxyFailure === 'function'
               && isKiroProxyFailure(err);
+            const restartCurrentAttempt = typeof isRestartCurrentAttemptError === 'function'
+              && isRestartCurrentAttemptError(err);
+            const forceFreshAttempt = /RESTART_CURRENT_ATTEMPT::/i.test(err?.message || String(err || ''));
+            if (forceFreshAttempt) {
+              maxAttemptsForRound = Math.max(maxAttemptsForRound, AUTO_RUN_MAX_RETRIES_PER_ROUND + 1);
+            }
             const canRetry = !blockedByAddPhone
               && !blockedByPhoneNoSupply
               && !blockedByPlusNonFreeTrial
@@ -850,7 +856,7 @@
               && !blockedBySignupUserAlreadyExists
               && !blockedByStep4Route405
               && !blockedByKiroProxy
-              && autoRunSkipFailures
+              && (autoRunSkipFailures || forceFreshAttempt)
               && attemptRun < maxAttemptsForRound;
 
             await setState({
@@ -1090,7 +1096,7 @@
 
             if (canRetry) {
               const retryIndex = attemptRun;
-              if (isRestartCurrentAttemptError(err)) {
+              if (restartCurrentAttempt) {
                 await addLog(`第 ${targetRun}/${totalRuns} 轮第 ${attemptRun} 次尝试需要整轮重开：${reason}`, 'warn');
               } else {
                 await addLog(`第 ${targetRun}/${totalRuns} 轮第 ${attemptRun} 次尝试失败：${reason}`, 'error');

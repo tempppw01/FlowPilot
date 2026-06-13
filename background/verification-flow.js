@@ -3,6 +3,7 @@
 })(typeof self !== 'undefined' ? self : globalThis, function createBackgroundVerificationFlowModule() {
   const ICLOUD_MAIL_POLL_MIN_ATTEMPTS = 5;
   const ICLOUD_MAIL_POLL_TIMEOUT_MARGIN_MS = 25000;
+  const SMSBOWER_LOGIN_CODE_STALE_ERROR_PREFIX = 'SMSBOWER_LOGIN_CODE_STALE::';
 
   function createVerificationFlowHelpers(deps = {}) {
     const {
@@ -1412,6 +1413,12 @@
           if (submitResult.invalidCode) {
             rejectedCodes.add(result.code);
             await addLog(`步骤 ${step}：验证码被页面拒绝：${submitResult.errorText || result.code}`, 'warn');
+
+            if (step !== 4 && mail.provider === SMSBOWER_MAIL_PROVIDER) {
+              throw new Error(
+                `${SMSBOWER_LOGIN_CODE_STALE_ERROR_PREFIX}步骤 ${step}：SMSBower TempMail 登录验证码被页面拒绝，通常是接口只返回注册阶段最近一次验证码，无法继续当前账号登录。页面提示：${submitResult.errorText || '代码不正确'}。`
+              );
+            }
 
             if (attempt >= maxSubmitAttempts) {
               throw new Error(`步骤 ${step}：验证码连续失败，已达到 ${maxSubmitAttempts} 次重试上限。`);

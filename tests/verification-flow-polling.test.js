@@ -1067,6 +1067,68 @@ test('verification flow uses full 2925 polling window after a rejected login cod
   assert.deepStrictEqual(submittedCodes, ['111111', '222222']);
 });
 
+test('verification flow treats rejected SMSBower login code as stale signup code', async () => {
+  const submittedCodes = [];
+  const resendCalls = [];
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async () => {},
+    chrome: { tabs: { update: async () => {} } },
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    completeNodeFromBackground: async () => {},
+    confirmCustomVerificationStepBypassRequest: async () => ({ confirmed: true }),
+    getHotmailVerificationPollConfig: () => ({}),
+    getHotmailVerificationRequestTimestamp: () => 0,
+    getState: async () => ({}),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isStopError: () => false,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+    MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+    pollCloudflareTempEmailVerificationCode: async () => ({}),
+    pollHotmailVerificationCode: async () => ({}),
+    pollLuckmailVerificationCode: async () => ({}),
+    pollSmsBowerMailVerificationCode: async () => ({ code: '263253', emailTimestamp: 1 }),
+    sendToContentScript: async (_source, message) => {
+      if (message.type === 'FILL_CODE') {
+        submittedCodes.push(message.payload.code);
+        return { invalidCode: true, errorText: '代码不正确' };
+      }
+      if (message.type === 'RESEND_VERIFICATION_CODE') {
+        resendCalls.push(message);
+      }
+      return {};
+    },
+    sendToContentScriptResilient: async () => ({}),
+    sendToMailContentScriptResilient: async () => ({}),
+    setState: async () => {},
+    setStepStatus: async () => {},
+    sleepWithStop: async () => {},
+    SMSBOWER_MAIL_PROVIDER: 'smsbower-mail',
+    throwIfStopped: () => {},
+    VERIFICATION_POLL_MAX_ROUNDS: 5,
+  });
+
+  await assert.rejects(
+    () => helpers.resolveVerificationStep(
+      8,
+      {
+        email: 'user@example.com',
+        mailProvider: 'smsbower-mail',
+        lastLoginCode: null,
+      },
+      { provider: 'smsbower-mail', label: 'SMSBower TempMail' },
+      {
+        maxResendRequests: 2,
+      }
+    ),
+    /SMSBOWER_LOGIN_CODE_STALE::/
+  );
+
+  assert.deepStrictEqual(submittedCodes, ['263253']);
+  assert.deepStrictEqual(resendCalls, []);
+});
+
 test('verification flow keeps Hotmail request timestamp filtering on the first poll', async () => {
   const pollPayloads = [];
 

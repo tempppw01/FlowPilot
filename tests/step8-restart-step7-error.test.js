@@ -293,3 +293,71 @@ test('step 8 escalates to rerun step 7 after too many local retry_without_step7 
     true
   );
 });
+
+test('step 8 converts stale SMSBower login code into fresh-attempt restart error', async () => {
+  const calls = {
+    logs: [],
+    resolveCalls: 0,
+  };
+
+  const executor = step8Api.createStep8Executor({
+    addLog: async (message, level) => {
+      calls.logs.push({ message, level });
+    },
+    chrome: {
+      tabs: {
+        update: async () => {},
+      },
+    },
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    confirmCustomVerificationStepBypass: async () => {},
+    ensureStep8VerificationPageReady: async () => ({ state: 'verification_page' }),
+    rerunStep7ForStep8Recovery: async () => {
+      throw new Error('should not rerun step 7 for stale SMSBower login code');
+    },
+    getOAuthFlowRemainingMs: async () => 8000,
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => Math.min(defaultTimeoutMs, 8000),
+    getMailConfig: () => ({
+      provider: 'smsbower-mail',
+      label: 'SMSBower TempMail',
+      source: 'smsbower-mail',
+      url: '',
+      navigateOnReuse: false,
+    }),
+    getState: async () => ({
+      email: 'user@example.com',
+      password: 'secret',
+      oauthUrl: 'https://oauth.example/latest',
+      mailProvider: 'smsbower-mail',
+    }),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isTabAlive: async () => true,
+    isVerificationMailPollingError: () => false,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    resolveVerificationStep: async () => {
+      calls.resolveCalls += 1;
+      throw new Error('SMSBOWER_LOGIN_CODE_STALE::步骤 8：SMSBower TempMail 登录验证码被页面拒绝。');
+    },
+    reuseOrCreateTab: async () => {},
+    setState: async () => {},
+    setStepStatus: async () => {},
+    shouldUseCustomRegistrationEmail: () => false,
+    STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS: 25000,
+    STEP7_MAIL_POLLING_RECOVERY_MAX_ATTEMPTS: 3,
+    throwIfStopped: () => {},
+  });
+
+  await assert.rejects(
+    () => executor.executeStep8({
+      email: 'user@example.com',
+      password: 'secret',
+      oauthUrl: 'https://oauth.example/latest',
+      mailProvider: 'smsbower-mail',
+    }),
+    /RESTART_CURRENT_ATTEMPT::.*SMSBower TempMail/
+  );
+
+  assert.equal(calls.resolveCalls, 1);
+  assert.equal(calls.logs.some(({ message }) => /重新进入注册新号阶段/.test(message)), true);
+});

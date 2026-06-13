@@ -93,6 +93,8 @@
       return String(typeof error === 'string' ? error : error?.message || '')
         .replace(/^GPC_PAGE_FLOW_ENDED::/i, '')
         .replace(/^AUTO_RUN_STEP_IDLE_RESTART::/i, '')
+        .replace(/^RESTART_CURRENT_ATTEMPT::/i, '')
+        .replace(/^SMSBOWER_LOGIN_CODE_STALE::/i, '')
         .replace(/^PHONE_RESTART_STEP7::/i, '');
     }
 
@@ -136,7 +138,7 @@
 
     function isRestartCurrentAttemptError(error) {
       const message = String(typeof error === 'string' ? error : error?.message || '');
-      return /当前邮箱已存在，需要重新开始新一轮|SIGNUP_PHONE_PASSWORD_MISMATCH::/i.test(message);
+      return /RESTART_CURRENT_ATTEMPT::|当前邮箱已存在，需要重新开始新一轮|SIGNUP_PHONE_PASSWORD_MISMATCH::/i.test(message);
     }
 
     function isSignupUserAlreadyExistsFailure(error) {
