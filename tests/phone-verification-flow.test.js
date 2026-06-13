@@ -4525,6 +4525,137 @@ test('phone verification helper restarts OAuth instead of resending when SMSBowe
   }
 });
 
+test('phone verification helper advances SMSBower provider ID after timeout across step 7 restart', async () => {
+  const requests = [];
+  const messages = [];
+  let currentState = {
+    phoneSmsProvider: 'smsbower',
+    smsbowerApiKey: 'demo-key',
+    smsbowerServiceCode: 'dr',
+    smsbowerCountryOrder: [52],
+    smsbowerProviderIds: '3237,2266,3193',
+    smsbowerMaxPrice: '0.1',
+    verificationResendCount: 0,
+    phoneCodeWaitSeconds: 60,
+    phoneCodeTimeoutWindows: 1,
+    phoneCodePollIntervalSeconds: 5,
+    phoneCodePollMaxRounds: 1,
+    currentPhoneActivation: null,
+    reusablePhoneActivation: null,
+  };
+  const realDateNow = Date.now;
+  let fakeNow = 0;
+  Date.now = () => fakeNow;
+
+  try {
+    const helpers = api.createPhoneVerificationHelpers({
+      addLog: async () => {},
+      ensureStep8SignupPageReady: async () => {},
+      fetchImpl: async (url) => {
+        const parsedUrl = new URL(url);
+        requests.push(parsedUrl);
+        const action = parsedUrl.searchParams.get('action');
+        const providerIds = parsedUrl.searchParams.get('providerIds');
+        const id = parsedUrl.searchParams.get('id');
+
+        if (action === 'getNumber') {
+          if (providerIds === '3237') {
+            return {
+              ok: true,
+              text: async () => 'ACCESS_NUMBER:900101:668686850001',
+            };
+          }
+          if (providerIds === '2266') {
+            return {
+              ok: true,
+              text: async () => 'ACCESS_NUMBER:900102:668686850002',
+            };
+          }
+          throw new Error(`Unexpected SMSBower providerIds: ${providerIds}`);
+        }
+        if (action === 'getStatus') {
+          return {
+            ok: true,
+            text: async () => (id === '900102' ? 'STATUS_OK:778899' : 'STATUS_WAIT_CODE'),
+          };
+        }
+        if (action === 'setStatus') {
+          return {
+            ok: true,
+            text: async () => 'ACCESS_ACTIVATION',
+          };
+        }
+        throw new Error(`Unexpected SMSBower action: ${action}`);
+      },
+      getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => defaultTimeoutMs,
+      getState: async () => ({ ...currentState }),
+      sendToContentScriptResilient: async (_source, message) => {
+        messages.push(message.type);
+        if (message.type === 'SUBMIT_PHONE_NUMBER') {
+          return {
+            phoneVerificationPage: true,
+            url: 'https://auth.openai.com/phone-verification',
+          };
+        }
+        if (message.type === 'SUBMIT_PHONE_VERIFICATION_CODE') {
+          return {
+            success: true,
+            consentReady: true,
+            url: 'https://auth.openai.com/authorize',
+          };
+        }
+        if (message.type === 'RESEND_PHONE_VERIFICATION_CODE') {
+          throw new Error('SMSBower timeout should not use page resend.');
+        }
+        throw new Error(`Unexpected content-script message: ${message.type}`);
+      },
+      setState: async (updates) => {
+        currentState = { ...currentState, ...updates };
+      },
+      sleepWithStop: async () => {
+        fakeNow += 61000;
+      },
+      throwIfStopped: () => {},
+    });
+
+    await assert.rejects(
+      helpers.completePhoneVerificationFlow(1, {
+        addPhonePage: true,
+        phoneVerificationPage: false,
+        url: 'https://auth.openai.com/add-phone',
+      }),
+      /PHONE_RESTART_STEP7::/
+    );
+
+    assert.deepStrictEqual(currentState.smsbowerTimedOutProviderIdsByCountry, {
+      52: ['3237'],
+    });
+    assert.equal(currentState.currentPhoneActivation, null);
+
+    fakeNow = 0;
+    const result = await helpers.completePhoneVerificationFlow(1, {
+      addPhonePage: true,
+      phoneVerificationPage: false,
+      url: 'https://auth.openai.com/add-phone',
+    });
+
+    assert.deepStrictEqual(result, {
+      success: true,
+      consentReady: true,
+      url: 'https://auth.openai.com/authorize',
+    });
+    const getNumberProviderIds = requests
+      .filter((requestUrl) => requestUrl.searchParams.get('action') === 'getNumber')
+      .map((requestUrl) => requestUrl.searchParams.get('providerIds'));
+    assert.deepStrictEqual(getNumberProviderIds, ['3237', '2266']);
+    assert.equal(messages.filter((type) => type === 'SUBMIT_PHONE_NUMBER').length, 2);
+    assert.equal(messages.includes('RESEND_PHONE_VERIFICATION_CODE'), false);
+    assert.deepStrictEqual(currentState.smsbowerTimedOutProviderIdsByCountry, {});
+  } finally {
+    Date.now = realDateNow;
+  }
+});
+
 test('phone verification helper respects configured number replacement limit', async () => {
   const requests = [];
   let currentState = {

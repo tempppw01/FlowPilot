@@ -33,6 +33,7 @@
 
     const PHONE_ACTIVATION_STATE_KEY = 'currentPhoneActivation';
     const PHONE_VERIFICATION_CODE_STATE_KEY = 'currentPhoneVerificationCode';
+    const SMSBOWER_PROVIDER_TIMEOUT_SKIP_STATE_KEY = 'smsbowerTimedOutProviderIdsByCountry';
     const REUSABLE_PHONE_ACTIVATION_STATE_KEY = 'reusablePhoneActivation';
     const REUSABLE_PHONE_ACTIVATION_POOL_STATE_KEY = 'phoneReusableActivationPool';
     const FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY = 'freeReusablePhoneActivation';
@@ -184,6 +185,33 @@
         }
         seen.add(text);
         normalized.push(text);
+      });
+      return normalized;
+    }
+
+    function normalizeSmsBowerProviderIdList(value = '') {
+      return String(value || '')
+        .split(/[\r\n,]+/)
+        .map((entry) => entry.trim())
+        .filter((entry) => /^\d+$/.test(entry));
+    }
+
+    function normalizeSmsBowerProviderTimeoutSkips(value = {}) {
+      const normalized = {};
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return normalized;
+      }
+      Object.entries(value).forEach(([countryId, providerIds]) => {
+        const countryKey = String(countryId || '').trim();
+        if (!/^\d+$/.test(countryKey)) {
+          return;
+        }
+        const ids = Array.isArray(providerIds)
+          ? normalizeStringList(providerIds.map((entry) => String(entry || '').trim()).filter((entry) => /^\d+$/.test(entry)))
+          : normalizeSmsBowerProviderIdList(providerIds);
+        if (ids.length) {
+          normalized[countryKey] = ids;
+        }
       });
       return normalized;
     }
@@ -1138,6 +1166,36 @@
       if (typeof broadcastDataUpdate === 'function') {
         broadcastDataUpdate(updates);
       }
+    }
+
+    async function persistSmsBowerProviderIdTimeoutSkip(state = {}, activation = {}) {
+      const normalizedActivation = normalizeActivation(activation);
+      if (!normalizedActivation || normalizedActivation.provider !== PHONE_SMS_PROVIDER_SMSBOWER) {
+        return;
+      }
+      const countryKey = String(
+        getProviderActivationCountryKey(state, normalizedActivation)
+        || normalizedActivation.countryId
+        || ''
+      ).trim();
+      if (!/^\d+$/.test(countryKey)) {
+        return;
+      }
+      const providerIds = normalizeSmsBowerProviderIdList(normalizedActivation.providerIds);
+      if (!providerIds.length) {
+        return;
+      }
+      const latestState = typeof getState === 'function'
+        ? await getState().catch(() => state)
+        : state;
+      const nextSkips = normalizeSmsBowerProviderTimeoutSkips(
+        latestState?.[SMSBOWER_PROVIDER_TIMEOUT_SKIP_STATE_KEY]
+      );
+      const mergedIds = normalizeStringList([...(nextSkips[countryKey] || []), ...providerIds]);
+      nextSkips[countryKey] = mergedIds;
+      await setPhoneRuntimeState({
+        [SMSBOWER_PROVIDER_TIMEOUT_SKIP_STATE_KEY]: nextSkips,
+      });
     }
 
     async function persistFreeReusableActivation(activation) {
@@ -2563,6 +2621,7 @@
             scopedStateForProvider(providerCandidate),
             {
               blockedCountryIds: useBlockedCountryIds,
+              blockedProviderIds: providerCandidate === provider ? (options?.blockedProviderIds || []) : [],
               countryPriceFloorByCountryId: useCountryPriceFloorByCountryId,
               preservePhoneSmsProvider: true,
             }
@@ -3057,6 +3116,7 @@
           }
 
           if (normalizedActivation.provider === PHONE_SMS_PROVIDER_SMSBOWER) {
+            await persistSmsBowerProviderIdTimeoutSkip(state, normalizedActivation);
             await addLog(
               `步骤 9：SMSBower 号码 ${normalizedActivation.phoneNumber} 在 ${waitSeconds} 秒内未收到短信，将返回步骤 7 刷新 OAuth 并获取新号码。`,
               'warn'
@@ -3735,6 +3795,7 @@
       let addPhoneReentryWithSameActivation = 0;
       const countrySmsFailureCounts = new Map();
       const countryPriceFloorByKey = new Map();
+      const smsBowerTimedOutProviderIdsByCountryKey = new Map();
       const normalizeCountryFailureKey = (countryId, provider = activation?.provider || state?.phoneSmsProvider || '') => {
         const normalizedProvider = normalizePhoneSmsProvider(provider || state?.phoneSmsProvider || '');
         const scopedState = scopeStateToActivationProvider(state, { provider: normalizedProvider });
@@ -3770,6 +3831,14 @@
         }
         return getProviderCountryLabel(state, normalizedProvider, normalizedCountryKey);
       };
+      Object.entries(normalizeSmsBowerProviderTimeoutSkips(
+        state?.[SMSBOWER_PROVIDER_TIMEOUT_SKIP_STATE_KEY]
+      )).forEach(([countryKey, providerIds]) => {
+        const compoundCountryKey = normalizeCountryFailureKey(countryKey, PHONE_SMS_PROVIDER_SMSBOWER);
+        if (compoundCountryKey && providerIds.length) {
+          smsBowerTimedOutProviderIdsByCountryKey.set(compoundCountryKey, new Set(providerIds));
+        }
+      });
 
       const directNavigateToAddPhone = async (attemptLabel = 'after replace-number rotation') => {
         if (typeof navigateAuthTabToAddPhone !== 'function') {
@@ -3934,6 +4003,100 @@
           floorById[keyPart] = Math.round(numeric * 10000) / 10000;
         });
         return floorById;
+      };
+
+      const markSmsBowerProviderIdTimeout = async (activationCandidate, reason = '') => {
+        const normalizedActivation = normalizeActivation(activationCandidate);
+        if (!normalizedActivation || normalizedActivation.provider !== PHONE_SMS_PROVIDER_SMSBOWER) {
+          return;
+        }
+        const activationCountryKey = getProviderActivationCountryKey(state, normalizedActivation);
+        const countryKey = normalizeCountryFailureKey(activationCountryKey, normalizedActivation.provider);
+        if (!countryKey) {
+          return;
+        }
+        const providerIds = normalizeSmsBowerProviderIdList(normalizedActivation.providerIds);
+        if (!providerIds.length) {
+          return;
+        }
+        const blockedIds = smsBowerTimedOutProviderIdsByCountryKey.get(countryKey) || new Set();
+        let changed = false;
+        providerIds.forEach((providerId) => {
+          if (!blockedIds.has(providerId)) {
+            blockedIds.add(providerId);
+            changed = true;
+          }
+        });
+        smsBowerTimedOutProviderIdsByCountryKey.set(countryKey, blockedIds);
+        if (changed) {
+          const parsedCountry = splitCountryFailureKey(countryKey, normalizedActivation.provider);
+          const latestState = typeof getState === 'function'
+            ? await getState().catch(() => state)
+            : state;
+          const nextSkips = normalizeSmsBowerProviderTimeoutSkips(
+            latestState?.[SMSBOWER_PROVIDER_TIMEOUT_SKIP_STATE_KEY]
+          );
+          if (parsedCountry.countryKey) {
+            nextSkips[parsedCountry.countryKey] = Array.from(blockedIds);
+            await setPhoneRuntimeState({
+              [SMSBOWER_PROVIDER_TIMEOUT_SKIP_STATE_KEY]: nextSkips,
+            });
+          }
+          const countryLabel = resolveCountryLabelByFailureKey(countryKey, normalizedActivation.provider);
+          await addLog(
+            `步骤 9：SMSBower ${countryLabel} 线路 ${providerIds.join(',')} 因 ${formatStep9Reason(reason || 'sms_timeout')} 未收到短信，下一次同国家将顺延到下一个线路 ID。`,
+            'warn'
+          );
+        }
+      };
+
+      const clearSmsBowerProviderIdTimeout = async (activationCandidate) => {
+        const normalizedActivation = normalizeActivation(activationCandidate);
+        if (!normalizedActivation || normalizedActivation.provider !== PHONE_SMS_PROVIDER_SMSBOWER) {
+          return;
+        }
+        const activationCountryKey = getProviderActivationCountryKey(state, normalizedActivation);
+        const countryKey = normalizeCountryFailureKey(activationCountryKey, normalizedActivation.provider);
+        if (countryKey) {
+          smsBowerTimedOutProviderIdsByCountryKey.delete(countryKey);
+          const parsedCountry = splitCountryFailureKey(countryKey, normalizedActivation.provider);
+          const latestState = typeof getState === 'function'
+            ? await getState().catch(() => state)
+            : state;
+          const nextSkips = normalizeSmsBowerProviderTimeoutSkips(
+            latestState?.[SMSBOWER_PROVIDER_TIMEOUT_SKIP_STATE_KEY]
+          );
+          if (parsedCountry.countryKey && Object.prototype.hasOwnProperty.call(nextSkips, parsedCountry.countryKey)) {
+            delete nextSkips[parsedCountry.countryKey];
+            await setPhoneRuntimeState({
+              [SMSBOWER_PROVIDER_TIMEOUT_SKIP_STATE_KEY]: nextSkips,
+            });
+          }
+        }
+      };
+
+      const getBlockedSmsBowerProviderIds = () => {
+        const activeProvider = normalizePhoneSmsProvider(
+          state?.phoneSmsProvider || activation?.provider || DEFAULT_PHONE_SMS_PROVIDER
+        );
+        if (activeProvider !== PHONE_SMS_PROVIDER_SMSBOWER) {
+          return [];
+        }
+        const blocked = [];
+        smsBowerTimedOutProviderIdsByCountryKey.forEach((providerIds, compoundCountryKey) => {
+          const parsed = splitCountryFailureKey(compoundCountryKey, activeProvider);
+          if (parsed.provider !== activeProvider) {
+            return;
+          }
+          const countryKey = String(parsed.countryKey || '').trim();
+          if (!countryKey) {
+            return;
+          }
+          providerIds.forEach((providerId) => {
+            blocked.push(`${countryKey}:${providerId}`);
+          });
+        });
+        return blocked;
       };
 
       const setCountryPriceFloorFromActivation = async (activationCandidate, reason = '') => {
@@ -4122,6 +4285,7 @@
               } else {
                 activation = await acquirePhoneActivation(state, {
                   blockedCountryIds: getBlockedCountryIds(),
+                  blockedProviderIds: getBlockedSmsBowerProviderIds(),
                   countryPriceFloorByCountryId: getCountryPriceFloorById(),
                   skipPreferredActivation: preferredActivationExhausted,
                 });
@@ -4443,6 +4607,7 @@
               await markActivationReusableAfterSuccess(state, activation);
             }
             clearCountrySmsFailure(activation.countryId, activation.provider);
+            await clearSmsBowerProviderIdTimeout(activation);
             shouldCancelActivation = false;
             await clearCurrentActivation();
             await setPhoneRuntimeState({
@@ -4469,6 +4634,7 @@
             )
           ) {
             await setCountryPriceFloorFromActivation(activation, replaceReason || 'sms_timeout');
+            await markSmsBowerProviderIdTimeout(activation, replaceReason || 'sms_timeout');
             await markCountrySmsFailure(activation.countryId, replaceReason || 'sms_timeout', activation.provider);
           }
           await markPreferredActivationExhausted(replaceReason || 'replace_number');

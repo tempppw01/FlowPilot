@@ -551,6 +551,36 @@
       .filter(Boolean);
   }
 
+  function normalizeBlockedProviderIds(value = []) {
+    const source = Array.isArray(value) ? value : String(value || '').split(/[\r\n,]+/);
+    const blocked = new Set();
+    source.forEach((entry) => {
+      const text = String(entry || '').trim();
+      if (!text) {
+        return;
+      }
+      const scopedMatch = text.match(/^(\d+)\s*:\s*(\d+)$/);
+      if (scopedMatch) {
+        blocked.add(`${Math.floor(Number(scopedMatch[1]) || 0)}:${scopedMatch[2]}`);
+        return;
+      }
+      const providerId = normalizeSmsBowerProviderIds(text, '');
+      if (providerId) {
+        blocked.add(providerId);
+      }
+    });
+    return blocked;
+  }
+
+  function isSmsBowerProviderIdBlocked(blockedProviderIds, countryId, providerId) {
+    const normalizedProviderId = normalizeSmsBowerProviderIds(providerId, '');
+    if (!normalizedProviderId) {
+      return false;
+    }
+    return blockedProviderIds.has(normalizedProviderId)
+      || blockedProviderIds.has(`${normalizeSmsBowerCountryId(countryId, 0)}:${normalizedProviderId}`);
+  }
+
   function formatPriceRangeText(minPriceLimit = null, maxPriceLimit = null) {
     const minPrice = normalizeSmsBowerPrice(minPriceLimit);
     const maxPrice = normalizeSmsBowerPrice(maxPriceLimit);
@@ -593,6 +623,7 @@
         .map((value) => normalizeSmsBowerCountryId(value, 0))
         .filter((id) => id > 0)
     );
+    const blockedProviderIds = normalizeBlockedProviderIds(options?.blockedProviderIds);
     let countryCandidates = allCountryCandidates.filter(
       (entry) => !blockedCountryIds.has(normalizeSmsBowerCountryId(entry.id, 0))
     );
@@ -630,7 +661,15 @@
           ? resolvedProviderIds
           : (getProviderIdsForCountryId(countryId) || resolvedProviderIds);
         const providerIdAttempts = splitSmsBowerProviderIds(countryProviderIds);
-        const lineAttempts = providerIdAttempts.length ? providerIdAttempts : [''];
+        const lineAttempts = providerIdAttempts
+          .filter((providerId) => !isSmsBowerProviderIdBlocked(blockedProviderIds, countryId, providerId));
+        if (providerIdAttempts.length && !lineAttempts.length) {
+          noNumbersByCountry.push(`${countryLabel} (${countryId}) all providerIds skipped after SMS timeouts: ${providerIdAttempts.join(',')}`);
+          continue;
+        }
+        if (!providerIdAttempts.length) {
+          lineAttempts.push('');
+        }
 
         for (const providerIdAttempt of lineAttempts) {
           const countryAttempt = (payloadOrError) => formatSmsBowerAcquireFailure(countryLabel, countryId, providerIdAttempt, payloadOrError);
