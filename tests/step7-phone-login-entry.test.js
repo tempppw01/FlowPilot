@@ -696,7 +696,10 @@ test('step 7 stops before submit when phone fill never includes the local number
   assert.deepEqual(api.getFills(), ['+447780579093', '7780579093', '+447780579093', '7780579093']);
 });
 
-function createPhoneAuthSubmitHarness(runModeEvents, runMode) {
+function createPhoneAuthSubmitHarness(runModeEvents, runMode, options = {}) {
+  const {
+    deliverySelector = false,
+  } = options;
   const selectedOption = { value: 'GB', textContent: 'United Kingdom (+44)' };
   const select = {
     value: 'GB',
@@ -725,6 +728,28 @@ function createPhoneAuthSubmitHarness(runModeEvents, runMode) {
       return '';
     },
   };
+  const deliveryState = {
+    selected: deliverySelector ? 'whatsapp' : '',
+    clicks: [],
+  };
+  function createDeliveryButton(channel, textContent) {
+    return {
+      disabled: false,
+      textContent,
+      channel,
+      getAttribute(name) {
+        if (name === 'aria-pressed') return deliveryState.selected === channel ? 'true' : 'false';
+        if (name === 'aria-selected') return deliveryState.selected === channel ? 'true' : 'false';
+        if (name === 'aria-disabled') return 'false';
+        return '';
+      },
+      closest() {
+        return null;
+      },
+    };
+  }
+  const whatsappButton = createDeliveryButton('whatsapp', 'WhatsApp');
+  const smsButton = createDeliveryButton('sms', '短信');
   const dialCodeSpan = { textContent: '44' };
   let phoneVerificationReady = false;
 
@@ -747,6 +772,9 @@ function createPhoneAuthSubmitHarness(runModeEvents, runMode) {
       }
       if (selector === 'span') {
         return [dialCodeSpan];
+      }
+      if (deliverySelector && String(selector).includes('[role="button"]')) {
+        return [whatsappButton, smsButton];
       }
       return [];
     },
@@ -836,6 +864,16 @@ return self.MultiPagePhoneAuth;
     simulateClick(element) {
       if (element === submitButton) {
         phoneVerificationReady = true;
+        return;
+      }
+      if (element === smsButton) {
+        deliveryState.selected = 'sms';
+        deliveryState.clicks.push('sms');
+        return;
+      }
+      if (element === whatsappButton) {
+        deliveryState.selected = 'whatsapp';
+        deliveryState.clicks.push('whatsapp');
       }
     },
     sleep: async () => {},
@@ -843,7 +881,7 @@ return self.MultiPagePhoneAuth;
     waitForElement: async () => phoneInput,
   });
 
-  return { helpers };
+  return { helpers, deliveryState };
 }
 
 test('phone auth operation delay metadata is identical for auto and manual submit runs', async () => {
@@ -862,4 +900,25 @@ test('phone auth operation delay metadata is identical for auto and manual submi
   assert.ok(runModeEvents.auto.length > 0);
   assert.deepStrictEqual(runModeEvents.auto.map((event) => event.delayMs), runModeEvents.manual.map((event) => event.delayMs));
   assert.deepStrictEqual(runModeEvents.auto.map((event) => event.kind), runModeEvents.manual.map((event) => event.kind));
+});
+
+test('phone auth selects SMS before continuing when WhatsApp is the default delivery method', async () => {
+  const runModeEvents = { auto: [] };
+  const { helpers, deliveryState } = createPhoneAuthSubmitHarness(runModeEvents, 'auto', {
+    deliverySelector: true,
+  });
+
+  const result = await helpers.submitPhoneNumber({
+    countryLabel: 'United Kingdom',
+    phoneNumber: '447780579093',
+    runMode: 'auto',
+  });
+
+  assert.equal(result.phoneVerificationPage, true);
+  assert.equal(deliveryState.selected, 'sms');
+  assert.deepStrictEqual(deliveryState.clicks, ['sms']);
+  assert.deepStrictEqual(
+    runModeEvents.auto.map((event) => event.label),
+    ['phone-country-select', 'phone-number', 'phone-number-hidden-sync', 'phone-delivery-sms', 'phone-number-submit']
+  );
 });

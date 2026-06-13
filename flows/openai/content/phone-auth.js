@@ -403,6 +403,84 @@
         || null;
     }
 
+    function getPhoneDeliveryMethodText(element) {
+      if (!element) return '';
+      return [
+        element.getAttribute?.('value'),
+        element.getAttribute?.('aria-label'),
+        element.getAttribute?.('title'),
+        element.getAttribute?.('data-value'),
+        getActionText(element),
+        element.textContent,
+      ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function isSmsDeliveryMethodText(value) {
+      return /(?:^|\b)(?:sms|text\s+message)(?:\b|$)|短信|テキスト|メッセージ/i.test(String(value || ''));
+    }
+
+    function isWhatsAppDeliveryMethodText(value) {
+      return /whats\s*app/i.test(String(value || ''));
+    }
+
+    function isPhoneDeliveryMethodSelected(element) {
+      if (!element) return false;
+      if (element.checked === true) return true;
+      const selectedValues = [
+        element.getAttribute?.('aria-pressed'),
+        element.getAttribute?.('aria-selected'),
+        element.getAttribute?.('data-selected'),
+        element.getAttribute?.('data-state'),
+      ].map((value) => String(value || '').trim().toLowerCase());
+      if (selectedValues.some((value) => value === 'true' || value === 'checked' || value === 'selected' || value === 'active')) {
+        return true;
+      }
+      const selectedParent = element.closest?.(
+        '[aria-pressed="true"], [aria-selected="true"], [data-selected="true"], [data-state="checked"], [data-state="selected"], [data-state="active"]'
+      );
+      return Boolean(selectedParent);
+    }
+
+    function getPhoneDeliveryMethodCandidates() {
+      const form = getAddPhoneForm();
+      if (!form) return [];
+      const selectors = [
+        'button',
+        '[role="button"]',
+        '[role="radio"]',
+        '[role="tab"]',
+        'input[type="radio"]',
+        'input[type="button"]',
+        'label',
+      ].join(', ');
+      return Array.from(form.querySelectorAll(selectors))
+        .filter((element) => isVisibleElement(element))
+        .map((element) => ({
+          element,
+          text: getPhoneDeliveryMethodText(element),
+        }))
+        .filter((entry) => isSmsDeliveryMethodText(entry.text) || isWhatsAppDeliveryMethodText(entry.text));
+    }
+
+    async function selectSmsPhoneDeliveryMethodIfAvailable() {
+      const candidates = getPhoneDeliveryMethodCandidates();
+      const smsEntry = candidates.find((entry) => isSmsDeliveryMethodText(entry.text));
+      const whatsappEntry = candidates.find((entry) => isWhatsAppDeliveryMethodText(entry.text));
+      if (!smsEntry || !whatsappEntry) {
+        return { selected: false, reason: 'selector_absent' };
+      }
+      if (isPhoneDeliveryMethodSelected(smsEntry.element)) {
+        return { selected: false, alreadySelected: true, channelText: smsEntry.text };
+      }
+      if (!isActionEnabled(smsEntry.element)) {
+        return { selected: false, reason: 'sms_disabled', channelText: smsEntry.text };
+      }
+      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'click', label: 'phone-delivery-sms' }, async () => {
+        simulateClick(smsEntry.element);
+      });
+      return { selected: true, channelText: smsEntry.text };
+    }
+
     function getPhoneVerificationCodeInput() {
       const form = getPhoneVerificationForm();
       if (!form) return null;
@@ -811,6 +889,10 @@
         });
       }
       await sleep(250);
+      const deliveryMethodResult = await selectSmsPhoneDeliveryMethodIfAvailable();
+      if (deliveryMethodResult.selected) {
+        await sleep(150);
+      }
       await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'submit', label: 'phone-number-submit' }, async () => {
         simulateClick(submitButton);
       });
