@@ -27,7 +27,7 @@
     { id: 10, label: 'Vietnam', providerIds: '3160' },
     { id: 73, label: 'Brazil', providerIds: '3237,3365,3252,3398,3406,3229,2404' },
     { id: 19, label: 'Nigeria', providerIds: '2266' },
-    { id: 52, label: 'Thailand', providerIds: '2266,3193' },
+    { id: 52, label: 'Thailand', providerIds: '3237,2266,3193' },
     { id: 43, label: 'Germany', providerIds: '3237' },
     { id: 53, label: 'Saudi Arabia', providerIds: '2377' },
     { id: 46, label: 'Sweden', providerIds: '2738' },
@@ -535,6 +535,9 @@
   function hasOnlyAutoSmsBowerProviderIds(providerIds = '', autoProviderIds = '') {
     const configured = normalizeSmsBowerProviderIds(providerIds, '');
     if (!configured) {
+      return true;
+    }
+    if (configured === DEFAULT_PROVIDER_IDS) {
       return true;
     }
     const autoSet = new Set(normalizeSmsBowerProviderIds(autoProviderIds, '').split(',').filter(Boolean));

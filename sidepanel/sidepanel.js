@@ -749,7 +749,7 @@ const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
   { id: 10, label: '越南', englishLabel: 'Vietnam', price: '0.031', providerIds: '3160' },
   { id: 73, label: '巴西', englishLabel: 'Brazil', price: '0.045', providerIds: '3237,3365,3252,3398,3406,3229,2404' },
   { id: 19, label: '尼日利亚', englishLabel: 'Nigeria', price: '0.054', providerIds: '2266' },
-  { id: 52, label: '泰国', englishLabel: 'Thailand', price: '0.054', providerIds: '2266,3193' },
+  { id: 52, label: '泰国', englishLabel: 'Thailand', price: '0.04', providerIds: '3237,2266,3193' },
   { id: 43, label: '德国', englishLabel: 'Germany', price: '0.056', providerIds: '3237' },
   { id: 53, label: '沙特阿拉伯', englishLabel: 'Saudi Arabia', price: '0.064', providerIds: '2377' },
   { id: 46, label: '瑞典', englishLabel: 'Sweden', price: '0.075', providerIds: '2738' },

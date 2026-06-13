@@ -206,6 +206,37 @@ test('SMSBower provider derives provider IDs from the selected country order whe
   assert.equal(activation.providerIds, '3243');
 });
 
+test('SMSBower provider prefers the low-price Gold Thailand line before Silver fallbacks', async () => {
+  const requests = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    fetchImpl: async (url) => {
+      requests.push(new URL(url));
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return 'ACCESS_NUMBER:176296:+66812345678';
+        },
+      };
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [52],
+    smsbowerProviderIds: '3170',
+  });
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].searchParams.get('country'), '52');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3237');
+  assert.equal(requests[0].searchParams.get('maxPrice'), '0.1');
+  assert.equal(activation.countryId, 52);
+  assert.equal(activation.countryLabel, 'Thailand');
+  assert.equal(activation.providerIds, '3237');
+});
+
 test('SMSBower provider tries the next provider ID in the same country when a line has no numbers', async () => {
   const requests = [];
   const module = loadModule();

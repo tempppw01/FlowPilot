@@ -217,6 +217,7 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /price:\s*''/);
   assert.doesNotMatch(sidepanelSource, /label:\s*'菲律宾'/);
   assert.match(sidepanelSource, /providerIds:\s*'2738'/);
+  assert.match(sidepanelSource, /id:\s*52[\s\S]*providerIds:\s*'3237,2266,3193'/);
   assert.match(sidepanelSource, /DEFAULT_SMSBOWER_MAX_PRICE = '0\.1'/);
   assert.match(sidepanelSource, /loadSmsBowerCountries\(\{ silent: true \}\)/);
   assert.match(sidepanelSource, /btn-smsbower-country-order-menu/);
@@ -259,6 +260,7 @@ function getSmsBowerCountryItemById(id) {
     187: { providerIds: '3170' },
     6: { providerIds: '3267' },
     33: { providerIds: '3243,2236,3288,3406,3160,3335' },
+    52: { providerIds: '3237,2266,3193' },
   }[id] || null);
 }
 ${extractFunction('getSmsBowerDefaultProviderIdsByCountryId')}
@@ -269,6 +271,9 @@ return { inputSmsBowerProviderIds, syncSmsBowerProviderIdsFromCountrySelection }
 
   api.syncSmsBowerProviderIdsFromCountrySelection([6]);
   assert.equal(api.inputSmsBowerProviderIds.value, '3267');
+
+  api.syncSmsBowerProviderIdsFromCountrySelection([52]);
+  assert.equal(api.inputSmsBowerProviderIds.value, '3237,2266,3193');
 
   api.syncSmsBowerProviderIdsFromCountrySelection([33]);
   assert.equal(api.inputSmsBowerProviderIds.value, '3243,2236,3288,3406,3160,3335');
