@@ -9227,7 +9227,7 @@ test('phone verification helper preserves SMSBower country-specific acquire fail
     phoneSmsProvider: 'smsbower',
     smsbowerApiKey: 'demo-key',
     smsbowerCountryOrder: [73],
-    smsbowerProviderIds: '3316,3398',
+    smsbowerProviderIds: '3237,3365,3252,3398,3406,3229,2404',
     smsbowerMaxPrice: '0.134',
     currentPhoneActivation: null,
     reusablePhoneActivation: null,
@@ -9260,7 +9260,7 @@ test('phone verification helper preserves SMSBower country-specific acquire fail
   await assert.rejects(
     helpers.requestPhoneActivation(currentState),
     (error) => {
-      assert.match(error.message, /SMSBower.*Brazil（73）获取号码失败：网络请求失败（Failed to fetch）；providerIds=3316,3398/);
+      assert.match(error.message, /SMSBower.*Brazil（73）获取号码失败：网络请求失败（Failed to fetch）；providerIds=2404/);
       assert.doesNotMatch(error.message, /获取手机号失败：$/);
       return true;
     }

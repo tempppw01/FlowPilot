@@ -149,15 +149,15 @@ const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = [6, 33, 39, 31, 16, 151, 10, 73, 19, 52, 43, 53, 46, 187];
 const SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID = {
   6: '3267',
-  33: '3243,3335',
+  33: '3243,2236,3288,3406,3160,3335',
   39: '3237',
   31: '2649',
   16: '3237',
-  151: '3234,2974',
+  151: '3234,3109,3235',
   10: '3160',
-  73: '3316,3398',
+  73: '3237,3365,3252,3398,3406,3229,2404',
   19: '2266',
-  52: '3237',
+  52: '2266,3193',
   43: '3237',
   53: '2377',
   46: '2738',
@@ -168,13 +168,21 @@ const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = {
   3267: 6,
   3243: 33,
   3335: 33,
+  2236: 33,
+  3288: 33,
+  3406: 73,
   2649: 31,
   3234: 151,
-  2974: 151,
+  3109: 151,
+  3235: 151,
   3160: 10,
-  3316: 73,
+  2404: 73,
+  3229: 73,
+  3252: 73,
+  3365: 73,
   3398: 73,
-  2266: 19,
+  2266: 52,
+  3193: 52,
   3237: 52,
   2377: 53,
   3170: 187,
@@ -431,7 +439,7 @@ return {
   assert.equal(api.normalizePersistentSettingValue('smsbowerApiKey', ' demo-smsbower '), ' demo-smsbower ');
   assert.equal(api.normalizePersistentSettingValue('smsbowerServiceCode', ' DR! '), 'dr');
   assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [187, '52', 187]), [187, 52]);
-  assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [3237, 3316, 187]), [52, 73, 187]);
+  assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [3237, 3398, 187]), [52, 73, 187]);
   assert.equal(api.normalizePersistentSettingValue('smsbowerProviderIds', '3170, abc, 3001'), '3170,3001');
   assert.equal(api.normalizePersistentSettingValue('smsbowerMinPrice', '0.123456'), '0.1235');
   assert.equal(api.normalizePersistentSettingValue('smsbowerMaxPrice', ''), '0.1');
@@ -440,7 +448,7 @@ return {
     smsbowerProviderIds: '3170',
   });
   assert.deepStrictEqual(smsBowerOrderPayload.smsbowerCountryOrder, [6, 33, 187]);
-  assert.equal(smsBowerOrderPayload.smsbowerProviderIds, '3267,3243,3335,3170');
+  assert.equal(smsBowerOrderPayload.smsbowerProviderIds, '3267,3243,2236,3288,3406,3160,3335,3170');
   const smsBowerManualProviderPayload = api.buildPersistentSettingsPayload({
     smsbowerCountryOrder: [6, 33, 187],
     smsbowerProviderIds: '9999',

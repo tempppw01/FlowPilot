@@ -10,6 +10,7 @@
   const DEFAULT_COUNTRY_LABEL = 'USA';
   const DEFAULT_PROVIDER_IDS = '3170';
   const DEFAULT_MAX_PRICE = '0.1';
+  const MAX_PRICE_CAP = 0.1;
   const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
   const DEFAULT_ACQUIRE_RETRY_ROUNDS = 3;
   const DEFAULT_ACQUIRE_RETRY_DELAY_MS = 2000;
@@ -18,15 +19,15 @@
   const PHONE_CODE_TIMEOUT_ERROR_PREFIX = 'PHONE_CODE_TIMEOUT::';
   const DEFAULT_COUNTRY_CANDIDATES = Object.freeze([
     { id: 6, label: 'Indonesia', providerIds: '3267' },
-    { id: 33, label: 'Colombia', providerIds: '3243,3335' },
+    { id: 33, label: 'Colombia', providerIds: '3243,2236,3288,3406,3160,3335' },
     { id: 39, label: 'Argentina', providerIds: '3237' },
     { id: 31, label: 'South Africa', providerIds: '2649' },
     { id: 16, label: 'United Kingdom', providerIds: '3237' },
-    { id: 151, label: 'Chile', providerIds: '3234,2974' },
+    { id: 151, label: 'Chile', providerIds: '3234,3109,3235' },
     { id: 10, label: 'Vietnam', providerIds: '3160' },
-    { id: 73, label: 'Brazil', providerIds: '3316,3398' },
+    { id: 73, label: 'Brazil', providerIds: '3237,3365,3252,3398,3406,3229,2404' },
     { id: 19, label: 'Nigeria', providerIds: '2266' },
-    { id: 52, label: 'Thailand', providerIds: '3237' },
+    { id: 52, label: 'Thailand', providerIds: '2266,3193' },
     { id: 43, label: 'Germany', providerIds: '3237' },
     { id: 53, label: 'Saudi Arabia', providerIds: '2377' },
     { id: 46, label: 'Sweden', providerIds: '2738' },
@@ -45,6 +46,7 @@
       .forEach((providerId) => LEGACY_COUNTRY_ID_BY_PROVIDER_ID.set(providerId, entry.id));
   });
   LEGACY_COUNTRY_ID_BY_PROVIDER_ID.set('3237', 52);
+  LEGACY_COUNTRY_ID_BY_PROVIDER_ID.set('2266', 52);
   const COUNTRY_BY_PHONE_PREFIX = Object.freeze([
     { prefix: '1', id: 187, iso: 'US', label: 'USA' },
     { prefix: '66', id: 52, iso: 'TH', label: 'Thailand' },
@@ -137,6 +139,12 @@
       return '';
     }
     return String(Math.round(numeric * 10000) / 10000);
+  }
+
+  function getCappedSmsBowerMaxPrice(value = DEFAULT_MAX_PRICE) {
+    const maxPriceText = normalizeSmsBowerPrice(value || DEFAULT_MAX_PRICE);
+    const maxPrice = maxPriceText ? Number(maxPriceText) : MAX_PRICE_CAP;
+    return normalizeSmsBowerPrice(Math.min(maxPrice, MAX_PRICE_CAP)) || DEFAULT_MAX_PRICE;
   }
 
   function normalizeSmsBowerCountryOrder(value = []) {
@@ -472,7 +480,7 @@
 
   function resolvePriceRange(state = {}) {
     const minPriceText = normalizeSmsBowerPrice(state?.smsbowerMinPrice);
-    const maxPriceText = normalizeSmsBowerPrice(state?.smsbowerMaxPrice || DEFAULT_MAX_PRICE);
+    const maxPriceText = getCappedSmsBowerMaxPrice(state?.smsbowerMaxPrice || DEFAULT_MAX_PRICE);
     const minPriceLimit = minPriceText ? Number(minPriceText) : null;
     const maxPriceLimit = maxPriceText ? Number(maxPriceText) : null;
     return {
@@ -531,6 +539,13 @@
     }
     const autoSet = new Set(normalizeSmsBowerProviderIds(autoProviderIds, '').split(',').filter(Boolean));
     return configured.split(',').filter(Boolean).every((providerId) => autoSet.has(providerId));
+  }
+
+  function splitSmsBowerProviderIds(providerIds = '') {
+    return normalizeSmsBowerProviderIds(providerIds, '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
   }
 
   function formatPriceRangeText(minPriceLimit = null, maxPriceLimit = null) {
@@ -595,6 +610,7 @@
       : autoProviderIds;
     const maxAcquireRounds = Math.max(1, Math.min(10, Math.floor(Number(state?.smsbowerActivationRetryRounds) || DEFAULT_ACQUIRE_RETRY_ROUNDS)));
     const retryDelayMs = Math.max(500, Math.min(30000, Math.floor(Number(state?.smsbowerActivationRetryDelayMs) || DEFAULT_ACQUIRE_RETRY_DELAY_MS)));
+    const maxPrice = getCappedSmsBowerMaxPrice(state?.smsbowerMaxPrice || DEFAULT_MAX_PRICE);
     let finalNoNumbersByCountry = [];
     let finalLastError = null;
 
@@ -610,78 +626,82 @@
         const countryProviderIds = useManualProviderIds
           ? resolvedProviderIds
           : (getProviderIdsForCountryId(countryId) || resolvedProviderIds);
-        const countryAttempt = (payloadOrError) => formatSmsBowerAcquireFailure(countryLabel, countryId, countryProviderIds, payloadOrError);
-        try {
-          const query = {
-            action: 'getNumber',
-            service: config.serviceCode,
-            country: countryId,
-          };
-          if (countryProviderIds) {
-            query.providerIds = countryProviderIds;
-          }
-          const maxPrice = normalizeSmsBowerPrice(state?.smsbowerMaxPrice || DEFAULT_MAX_PRICE);
-          if (maxPrice) {
-            query.maxPrice = maxPrice;
-          }
-          const payload = await fetchPayload(config, query, 'SMSBower getNumber');
-          const activation = parseActivationPayload(payload, {
-            countryId,
-            countryLabel,
-            serviceCode: config.serviceCode,
-            selectedPrice: maxPrice,
-            providerIds: countryProviderIds,
-          });
-          if (activation) {
-            return activation;
-          }
+        const providerIdAttempts = splitSmsBowerProviderIds(countryProviderIds);
+        const lineAttempts = providerIdAttempts.length ? providerIdAttempts : [''];
 
-          const failure = countryAttempt(payload);
-          const failureSummary = failure.message.startsWith('SMSBower ')
-            ? failure.message.slice(9)
-            : failure.message;
-          if (failure.failure.isNoNumbers) {
-            noNumbersByCountry.push(failureSummary);
+        for (const providerIdAttempt of lineAttempts) {
+          const countryAttempt = (payloadOrError) => formatSmsBowerAcquireFailure(countryLabel, countryId, providerIdAttempt, payloadOrError);
+          try {
+            const query = {
+              action: 'getNumber',
+              service: config.serviceCode,
+              country: countryId,
+            };
+            if (providerIdAttempt) {
+              query.providerIds = providerIdAttempt;
+            }
+            if (maxPrice) {
+              query.maxPrice = maxPrice;
+            }
+            const payload = await fetchPayload(config, query, 'SMSBower getNumber');
+            const activation = parseActivationPayload(payload, {
+              countryId,
+              countryLabel,
+              serviceCode: config.serviceCode,
+              selectedPrice: maxPrice,
+              providerIds: providerIdAttempt,
+            });
+            if (activation) {
+              return activation;
+            }
+
+            const failure = countryAttempt(payload);
+            const failureSummary = failure.message.startsWith('SMSBower ')
+              ? failure.message.slice(9)
+              : failure.message;
+            if (failure.failure.isNoNumbers) {
+              noNumbersByCountry.push(failureSummary);
+              if (typeof deps.addLog === 'function') {
+                await deps.addLog(`步骤 9：${failure.message}`, 'warn');
+              }
+              continue;
+            }
+
+            finalLastError = new Error(failure.message);
+            finalLastError.countryId = countryId;
+            finalLastError.countryLabel = countryLabel;
+            finalLastError.providerIds = providerIdAttempt;
+            finalLastError.failureReason = failure.failure.reason;
             if (typeof deps.addLog === 'function') {
               await deps.addLog(`步骤 9：${failure.message}`, 'warn');
             }
-            continue;
-          }
+          } catch (error) {
+            const failure = countryAttempt(error);
+            const failureSummary = failure.message.startsWith('SMSBower ')
+              ? failure.message.slice(9)
+              : failure.message;
+            if (failure.failure.isNoNumbers || isNoNumbersPayload(error?.payload || error?.message)) {
+              noNumbersByCountry.push(failureSummary);
+              if (typeof deps.addLog === 'function') {
+                await deps.addLog(`步骤 9：${failure.message}`, 'warn');
+              }
+              continue;
+            }
 
-          finalLastError = new Error(failure.message);
-          finalLastError.countryId = countryId;
-          finalLastError.countryLabel = countryLabel;
-          finalLastError.providerIds = countryProviderIds;
-          finalLastError.failureReason = failure.failure.reason;
-          if (typeof deps.addLog === 'function') {
-            await deps.addLog(`步骤 9：${failure.message}`, 'warn');
-          }
-        } catch (error) {
-          const failure = countryAttempt(error);
-          const failureSummary = failure.message.startsWith('SMSBower ')
-            ? failure.message.slice(9)
-            : failure.message;
-          if (failure.failure.isNoNumbers || isNoNumbersPayload(error?.payload || error?.message)) {
-            noNumbersByCountry.push(failureSummary);
+            finalLastError = new Error(failure.message);
+            finalLastError.cause = error;
+            finalLastError.payload = error?.payload;
+            finalLastError.status = error?.status;
+            finalLastError.countryId = countryId;
+            finalLastError.countryLabel = countryLabel;
+            finalLastError.providerIds = providerIdAttempt;
+            finalLastError.failureReason = failure.failure.reason;
             if (typeof deps.addLog === 'function') {
               await deps.addLog(`步骤 9：${failure.message}`, 'warn');
             }
-            continue;
-          }
-
-          finalLastError = new Error(failure.message);
-          finalLastError.cause = error;
-          finalLastError.payload = error?.payload;
-          finalLastError.status = error?.status;
-          finalLastError.countryId = countryId;
-          finalLastError.countryLabel = countryLabel;
-          finalLastError.providerIds = countryProviderIds;
-          finalLastError.failureReason = failure.failure.reason;
-          if (typeof deps.addLog === 'function') {
-            await deps.addLog(`步骤 9：${failure.message}`, 'warn');
-          }
-          if (failure.failure.isTerminal) {
-            throw finalLastError;
+            if (failure.failure.isTerminal) {
+              throw finalLastError;
+            }
           }
         }
       }

@@ -90,9 +90,10 @@ test('SMSBower provider logs Brazil failures with country and providerId context
   });
 
   assert.equal(requests[0].searchParams.get('country'), '73');
-  assert.equal(requests[0].searchParams.get('providerIds'), '3316,3398');
-  assert.equal(requests[1].searchParams.get('country'), '187');
-  assert.equal(requests[1].searchParams.get('providerIds'), '3170');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3237');
+  assert.equal(requests[1].searchParams.get('providerIds'), '3365');
+  assert.equal(requests[7].searchParams.get('country'), '187');
+  assert.equal(requests[7].searchParams.get('providerIds'), '3170');
   assert.equal(activation.countryId, 187);
   assert.equal(activation.countryLabel, 'USA');
   assert.equal(activation.providerIds, '3170');
@@ -103,7 +104,7 @@ test('SMSBower provider logs Brazil failures with country and providerId context
       && /73/.test(entry.message)
       && /网络请求失败/.test(entry.message)
       && /Failed to fetch/.test(entry.message)
-      && /providerIds=3316,3398/.test(entry.message)
+      && /providerIds=3237/.test(entry.message)
     )),
     true
   );
@@ -199,10 +200,50 @@ test('SMSBower provider derives provider IDs from the selected country order whe
 
   const parsedUrl = requests[0];
   assert.equal(parsedUrl.searchParams.get('country'), '33');
-  assert.equal(parsedUrl.searchParams.get('providerIds'), '3243,3335');
+  assert.equal(parsedUrl.searchParams.get('providerIds'), '3243');
   assert.equal(activation.countryId, 33);
   assert.equal(activation.countryLabel, 'Colombia');
-  assert.equal(activation.providerIds, '3243,3335');
+  assert.equal(activation.providerIds, '3243');
+});
+
+test('SMSBower provider tries the next provider ID in the same country when a line has no numbers', async () => {
+  const requests = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    fetchImpl: async (url) => {
+      const parsedUrl = new URL(url);
+      requests.push(parsedUrl);
+      const providerIds = parsedUrl.searchParams.get('providerIds');
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return providerIds === '2236'
+            ? 'ACCESS_NUMBER:176295:+573001234567'
+            : 'NO_NUMBERS';
+        },
+      };
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [33],
+    smsbowerProviderIds: '3243,2236,3288,3406,3160,3335',
+    smsbowerMaxPrice: '0.2',
+  });
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].searchParams.get('country'), '33');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3243');
+  assert.equal(requests[0].searchParams.get('maxPrice'), '0.1');
+  assert.equal(requests[1].searchParams.get('country'), '33');
+  assert.equal(requests[1].searchParams.get('providerIds'), '2236');
+  assert.equal(requests[1].searchParams.get('maxPrice'), '0.1');
+  assert.equal(activation.countryId, 33);
+  assert.equal(activation.countryLabel, 'Colombia');
+  assert.equal(activation.providerIds, '2236');
+  assert.equal(activation.selectedPrice, '0.1');
 });
 
 test('SMSBower provider cancels activation with status 8', async () => {

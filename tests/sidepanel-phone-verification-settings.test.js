@@ -258,7 +258,7 @@ function getSmsBowerCountryItemById(id) {
   return ({
     187: { providerIds: '3170' },
     6: { providerIds: '3267' },
-    33: { providerIds: '3243,3335' },
+    33: { providerIds: '3243,2236,3288,3406,3160,3335' },
   }[id] || null);
 }
 ${extractFunction('getSmsBowerDefaultProviderIdsByCountryId')}
@@ -271,7 +271,7 @@ return { inputSmsBowerProviderIds, syncSmsBowerProviderIdsFromCountrySelection }
   assert.equal(api.inputSmsBowerProviderIds.value, '3267');
 
   api.syncSmsBowerProviderIdsFromCountrySelection([33]);
-  assert.equal(api.inputSmsBowerProviderIds.value, '3243,3335');
+  assert.equal(api.inputSmsBowerProviderIds.value, '3243,2236,3288,3406,3160,3335');
 
   api.inputSmsBowerProviderIds.value = '8888';
   api.syncSmsBowerProviderIdsFromCountrySelection([33]);

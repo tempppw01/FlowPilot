@@ -741,20 +741,44 @@ const DEFAULT_MADAO_MODE = MADAO_MODE_ROUTING_PLAN;
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
   { id: 6, label: '印度尼西亚', englishLabel: 'Indonesia', price: '0.014', providerIds: '3267' },
-  { id: 33, label: '哥伦比亚', englishLabel: 'Colombia', price: '0.016', providerIds: '3243,3335' },
+  { id: 33, label: '哥伦比亚', englishLabel: 'Colombia', price: '0.017', providerIds: '3243,2236,3288,3406,3160,3335' },
   { id: 39, label: '阿根廷', englishLabel: 'Argentina', price: '0.016', providerIds: '3237' },
   { id: 31, label: '南非', englishLabel: 'South Africa', price: '0.02', providerIds: '2649' },
   { id: 16, label: '英国', englishLabel: 'United Kingdom', price: '0.027', providerIds: '3237' },
-  { id: 151, label: '智利', englishLabel: 'Chile', price: '0.027', providerIds: '3234,2974' },
+  { id: 151, label: '智利', englishLabel: 'Chile', price: '0.027', providerIds: '3234,3109,3235' },
   { id: 10, label: '越南', englishLabel: 'Vietnam', price: '0.031', providerIds: '3160' },
-  { id: 73, label: '巴西', englishLabel: 'Brazil', price: '0.052', providerIds: '3316,3398' },
+  { id: 73, label: '巴西', englishLabel: 'Brazil', price: '0.045', providerIds: '3237,3365,3252,3398,3406,3229,2404' },
   { id: 19, label: '尼日利亚', englishLabel: 'Nigeria', price: '0.054', providerIds: '2266' },
-  { id: 52, label: '泰国', englishLabel: 'Thailand', price: '0.054', providerIds: '3237' },
+  { id: 52, label: '泰国', englishLabel: 'Thailand', price: '0.054', providerIds: '2266,3193' },
   { id: 43, label: '德国', englishLabel: 'Germany', price: '0.056', providerIds: '3237' },
   { id: 53, label: '沙特阿拉伯', englishLabel: 'Saudi Arabia', price: '0.064', providerIds: '2377' },
   { id: 46, label: '瑞典', englishLabel: 'Sweden', price: '0.075', providerIds: '2738' },
   { id: 187, label: '美国', englishLabel: 'USA', price: '', providerIds: '3170' },
 ]);
+const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
+  2738: 46,
+  3267: 6,
+  3243: 33,
+  3335: 33,
+  2236: 33,
+  3288: 33,
+  3406: 73,
+  2649: 31,
+  3234: 151,
+  3109: 151,
+  3235: 151,
+  3160: 10,
+  2404: 73,
+  3229: 73,
+  3252: 73,
+  3365: 73,
+  3398: 73,
+  2266: 52,
+  3193: 52,
+  3237: 52,
+  2377: 53,
+  3170: 187,
+});
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze(SMSBOWER_LOW_PRICE_COUNTRY_ITEMS.map((item) => item.id));
 const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
 const DEFAULT_SMSBOWER_MAX_PRICE = '0.1';
@@ -6953,6 +6977,10 @@ function resolveSmsBowerCountryIdValue(value, fallback = DEFAULT_SMSBOWER_COUNTR
     return countryId;
   }
   const legacyProviderId = String(countryId || '').trim();
+  const legacyCountryId = SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID[legacyProviderId];
+  if (legacyCountryId) {
+    return normalizeSmsBowerCountryIdValue(legacyCountryId, fallback);
+  }
   const legacyMatch = SMSBOWER_LOW_PRICE_COUNTRY_ITEMS.find((item) => (
     normalizeSmsBowerProviderIdsValue(item.providerIds || item.providerId || '')
       .split(',')
