@@ -399,7 +399,7 @@ async function executeStepAndWait(step) {
   events.steps.push(step);
   if (step === 4 && remainingFailures > 0) {
     remainingFailures -= 1;
-    throw new Error('步骤 4：SMSBower TempMail 验证码尚未到达（60/60）。');
+    throw new Error('步骤 4：SMSBower TempMail 验证码尚未到达（18/18）。');
   }
 }
 

@@ -124,8 +124,8 @@ test('mail rule registry exposes canonical OpenAI verification poll payloads', (
     email: 'smsbower@example.com',
     mailProvider: 'smsbower-mail',
   });
-  assert.equal(smsbowerSignupPayload.maxAttempts, 60);
-  assert.equal(smsbowerSignupPayload.intervalMs, 1000);
+  assert.equal(smsbowerSignupPayload.maxAttempts, 18);
+  assert.equal(smsbowerSignupPayload.intervalMs, 5000);
 
   const smsbowerLoginPayload = registry.buildVerificationPollPayloadForNode('fetch-login-code', {
     activeFlowId: 'openai',

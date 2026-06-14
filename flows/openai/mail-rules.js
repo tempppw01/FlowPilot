@@ -6,8 +6,8 @@
   const SIGNUP_CODE_NODE_ID = 'fetch-signup-code';
   const LOGIN_CODE_NODE_ID = 'fetch-login-code';
   const SMSBOWER_MAIL_PROVIDER = 'smsbower-mail';
-  const SMSBOWER_SIGNUP_CODE_MAX_ATTEMPTS = 60;
-  const SMSBOWER_SIGNUP_CODE_INTERVAL_MS = 1000;
+  const SMSBOWER_SIGNUP_CODE_MAX_ATTEMPTS = 18;
+  const SMSBOWER_SIGNUP_CODE_INTERVAL_MS = 5000;
   const OPENAI_CODE_PATTERNS = Object.freeze([
     Object.freeze({
       source: '(?:chatgpt\\s+log-?in\\s+code|enter\\s+this\\s+code)[^0-9]{0,24}(\\d{6})',
