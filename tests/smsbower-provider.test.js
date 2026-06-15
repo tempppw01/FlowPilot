@@ -307,6 +307,77 @@ test('SMSBower provider continues through a randomized non-USA country queue whe
   assert.equal(activation.providerIds, '3267');
 });
 
+test('SMSBower random mode reshuffles non-USA countries on every activation request', async () => {
+  const requests = [];
+  const randomValues = [0, 0.99];
+  const module = loadModule();
+  const provider = module.createProvider({
+    randomFn: () => randomValues.shift() ?? 0,
+    fetchImpl: async (url) => {
+      const parsedUrl = new URL(url);
+      requests.push(parsedUrl);
+      const country = parsedUrl.searchParams.get('country');
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return country === '6'
+            ? 'ACCESS_NUMBER:176299:+628123456780'
+            : 'ACCESS_NUMBER:176300:+66812345670';
+        },
+      };
+    },
+  });
+
+  const state = {
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [52, 6, 187],
+    smsbowerProviderIds: '3170',
+    smsbowerRandomMode: true,
+  };
+
+  const firstActivation = await provider.requestActivation(state);
+  const secondActivation = await provider.requestActivation(state);
+
+  assert.equal(requests[0].searchParams.get('country'), '6');
+  assert.equal(requests[1].searchParams.get('country'), '52');
+  assert.notEqual(requests[0].searchParams.get('country'), '187');
+  assert.notEqual(requests[1].searchParams.get('country'), '187');
+  assert.equal(firstActivation.countryId, 6);
+  assert.equal(secondActivation.countryId, 52);
+});
+
+test('SMSBower random mode reshuffles provider IDs inside the selected country', async () => {
+  const requests = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    randomFn: () => 0,
+    fetchImpl: async (url) => {
+      const parsedUrl = new URL(url);
+      requests.push(parsedUrl);
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return 'ACCESS_NUMBER:176301:+573001234568';
+        },
+      };
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [33],
+    smsbowerProviderIds: '3243,2236,3288,3406,3160,3335',
+    smsbowerRandomMode: true,
+  });
+
+  assert.equal(requests[0].searchParams.get('country'), '33');
+  assert.equal(requests[0].searchParams.get('providerIds'), '2236');
+  assert.equal(activation.countryId, 33);
+  assert.equal(activation.providerIds, '2236');
+});
+
 test('SMSBower provider tries the next provider ID in the same country when a line has no numbers', async () => {
   const requests = [];
   const module = loadModule();

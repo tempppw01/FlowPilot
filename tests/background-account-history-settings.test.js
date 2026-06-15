@@ -441,6 +441,8 @@ return {
   assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [187, '52', 187]), [187, 52]);
   assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [3237, 3398, 187]), [52, 73, 187]);
   assert.equal(api.normalizePersistentSettingValue('smsbowerProviderIds', '3170, abc, 3001'), '3170,3001');
+  assert.equal(api.normalizePersistentSettingValue('smsbowerRandomMode', 1), true);
+  assert.equal(api.normalizePersistentSettingValue('smsbowerRandomMode', 0), false);
   assert.equal(api.normalizePersistentSettingValue('smsbowerMinPrice', '0.123456'), '0.1235');
   assert.equal(api.normalizePersistentSettingValue('smsbowerMaxPrice', ''), '0.1');
   const smsBowerOrderPayload = api.buildPersistentSettingsPayload({

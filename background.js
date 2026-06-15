@@ -1551,6 +1551,7 @@ const PERSISTED_SETTING_DEFAULTS = {
   smsbowerProviderIds: DEFAULT_SMSBOWER_PROVIDER_IDS,
   smsbowerMinPrice: '',
   smsbowerMaxPrice: DEFAULT_SMSBOWER_MAX_PRICE,
+  smsbowerRandomMode: false,
   phonePreferredActivation: null,
 };
 
@@ -3911,6 +3912,8 @@ function normalizePersistentSettingValue(key, value) {
       return normalizeSmsBowerCountryOrder(value);
     case 'smsbowerProviderIds':
       return normalizeSmsBowerProviderIds(value);
+    case 'smsbowerRandomMode':
+      return Boolean(value);
     case 'smsbowerMinPrice':
       return normalizeSmsBowerPrice(value);
     case 'smsbowerMaxPrice':

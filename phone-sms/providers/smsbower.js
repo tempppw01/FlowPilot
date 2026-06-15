@@ -551,6 +551,33 @@
       .filter(Boolean);
   }
 
+  function shuffleSmsBowerItems(items = [], randomFn = Math.random) {
+    const next = Array.isArray(items) ? [...items] : [];
+    const getRandom = typeof randomFn === 'function' ? randomFn : Math.random;
+    for (let index = next.length - 1; index > 0; index -= 1) {
+      const randomValue = Math.max(0, Math.min(0.999999, Number(getRandom()) || 0));
+      const swapIndex = Math.floor(randomValue * (index + 1));
+      [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+    }
+    return next;
+  }
+
+  function shouldUseSmsBowerRandomMode(state = {}) {
+    return Boolean(state?.smsbowerRandomMode);
+  }
+
+  function resolveSmsBowerRandomCountryCandidates(countryCandidates = [], randomFn = Math.random) {
+    const nonUsCandidates = countryCandidates.filter(
+      (entry) => normalizeSmsBowerCountryId(entry?.id, 0) !== DEFAULT_COUNTRY_ID
+    );
+    const candidates = nonUsCandidates.length
+      ? nonUsCandidates
+      : DEFAULT_COUNTRY_CANDIDATES.filter(
+        (entry) => normalizeSmsBowerCountryId(entry?.id, 0) !== DEFAULT_COUNTRY_ID
+      );
+    return shuffleSmsBowerItems(candidates, randomFn);
+  }
+
   function normalizeBlockedProviderIds(value = []) {
     const source = Array.isArray(value) ? value : String(value || '').split(/[\r\n,]+/);
     const blocked = new Set();
@@ -615,6 +642,8 @@
   async function requestActivation(state = {}, options = {}, deps = {}) {
     const config = resolveConfig(state, deps);
     const allCountryCandidates = resolveCountryCandidates(state);
+    const randomMode = shouldUseSmsBowerRandomMode(state);
+    const randomFn = typeof deps.randomFn === 'function' ? deps.randomFn : Math.random;
     if (!allCountryCandidates.length) {
       throw new Error('步骤 9：SMSBower 未选择国家，请先在接码设置中至少选择 1 个国家。');
     }
@@ -632,6 +661,9 @@
       if (blockedCountryIds.size && typeof deps.addLog === 'function') {
         await deps.addLog('步骤 9：SMSBower 已选国家均达到临时失败跳过阈值，本轮解除跳过并重新尝试。', 'warn');
       }
+    }
+    if (randomMode) {
+      countryCandidates = resolveSmsBowerRandomCountryCandidates(countryCandidates, randomFn);
     }
     const priceRange = resolvePriceRange(state);
     if (priceRange.invalidRange) {
@@ -663,6 +695,9 @@
         const providerIdAttempts = splitSmsBowerProviderIds(countryProviderIds);
         const lineAttempts = providerIdAttempts
           .filter((providerId) => !isSmsBowerProviderIdBlocked(blockedProviderIds, countryId, providerId));
+        if (randomMode && lineAttempts.length > 1) {
+          lineAttempts.splice(0, lineAttempts.length, ...shuffleSmsBowerItems(lineAttempts, randomFn));
+        }
         if (providerIdAttempts.length && !lineAttempts.length) {
           noNumbersByCountry.push(`${countryLabel} (${countryId}) all providerIds skipped after SMS timeouts: ${providerIdAttempts.join(',')}`);
           continue;
@@ -894,6 +929,7 @@
       sleepWithStop: deps.sleepWithStop,
       throwIfStopped: deps.throwIfStopped,
       addLog: deps.addLog,
+      randomFn: deps.randomFn,
       requestTimeoutMs: deps.requestTimeoutMs || DEFAULT_REQUEST_TIMEOUT_MS,
     };
     const capabilities = Object.freeze({

@@ -235,6 +235,11 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /applySmsBowerCountrySelection\(randomOrder,/);
   assert.match(sidepanelSource, /SMSBower 已启用随机国家队列/);
   assert.match(sidepanelSource, /forceProviderIds:\s*true/);
+  assert.match(sidepanelSource, /smsbowerRandomModeEnabled/);
+  assert.match(sidepanelSource, /smsbowerRandomMode:\s*smsBowerRandomModeValue/);
+  assert.match(sidepanelSource, /smsbowerRandomMode:\s*Boolean\(smsbowerRandomModeEnabled\)/);
+  assert.match(sidepanelSource, /setSmsBowerRandomMode\(true/);
+  assert.match(sidepanelSource, /setSmsBowerRandomMode\(false/);
   assert.doesNotMatch(sidepanelSource, /let\s+smsbowerProviderIdsAutoValue\s*=\s*DEFAULT_SMSBOWER_PROVIDER_IDS/);
   assert.doesNotMatch(sidepanelSource, /inputSmsBowerProviderIds\.value = normalizeSmsBowerProviderIdsValue\(state\?\.smsbowerProviderIds \|\| DEFAULT_SMSBOWER_PROVIDER_IDS\);/);
   assert.doesNotMatch(sidepanelSource, /0\.251/);
