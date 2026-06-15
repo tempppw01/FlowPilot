@@ -10,6 +10,7 @@
       DEFAULT_SMSBOWER_MAIL_SERVICE_CODE = 'dr',
       describeSmsBowerMailPayload,
       extractSmsBowerMailCode,
+      extractSmsBowerMailLink,
       fetchImpl = typeof fetch === 'function' ? fetch.bind(globalThis) : null,
       getState = async () => ({}),
       isSmsBowerMailPendingCode,
@@ -278,6 +279,69 @@
       throw lastError || new Error(`步骤 ${step}：未在 SMSBower TempMail 中找到新的匹配验证码。`);
     }
 
+    async function pollSmsBowerMailLink(step, state, pollPayload = {}) {
+      const latestState = state || await getState();
+      const config = ensureSmsBowerMailConfig(latestState, { requireApiKey: true, requireActivation: true });
+      const activation = config.currentActivation;
+      const targetEmail = resolveSmsBowerMailPollTargetEmail(latestState, pollPayload);
+      const actionLabel = String(pollPayload.actionLabel || 'SMSBower TempMail email link').trim();
+      if (!targetEmail) {
+        throw new Error('SMSBower TempMail link polling requires a target email. Get an email first.');
+      }
+      if (typeof extractSmsBowerMailLink !== 'function') {
+        throw new Error('SMSBower TempMail link extractor is not available.');
+      }
+
+      await addLog(`步骤 ${step}：正在轮询 ${actionLabel}：${targetEmail}（mailId=${activation.id}）...`, 'info');
+      const maxAttempts = Number(pollPayload.maxAttempts) || 8;
+      const intervalMs = Number(pollPayload.intervalMs) || 3000;
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        throwIfStopped();
+        try {
+          const payload = await requestSmsBowerMailJson(config, '/getCode', {
+            params: { mailId: activation.id },
+          });
+          if (isSmsBowerMailSuccess(payload)) {
+            const link = String(extractSmsBowerMailLink(payload, {
+              hostFilters: pollPayload.hostFilters || [],
+            }) || '').trim();
+            if (link) {
+              try {
+                await requestSmsBowerMailNextCode(latestState, {
+                  logPrefix: 'SMSBower TempMail',
+                });
+              } catch (err) {
+                await addLog(`步骤 ${step}：SMSBower TempMail 关闭激活失败：${err.message}`, 'warn');
+              }
+              return {
+                ok: true,
+                link,
+                url: link,
+                emailTimestamp: Date.now(),
+                mailId: activation.id,
+              };
+            }
+            lastError = new Error(`步骤 ${step}：SMSBower TempMail 已返回邮件，但未解析到匹配链接（${attempt}/${maxAttempts}）。`);
+          } else if (isSmsBowerMailPendingCode(payload)) {
+            lastError = new Error(`步骤 ${step}：SMSBower TempMail 邮件尚未到达（${attempt}/${maxAttempts}）。`);
+          } else {
+            lastError = new Error(`步骤 ${step}：SMSBower TempMail 轮询失败：${describeSmsBowerMailPayload(payload) || 'unknown_error'}`);
+          }
+          await addLog(lastError.message, attempt === maxAttempts ? 'warn' : 'info');
+        } catch (err) {
+          lastError = err;
+          await addLog(`步骤 ${step}：SMSBower TempMail 轮询失败：${err.message}`, 'warn');
+        }
+        if (attempt < maxAttempts) {
+          await sleepWithStop(intervalMs);
+        }
+      }
+
+      throw lastError || new Error(`步骤 ${step}：未在 SMSBower TempMail 中找到邮件链接。`);
+    }
+
     async function clearSmsBowerMailRuntimeState(options = {}) {
       await setState({
         currentSmsBowerMailActivation: null,
@@ -291,6 +355,7 @@
       ensureSmsBowerMailConfig,
       fetchSmsBowerMailAddress,
       getSmsBowerMailConfig,
+      pollSmsBowerMailLink,
       pollSmsBowerMailVerificationCode,
       requestSmsBowerMailJson,
       resolveSmsBowerMailPollTargetEmail,

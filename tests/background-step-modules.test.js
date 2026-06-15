@@ -22,6 +22,7 @@ test('background imports workflow step modules including rebuilt Kiro modules', 
     'flows/kiro/background/desktop-client.js',
     'flows/kiro/background/desktop-authorize-runner.js',
     'flows/kiro/background/publisher-kiro-rs.js',
+    'flows/claude/background/register-runner.js',
   ].forEach((path) => {
     assert.match(source, new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   });

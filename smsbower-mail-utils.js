@@ -159,6 +159,114 @@
     ]);
   }
 
+  function decodeSmsBowerMailText(value = '') {
+    return String(value || '')
+      .replace(/\\\//g, '/')
+      .replace(/&amp;/gi, '&')
+      .replace(/&#x3D;/gi, '=')
+      .replace(/&#61;/g, '=')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#34;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim();
+  }
+
+  function collectSmsBowerMailPayloadStrings(value, output = [], seen = new Set()) {
+    if (value === null || value === undefined) return output;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      const text = decodeSmsBowerMailText(value);
+      if (text) output.push(text);
+      return output;
+    }
+    if (typeof value !== 'object' || seen.has(value)) return output;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      value.forEach((entry) => collectSmsBowerMailPayloadStrings(entry, output, seen));
+      return output;
+    }
+    const priorityKeys = [
+      'link',
+      'url',
+      'loginLink',
+      'login_link',
+      'magicLink',
+      'magic_link',
+      'activationLink',
+      'activation_link',
+      'verificationLink',
+      'verification_link',
+      'code',
+      'message',
+      'msg',
+      'text',
+      'body',
+      'html',
+      'content',
+      'data',
+      'mail',
+      'email',
+    ];
+    priorityKeys.forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(value, key)) {
+        collectSmsBowerMailPayloadStrings(value[key], output, seen);
+      }
+    });
+    Object.entries(value).forEach(([key, entryValue]) => {
+      if (!priorityKeys.includes(key)) {
+        collectSmsBowerMailPayloadStrings(entryValue, output, seen);
+      }
+    });
+    return output;
+  }
+
+  function normalizeSmsBowerMailLinkCandidate(rawValue = '') {
+    const candidate = decodeSmsBowerMailText(rawValue)
+      .replace(/[)\].,;!?]+$/g, '')
+      .trim();
+    if (!candidate) return '';
+    try {
+      return new URL(candidate).toString();
+    } catch {
+      return '';
+    }
+  }
+
+  function extractSmsBowerMailLinks(payload = {}) {
+    const strings = collectSmsBowerMailPayloadStrings(payload);
+    const links = [];
+    const seen = new Set();
+    strings.forEach((text) => {
+      const matches = decodeSmsBowerMailText(text).match(/https?:\/\/[^\s"'<>]+/gi) || [];
+      matches.forEach((match) => {
+        const link = normalizeSmsBowerMailLinkCandidate(match);
+        const key = link.toLowerCase();
+        if (link && !seen.has(key)) {
+          seen.add(key);
+          links.push(link);
+        }
+      });
+    });
+    return links;
+  }
+
+  function extractSmsBowerMailLink(payload = {}, options = {}) {
+    const links = extractSmsBowerMailLinks(payload);
+    const hostFilters = Array.isArray(options.hostFilters)
+      ? options.hostFilters.map((entry) => String(entry || '').trim().toLowerCase()).filter(Boolean)
+      : [];
+    if (!hostFilters.length) {
+      return links[0] || '';
+    }
+    return links.find((link) => {
+      try {
+        const hostname = new URL(link).hostname.toLowerCase();
+        return hostFilters.some((filter) => hostname === filter || hostname.endsWith(`.${filter}`));
+      } catch {
+        return false;
+      }
+    }) || '';
+  }
+
   function isSmsBowerMailSuccess(payload = {}) {
     return Boolean(payload && typeof payload === 'object' && Number(payload.status) === 1);
   }
@@ -176,6 +284,8 @@
     SMSBOWER_MAIL_DOMAINS,
     SMSBOWER_MAIL_PROVIDER,
     describeSmsBowerMailPayload,
+    extractSmsBowerMailLink,
+    extractSmsBowerMailLinks,
     extractSmsBowerMailCode,
     isSmsBowerMailPendingCode,
     isSmsBowerMailSuccess,

@@ -42,6 +42,7 @@ test('sidepanel html exposes flow selector and kiro source fields', () => {
   [
     'id="select-flow"',
     '<option value="grok">Grok</option>',
+    '<option value="claude">Claude</option>',
     'id="label-source-selector"',
     'id="btn-open-target-repository"',
     'id="row-step6-cookie-settings"',
@@ -70,6 +71,8 @@ test('sidepanel html exposes flow selector and kiro source fields', () => {
     'id="display-openai-webchat-upload-status"',
     '<script src="../flows/grok/index.js"></script>',
     '<script src="../flows/grok/workflow.js"></script>',
+    '<script src="../flows/claude/index.js"></script>',
+    '<script src="../flows/claude/workflow.js"></script>',
   ].forEach((snippet) => {
     assert.match(visibleHtml, new RegExp(snippet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   });
@@ -89,6 +92,10 @@ test('sidepanel html exposes flow selector and kiro source fields', () => {
   );
   assert.ok(
     sidepanelHtml.indexOf('<script src="../flows/grok/workflow.js"></script>')
+      < sidepanelHtml.indexOf('<script src="../flows/claude/index.js"></script>')
+  );
+  assert.ok(
+    sidepanelHtml.indexOf('<script src="../flows/claude/workflow.js"></script>')
       < sidepanelHtml.indexOf('<script src="../flows/index.js"></script>')
   );
 });
@@ -196,16 +203,17 @@ const TARGET_REPOSITORY_URLS = Object.freeze({
   }),
 });
 function normalizeFlowId(value) {
-  return ['openai', 'kiro', 'grok'].includes(value) ? value : 'openai';
+  return ['openai', 'kiro', 'grok', 'claude'].includes(value) ? value : 'openai';
 }
 function getDefaultTargetIdForFlow(flowId) {
-  return flowId === 'grok' ? 'webchat2api' : (flowId === 'kiro' ? 'kiro-rs' : 'cpa');
+  return flowId === 'claude' ? 'claude' : (flowId === 'grok' ? 'webchat2api' : (flowId === 'kiro' ? 'kiro-rs' : 'cpa'));
 }
 function normalizeTargetIdForFlow(flowId, targetId, fallback) {
   const targets = {
     openai: ['cpa', 'sub2api', 'codex2api', 'webchat'],
     kiro: ['kiro-rs'],
     grok: ['webchat2api'],
+    claude: ['claude'],
   }[flowId] || [];
   return targets.includes(targetId) ? targetId : fallback;
 }
@@ -385,7 +393,7 @@ function getDefaultTargetIdForFlow(flowId = DEFAULT_ACTIVE_FLOW_ID) {
 }
 function normalizeFlowId(value = '', fallback = DEFAULT_ACTIVE_FLOW_ID) {
   const normalized = String(value || fallback || DEFAULT_ACTIVE_FLOW_ID).trim().toLowerCase();
-  return ['openai', 'kiro', 'grok'].includes(normalized) ? normalized : DEFAULT_ACTIVE_FLOW_ID;
+  return ['openai', 'kiro', 'grok', 'claude'].includes(normalized) ? normalized : DEFAULT_ACTIVE_FLOW_ID;
 }
 function getFlowRegistry() {
   return {

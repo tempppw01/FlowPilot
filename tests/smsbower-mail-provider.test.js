@@ -31,6 +31,7 @@ function createProviderApi(options = {}) {
     DEFAULT_SMSBOWER_MAIL_SERVICE_CODE: utils.DEFAULT_SMSBOWER_MAIL_SERVICE_CODE,
     describeSmsBowerMailPayload: utils.describeSmsBowerMailPayload,
     extractSmsBowerMailCode: utils.extractSmsBowerMailCode,
+    extractSmsBowerMailLink: utils.extractSmsBowerMailLink,
     fetchImpl: fetchImpl || (async (url) => {
       calls.push({ url: String(url) });
       if (String(url).includes('/getActivation')) {
@@ -229,4 +230,58 @@ test('pollSmsBowerMailVerificationCode waits through pending code responses', as
 
   assert.equal(result.code, '123456');
   assert.equal(codeAttempts, 2);
+});
+
+test('extractSmsBowerMailLink prefers allowed hosts from mail payload text', () => {
+  const link = utils.extractSmsBowerMailLink({
+    status: 1,
+    message: 'Open https://example.com/skip or https:\\/\\/claude.ai\\/login?token=abc&amp;email=fresh%40gmail.com to continue.',
+  }, {
+    hostFilters: ['claude.ai', 'anthropic.com'],
+  });
+
+  assert.equal(link, 'https://claude.ai/login?token=abc&email=fresh%40gmail.com');
+});
+
+test('pollSmsBowerMailLink reads Claude magic link and closes activation', async () => {
+  const requestUrls = [];
+  const api = createProviderApi({
+    state: {
+      smsbowerMailApiKey: 'api-key',
+      smsbowerMailBaseUrl: 'https://smsbower.page/api/mail',
+      currentSmsBowerMailActivation: {
+        id: '42',
+        address: 'fresh@gmail.com',
+      },
+      email: 'fresh@gmail.com',
+    },
+    fetchImpl: async (url) => {
+      requestUrls.push(String(url));
+      if (String(url).includes('/getCode')) {
+        return {
+          ok: true,
+          text: async () => JSON.stringify({
+            status: 1,
+            data: {
+              html: '<a href="https://claude.ai/login?token=abc&amp;next=%2F">Log in</a>',
+            },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        text: async () => JSON.stringify({ status: 1, message: 'Success' }),
+      };
+    },
+  });
+
+  const result = await api.pollSmsBowerMailLink(3, null, {
+    hostFilters: ['claude.ai'],
+    maxAttempts: 1,
+    intervalMs: 1,
+  });
+
+  assert.equal(result.link, 'https://claude.ai/login?token=abc&next=%2F');
+  assert.ok(requestUrls.some((url) => url.includes('/getCode?') && url.includes('mailId=42')));
+  assert.ok(requestUrls.some((url) => url.includes('/setStatus?') && url.includes('status=3')));
 });

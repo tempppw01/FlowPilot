@@ -173,6 +173,17 @@ const DEFAULT_PHONE_CODE_POLL_INTERVAL_SECONDS = 5;
 const PHONE_CODE_POLL_MAX_ROUNDS_MIN = 1;
 const PHONE_CODE_POLL_MAX_ROUNDS_MAX = 120;
 const DEFAULT_PHONE_CODE_POLL_MAX_ROUNDS = 4;
+const PHONE_SMS_PROVIDER_SMSBOWER = 'smsbower';
+const DEFAULT_SMSBOWER_COUNTRY_ORDER = [187];
+const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
+const DEFAULT_SMSBOWER_MAX_PRICE = '0.1';
+let smsbowerCountryOrderSelection = [];
+const inputSmsBowerApiKey = { value: '' };
+const inputSmsBowerServiceCode = { value: 'dr' };
+const selectSmsBowerCountryOrder = { selectedOptions: [] };
+const inputSmsBowerProviderIds = { value: '' };
+const inputSmsBowerMinPrice = { value: '' };
+const inputSmsBowerMaxPrice = { value: '' };
 const DEFAULT_PHONE_VERIFICATION_REPLACEMENT_LIMIT = 3;
 const inputHeroSmsApiKey = { value: '' };
 const inputHeroSmsReuseEnabled = { checked: true };
@@ -185,6 +196,12 @@ const inputPhoneCodePollIntervalSeconds = { value: '5' };
 const inputPhoneCodePollMaxRounds = { value: '4' };
 const selectHeroSmsCountry = { value: '52', selectedIndex: 0, options: [{ value: '52', textContent: 'Thailand' }] };
 function normalizeHeroSmsMaxPriceValue(value = '') { return String(value || '').trim(); }
+function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value.map((entry) => Number(entry)).filter(Boolean) : []; }
+function normalizeSmsBowerServiceCodeValue(value = '') { return String(value || 'dr').trim().toLowerCase(); }
+function normalizeSmsBowerProviderIdsValue(value = '') { return String(value || '').trim(); }
+function normalizeSmsBowerPriceValue(value = '') { const numeric = Number(String(value ?? '').trim()); return Number.isFinite(numeric) && numeric > 0 ? String(Math.round(numeric * 10000) / 10000) : ''; }
+function normalizeSmsBowerCountryIdValue(value, fallback = 187) { const numeric = Math.floor(Number(value)); return Number.isInteger(numeric) && numeric > 0 ? numeric : fallback; }
+function getSmsBowerDefaultProviderIdsByCountryId() { return '3170'; }
 function normalizeHeroSmsReuseEnabledValue(value) { return value === undefined || value === null ? true : Boolean(value); }
 function normalizeHeroSmsAcquirePriority(value = '') { return String(value || '').trim().toLowerCase() === 'price' ? 'price' : 'country'; }
 function normalizeHeroSmsCountryId(value) { return Math.max(1, Math.floor(Number(value) || 52)); }

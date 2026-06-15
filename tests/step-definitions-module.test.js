@@ -34,6 +34,7 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
   const gpcSteps = api.getSteps({ plusModeEnabled: true, plusPaymentMethod: 'gpc-helper' });
   const kiroSteps = api.getSteps({ activeFlowId: 'kiro' });
   const grokSteps = api.getSteps({ activeFlowId: 'grok' });
+  const claudeSteps = api.getSteps({ activeFlowId: 'claude' });
 
   assert.equal(Array.isArray(steps), true);
   assert.equal(steps.length, 11);
@@ -177,8 +178,9 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
   assert.equal(api.hasFlow('openai'), true);
   assert.equal(api.hasFlow('kiro'), true);
   assert.equal(api.hasFlow('grok'), true);
+  assert.equal(api.hasFlow('claude'), true);
   assert.equal(api.hasFlow('site-a'), false);
-  assert.deepStrictEqual(api.getRegisteredFlowIds(), ['openai', 'kiro', 'grok']);
+  assert.deepStrictEqual(api.getRegisteredFlowIds(), ['openai', 'kiro', 'grok', 'claude']);
   assert.deepStrictEqual(api.getSteps({ activeFlowId: 'site-a' }), []);
   assert.equal(api.getStepById(2, { activeFlowId: 'site-a' }), null);
   assert.deepStrictEqual(
@@ -254,6 +256,33 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
       ['grok-submit-profile'],
       ['grok-extract-sso-cookie'],
       ['grok-upload-sso-to-webchat2api'],
+      [],
+    ]
+  );
+  assert.deepStrictEqual(
+    claudeSteps.map((step) => step.key),
+    [
+      'claude-open-official-page',
+      'claude-submit-email',
+      'claude-fetch-login-link',
+      'claude-open-login-link',
+    ]
+  );
+  assert.equal(claudeSteps.every((step) => step.flowId === 'claude'), true);
+  assert.equal(claudeSteps[0].driverId, 'flows/claude/background/register-runner');
+  assert.equal(claudeSteps[0].sourceId, 'claude-register-page');
+  assert.deepStrictEqual(
+    claudeSteps.map((step) => step.title),
+    ['打开 Claude 官网', '获取邮箱并填写', '获取邮箱登录链接', '打开登录链接']
+  );
+  assert.deepStrictEqual(api.getStepIds({ activeFlowId: 'claude' }), [1, 2, 3, 4]);
+  assert.equal(api.getLastStepId({ activeFlowId: 'claude' }), 4);
+  assert.deepStrictEqual(
+    api.getNodes({ activeFlowId: 'claude' }).map((node) => node.next),
+    [
+      ['claude-submit-email'],
+      ['claude-fetch-login-link'],
+      ['claude-open-login-link'],
       [],
     ]
   );

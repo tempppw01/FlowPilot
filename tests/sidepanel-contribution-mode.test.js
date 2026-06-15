@@ -289,6 +289,17 @@ const DEFAULT_PHONE_CODE_POLL_INTERVAL_SECONDS = 5;
 const PHONE_CODE_POLL_MAX_ROUNDS_MIN = 1;
 const PHONE_CODE_POLL_MAX_ROUNDS_MAX = 120;
 const DEFAULT_PHONE_CODE_POLL_MAX_ROUNDS = 4;
+const PHONE_SMS_PROVIDER_SMSBOWER = 'smsbower';
+const DEFAULT_SMSBOWER_COUNTRY_ORDER = [187];
+const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
+const DEFAULT_SMSBOWER_MAX_PRICE = '0.1';
+let smsbowerCountryOrderSelection = [];
+const inputSmsBowerApiKey = { value: '' };
+const inputSmsBowerServiceCode = { value: 'dr' };
+const selectSmsBowerCountryOrder = { selectedOptions: [] };
+const inputSmsBowerProviderIds = { value: '' };
+const inputSmsBowerMinPrice = { value: '' };
+const inputSmsBowerMaxPrice = { value: '' };
 
 function getCloudflareDomainsFromState() { return { domains: ['example.com'], activeDomain: 'example.com' }; }
 function normalizeCloudflareDomainValue(value) { return String(value || '').trim(); }
@@ -327,6 +338,12 @@ function normalizePhoneCodeWaitSecondsValue(value, fallback = 60) { const parsed
 function normalizePhoneCodeTimeoutWindowsValue(value, fallback = 2) { const parsed = Number.parseInt(String(value ?? '').trim(), 10); return Number.isFinite(parsed) ? parsed : fallback; }
 function normalizePhoneCodePollIntervalSecondsValue(value, fallback = 5) { const parsed = Number.parseInt(String(value ?? '').trim(), 10); return Number.isFinite(parsed) ? parsed : fallback; }
 function normalizePhoneCodePollMaxRoundsValue(value, fallback = 4) { const parsed = Number.parseInt(String(value ?? '').trim(), 10); return Number.isFinite(parsed) ? parsed : fallback; }
+function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value.map((entry) => Number(entry)).filter(Boolean) : []; }
+function normalizeSmsBowerServiceCodeValue(value = '') { return String(value || 'dr').trim().toLowerCase(); }
+function normalizeSmsBowerProviderIdsValue(value = '') { return String(value || '').trim(); }
+function normalizeSmsBowerPriceValue(value = '') { const numeric = Number(String(value ?? '').trim()); return Number.isFinite(numeric) && numeric > 0 ? String(Math.round(numeric * 10000) / 10000) : ''; }
+function normalizeSmsBowerCountryIdValue(value, fallback = 187) { const numeric = Math.floor(Number(value)); return Number.isInteger(numeric) && numeric > 0 ? numeric : fallback; }
+function getSmsBowerDefaultProviderIdsByCountryId() { return '3170'; }
 function getSelectedHeroSmsCountryOption() { return { id: 52, label: 'Thailand' }; }
 function syncHeroSmsFallbackSelectionOrderFromSelect() { return [{ id: 52, label: 'Thailand' }]; }
 ${bundle}

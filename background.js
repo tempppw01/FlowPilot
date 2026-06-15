@@ -7,6 +7,8 @@ importScripts(
   'flows/kiro/workflow.js',
   'flows/grok/index.js',
   'flows/grok/workflow.js',
+  'flows/claude/index.js',
+  'flows/claude/workflow.js',
   'flows/index.js',
   'core/flow-kernel/flow-registry.js',
   'shared/contribution-registry.js',
@@ -45,6 +47,7 @@ importScripts(
   'background/contribution/adapters/kiro-builder-id.js',
   'flows/kiro/background/register-runner.js',
   'flows/grok/background/register-runner.js',
+  'flows/claude/background/register-runner.js',
   'flows/kiro/background/desktop-client.js',
   'flows/kiro/background/desktop-authorize-runner.js',
   'flows/kiro/background/publisher-kiro-rs.js',
@@ -3354,6 +3357,7 @@ const smsbowerMailProvider = self.MultiPageBackgroundSmsBowerMailProvider.create
   DEFAULT_SMSBOWER_MAIL_SERVICE_CODE,
   describeSmsBowerMailPayload,
   extractSmsBowerMailCode,
+  extractSmsBowerMailLink,
   getState,
   isSmsBowerMailPendingCode,
   isSmsBowerMailSuccess,
@@ -3379,6 +3383,7 @@ const {
   cancelSmsBowerMailActivationForRetry,
   clearSmsBowerMailRuntimeState,
   fetchSmsBowerMailAddress,
+  pollSmsBowerMailLink,
   pollSmsBowerMailVerificationCode,
 } = smsbowerMailProvider;
 
@@ -11131,6 +11136,7 @@ async function skipNode(nodeId) {
   const linkedSkipNodeIdsByRoot = {
     'open-chatgpt': ['submit-signup-email', 'fill-password', 'fetch-signup-code', 'fill-profile', 'wait-registration-success'],
     'kiro-open-register-page': ['kiro-submit-email', 'kiro-submit-name', 'kiro-submit-verification-code', 'kiro-submit-password', 'kiro-complete-register-consent'],
+    'claude-open-official-page': ['claude-submit-email', 'claude-fetch-login-link', 'claude-open-login-link'],
   };
   const linkedSkipNodeIds = linkedSkipNodeIdsByRoot[normalizedNodeId] || [];
   if (linkedSkipNodeIds.length) {
@@ -11516,6 +11522,10 @@ const AUTO_RUN_BACKGROUND_COMPLETED_STEP_KEYS = new Set([
   'grok-submit-profile',
   'grok-extract-sso-cookie',
   'grok-upload-sso-to-webchat2api',
+  'claude-open-official-page',
+  'claude-submit-email',
+  'claude-fetch-login-link',
+  'claude-open-login-link',
 ]);
 const STEP_COMPLETION_SIGNAL_STEP_KEYS = new Set([
   'fill-password',
@@ -14223,9 +14233,10 @@ async function resumeAutoRun() {
 
 const SIGNUP_ENTRY_URL = 'https://chatgpt.com/';
 const OPENAI_AUTH_INJECT_FILES = ['content/utils.js', 'content/operation-delay.js', 'flows/openai/content/auth-page-recovery.js', 'flows/openai/content/phone-country-utils.js', 'flows/openai/content/phone-auth.js', 'flows/openai/content/openai-auth.js'];
-const KIRO_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'shared/kiro-timeouts.js', 'content/utils.js', 'flows/kiro/content/register-page.js'];
-const KIRO_DESKTOP_AUTHORIZE_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'shared/kiro-timeouts.js', 'content/utils.js', 'flows/kiro/content/desktop-authorize-page.js'];
-const GROK_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'content/utils.js', 'flows/grok/content/register-page.js'];
+const KIRO_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'shared/kiro-timeouts.js', 'content/utils.js', 'flows/kiro/content/register-page.js'];
+const KIRO_DESKTOP_AUTHORIZE_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'shared/kiro-timeouts.js', 'content/utils.js', 'flows/kiro/content/desktop-authorize-page.js'];
+const GROK_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'content/utils.js', 'flows/grok/content/register-page.js'];
+const CLAUDE_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'content/utils.js', 'flows/claude/content/register-page.js'];
 const panelBridge = self.MultiPageBackgroundPanelBridge?.createPanelBridge({
   chrome,
   addLog,
@@ -14736,6 +14747,26 @@ const grokRegisterRunner = self.MultiPageBackgroundGrokRegisterRunner?.createGro
   GROK_REGISTER_INJECT_FILES,
   markCurrentRegistrationAccountUsed,
 });
+const claudeRegisterRunner = self.MultiPageBackgroundClaudeRegisterRunner?.createClaudeRegisterRunner({
+  addLog,
+  chrome,
+  ensureContentScriptReadyOnTab,
+  completeNodeFromBackground,
+  fetchSmsBowerMailAddress,
+  getTabId,
+  getState,
+  isTabAlive,
+  pollSmsBowerMailLink,
+  registerTab,
+  reuseOrCreateTab,
+  sendToContentScriptResilient,
+  setState,
+  sleepWithStop,
+  SMSBOWER_MAIL_PROVIDER,
+  throwIfStopped,
+  waitForTabStableComplete,
+  CLAUDE_REGISTER_INJECT_FILES,
+});
 const kiroBuilderIdContributionAdapter = self.MultiPageBackgroundKiroBuilderIdContributionAdapter?.createKiroBuilderIdContributionAdapter?.({
   addLog,
   fetchImpl: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
@@ -14913,6 +14944,10 @@ const stepExecutorsByKey = {
   'grok-submit-profile': (state) => grokRegisterRunner.executeGrokSubmitProfile(state),
   'grok-extract-sso-cookie': (state) => grokRegisterRunner.executeGrokExtractSsoCookie(state),
   'grok-upload-sso-to-webchat2api': (state) => grokWebchat2ApiPublisher.executeGrokUploadSsoToWebchat2Api(state),
+  'claude-open-official-page': (state) => claudeRegisterRunner.executeClaudeOpenOfficialPage(state),
+  'claude-submit-email': (state) => claudeRegisterRunner.executeClaudeSubmitEmail(state),
+  'claude-fetch-login-link': (state) => claudeRegisterRunner.executeClaudeFetchLoginLink(state),
+  'claude-open-login-link': (state) => claudeRegisterRunner.executeClaudeOpenLoginLink(state),
 };
 const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter({
   addLog,

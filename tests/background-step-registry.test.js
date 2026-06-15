@@ -20,6 +20,7 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   assert.match(source, /flows\/grok\/background\/state\.js/);
   assert.match(source, /flows\/grok\/background\/register-runner\.js/);
   assert.match(source, /flows\/grok\/background\/publisher-webchat2api\.js/);
+  assert.match(source, /flows\/claude\/background\/register-runner\.js/);
   assert.match(source, /flows\/openai\/background\/session-reader\.js/);
   assert.match(source, /flows\/openai\/background\/publisher-webchat\.js/);
   assert.doesNotMatch(source, /background\/steps\/kiro-device-auth\.js/);
@@ -28,6 +29,7 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   assert.match(source, /const kiroDesktopAuthorizeRunner = self\.MultiPageBackgroundKiroDesktopAuthorizeRunner\?\.createKiroDesktopAuthorizeRunner\(/);
   assert.match(source, /const kiroPublisher = self\.MultiPageBackgroundKiroPublisherKiroRs\?\.createKiroRsPublisher\(/);
   assert.match(source, /const grokRegisterRunner = self\.MultiPageBackgroundGrokRegisterRunner\?\.createGrokRegisterRunner\(/);
+  assert.match(source, /const claudeRegisterRunner = self\.MultiPageBackgroundClaudeRegisterRunner\?\.createClaudeRegisterRunner\(/);
   assert.match(source, /const grokWebchat2ApiPublisher = self\.MultiPageBackgroundGrokPublisherWebchat2Api\?\.createGrokWebchat2ApiPublisher\(/);
   assert.match(source, /const openAiWebchatPublisher = self\.MultiPageBackgroundOpenAiPublisherWebchat\?\.createOpenAiWebchatPublisher\(/);
 
@@ -46,6 +48,10 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   assert.match(source, /'grok-submit-profile': \(state\) => grokRegisterRunner\.executeGrokSubmitProfile\(state\)/);
   assert.match(source, /'grok-extract-sso-cookie': \(state\) => grokRegisterRunner\.executeGrokExtractSsoCookie\(state\)/);
   assert.match(source, /'grok-upload-sso-to-webchat2api': \(state\) => grokWebchat2ApiPublisher\.executeGrokUploadSsoToWebchat2Api\(state\)/);
+  assert.match(source, /'claude-open-official-page': \(state\) => claudeRegisterRunner\.executeClaudeOpenOfficialPage\(state\)/);
+  assert.match(source, /'claude-submit-email': \(state\) => claudeRegisterRunner\.executeClaudeSubmitEmail\(state\)/);
+  assert.match(source, /'claude-fetch-login-link': \(state\) => claudeRegisterRunner\.executeClaudeFetchLoginLink\(state\)/);
+  assert.match(source, /'claude-open-login-link': \(state\) => claudeRegisterRunner\.executeClaudeOpenLoginLink\(state\)/);
   assert.match(source, /'openai-upload-session-to-webchat': \(state\) => openAiWebchatPublisher\.executeOpenAiUploadSessionToWebchat\(state\)/);
 
   assert.match(
@@ -55,6 +61,10 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   assert.match(
     source,
     /'grok-open-signup-page',[\s\S]*'grok-submit-email',[\s\S]*'grok-submit-verification-code',[\s\S]*'grok-submit-profile',[\s\S]*'grok-extract-sso-cookie',[\s\S]*'grok-upload-sso-to-webchat2api'/
+  );
+  assert.match(
+    source,
+    /'claude-open-official-page',[\s\S]*'claude-submit-email',[\s\S]*'claude-fetch-login-link',[\s\S]*'claude-open-login-link'/
   );
   assert.match(source, /'openai-upload-session-to-webchat'/);
 });
