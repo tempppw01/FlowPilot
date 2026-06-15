@@ -4533,7 +4533,7 @@ test('phone verification helper advances SMSBower provider ID after timeout acro
     smsbowerApiKey: 'demo-key',
     smsbowerServiceCode: 'dr',
     smsbowerCountryOrder: [52],
-    smsbowerProviderIds: '3237,2266,3193',
+    smsbowerProviderIds: '2266,3193,3237',
     smsbowerMaxPrice: '0.1',
     verificationResendCount: 0,
     phoneCodeWaitSeconds: 60,
@@ -4559,13 +4559,13 @@ test('phone verification helper advances SMSBower provider ID after timeout acro
         const id = parsedUrl.searchParams.get('id');
 
         if (action === 'getNumber') {
-          if (providerIds === '3237') {
+          if (providerIds === '2266') {
             return {
               ok: true,
               text: async () => 'ACCESS_NUMBER:900101:668686850001',
             };
           }
-          if (providerIds === '2266') {
+          if (providerIds === '3193') {
             return {
               ok: true,
               text: async () => 'ACCESS_NUMBER:900102:668686850002',
@@ -4628,7 +4628,7 @@ test('phone verification helper advances SMSBower provider ID after timeout acro
     );
 
     assert.deepStrictEqual(currentState.smsbowerTimedOutProviderIdsByCountry, {
-      52: ['3237'],
+      52: ['2266'],
     });
     assert.equal(currentState.currentPhoneActivation, null);
 
@@ -4647,7 +4647,7 @@ test('phone verification helper advances SMSBower provider ID after timeout acro
     const getNumberProviderIds = requests
       .filter((requestUrl) => requestUrl.searchParams.get('action') === 'getNumber')
       .map((requestUrl) => requestUrl.searchParams.get('providerIds'));
-    assert.deepStrictEqual(getNumberProviderIds, ['3237', '2266']);
+    assert.deepStrictEqual(getNumberProviderIds, ['2266', '3193']);
     assert.equal(messages.filter((type) => type === 'SUBMIT_PHONE_NUMBER').length, 2);
     assert.equal(messages.includes('RESEND_PHONE_VERIFICATION_CODE'), false);
     assert.deepStrictEqual(currentState.smsbowerTimedOutProviderIdsByCountry, {});
@@ -9358,7 +9358,7 @@ test('phone verification helper preserves SMSBower country-specific acquire fail
     phoneSmsProvider: 'smsbower',
     smsbowerApiKey: 'demo-key',
     smsbowerCountryOrder: [73],
-    smsbowerProviderIds: '3237,3365,3252,3398,3406,3229,2404',
+    smsbowerProviderIds: '3252,2404,3406,3365,3398,3229,3237',
     smsbowerMaxPrice: '0.134',
     currentPhoneActivation: null,
     reusablePhoneActivation: null,
@@ -9391,7 +9391,7 @@ test('phone verification helper preserves SMSBower country-specific acquire fail
   await assert.rejects(
     helpers.requestPhoneActivation(currentState),
     (error) => {
-      assert.match(error.message, /SMSBower.*Brazil（73）获取号码失败：网络请求失败（Failed to fetch）；providerIds=2404/);
+      assert.match(error.message, /SMSBower.*Brazil（73）获取号码失败：网络请求失败（Failed to fetch）；providerIds=3237/);
       assert.doesNotMatch(error.message, /获取手机号失败：$/);
       return true;
     }

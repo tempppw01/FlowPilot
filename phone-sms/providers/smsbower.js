@@ -18,18 +18,49 @@
   const DEFAULT_POLL_INTERVAL_MS = 5000;
   const PHONE_CODE_TIMEOUT_ERROR_PREFIX = 'PHONE_CODE_TIMEOUT::';
   const DEFAULT_COUNTRY_CANDIDATES = Object.freeze([
+    { id: 48, label: 'Netherlands', providerIds: '2442', providerLines: [{ id: '2442', rank: 'gold', price: 0.006 }] },
+    { id: 78, label: 'France', providerIds: '3237', providerLines: [{ id: '3237', rank: 'gold', price: 0.014 }] },
     { id: 6, label: 'Indonesia', providerIds: '3267' },
-    { id: 33, label: 'Colombia', providerIds: '3243,2236,3288,3406,3160,3335' },
-    { id: 39, label: 'Argentina', providerIds: '3237' },
-    { id: 31, label: 'South Africa', providerIds: '2649' },
+    { id: 33, label: 'Colombia', providerIds: '3243,2236,3253,3160,2266,3288,3406,3335', providerLines: [
+      { id: '3243', rank: 'gold', price: 0.017 },
+      { id: '2236', rank: 'gold', price: 0.022 },
+      { id: '3253', rank: 'gold', price: 0.028 },
+      { id: '3160', rank: 'gold', price: 0.054 },
+      { id: '2266', rank: 'silver', price: 0.054 },
+    ] },
     { id: 16, label: 'United Kingdom', providerIds: '3237' },
     { id: 151, label: 'Chile', providerIds: '3234,3109,3235' },
-    { id: 10, label: 'Vietnam', providerIds: '3160' },
-    { id: 73, label: 'Brazil', providerIds: '3237,3365,3252,3398,3406,3229,2404' },
-    { id: 19, label: 'Nigeria', providerIds: '2266' },
-    { id: 52, label: 'Thailand', providerIds: '3237,2266,3193' },
+    { id: 31, label: 'South Africa', providerIds: '2812,2266,2217,2649', providerLines: [
+      { id: '2812', rank: 'silver', price: 0.043 },
+      { id: '2266', rank: 'silver', price: 0.054 },
+      { id: '2217', rank: 'silver', price: 0.06 },
+    ] },
+    { id: 73, label: 'Brazil', providerIds: '3252,2404,3406,3365,3398,3229,3237', providerLines: [
+      { id: '3252', rank: 'gold', price: 0.052 },
+      { id: '2404', rank: 'gold', price: 0.06 },
+      { id: '3406', rank: 'gold', price: 0.067 },
+      { id: '3365', rank: 'silver', price: 0.051 },
+      { id: '3398', rank: 'silver', price: 0.058 },
+      { id: '3229', rank: 'silver', price: 0.06 },
+    ] },
+    { id: 52, label: 'Thailand', providerIds: '2266,3193,3237', providerLines: [
+      { id: '2266', rank: 'silver', price: 0.054 },
+      { id: '3193', rank: 'silver', price: 0.067 },
+    ] },
+    { id: 95, label: 'UAE', providerIds: '2266', providerLines: [{ id: '2266', rank: 'gold', price: 0.054 }] },
+    { id: 85, label: 'Moldova', providerIds: '2266', providerLines: [{ id: '2266', rank: 'gold', price: 0.054 }] },
+    { id: 19, label: 'Nigeria', providerIds: '2266,3193', providerLines: [
+      { id: '2266', rank: 'silver', price: 0.054 },
+      { id: '3193', rank: 'silver', price: 0.067 },
+    ] },
+    { id: 10, label: 'Vietnam', providerIds: '2266,2217,3160', providerLines: [
+      { id: '2266', rank: 'silver', price: 0.054 },
+      { id: '2217', rank: 'silver', price: 0.089 },
+    ] },
     { id: 43, label: 'Germany', providerIds: '3237' },
     { id: 53, label: 'Saudi Arabia', providerIds: '2377' },
+    { id: 54, label: 'Mexico', providerIds: '3193', providerLines: [{ id: '3193', rank: 'gold', price: 0.067 }] },
+    { id: 39, label: 'Argentina', providerIds: '2738,3237', providerLines: [{ id: '2738', rank: 'silver', price: 0.067 }] },
     { id: 46, label: 'Sweden', providerIds: '2738' },
     { id: 187, label: 'USA', providerIds: '3170' },
   ]);
@@ -37,6 +68,10 @@
   const DEFAULT_PROVIDER_IDS_BY_COUNTRY_ID = new Map(DEFAULT_COUNTRY_CANDIDATES.map((entry) => [
     entry.id,
     normalizeSmsBowerProviderIds(entry.providerIds, ''),
+  ]));
+  const DEFAULT_PROVIDER_LINES_BY_COUNTRY_ID = new Map(DEFAULT_COUNTRY_CANDIDATES.map((entry) => [
+    entry.id,
+    Array.isArray(entry.providerLines) ? entry.providerLines : [],
   ]));
   const LEGACY_COUNTRY_ID_BY_PROVIDER_ID = new Map();
   DEFAULT_COUNTRY_CANDIDATES.forEach((entry) => {
@@ -47,6 +82,12 @@
   });
   LEGACY_COUNTRY_ID_BY_PROVIDER_ID.set('3237', 52);
   LEGACY_COUNTRY_ID_BY_PROVIDER_ID.set('2266', 52);
+  const PROVIDER_RANK_WEIGHT = Object.freeze({
+    gold: 0,
+    silver: 1,
+    bronze: 2,
+    standard: 3,
+  });
   const COUNTRY_BY_PHONE_PREFIX = Object.freeze([
     { prefix: '1', id: 187, iso: 'US', label: 'USA' },
     { prefix: '66', id: 52, iso: 'TH', label: 'Thailand' },
@@ -562,6 +603,51 @@
     return next;
   }
 
+  function getSmsBowerProviderLineMetadata(countryId, providerId) {
+    const normalizedCountryId = resolveSmsBowerCountryId(countryId, 0);
+    const normalizedProviderId = normalizeSmsBowerProviderIds(providerId, '');
+    const providerLines = DEFAULT_PROVIDER_LINES_BY_COUNTRY_ID.get(normalizedCountryId) || [];
+    return providerLines.find((line) => String(line?.id || '').trim() === normalizedProviderId) || null;
+  }
+
+  function getSmsBowerProviderRankWeight(rank = '') {
+    const normalizedRank = String(rank || '').trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(PROVIDER_RANK_WEIGHT, normalizedRank)
+      ? PROVIDER_RANK_WEIGHT[normalizedRank]
+      : 99;
+  }
+
+  function orderSmsBowerProviderIdAttempts(countryId, providerIds = [], options = {}) {
+    const randomMode = Boolean(options?.randomMode);
+    const randomFn = typeof options?.randomFn === 'function' ? options.randomFn : Math.random;
+    const entries = (Array.isArray(providerIds) ? providerIds : [])
+      .map((providerId, index) => {
+        const metadata = getSmsBowerProviderLineMetadata(countryId, providerId);
+        const price = Number(metadata?.price);
+        return {
+          providerId,
+          index,
+          rankWeight: getSmsBowerProviderRankWeight(metadata?.rank),
+          price: Number.isFinite(price) ? price : Number.POSITIVE_INFINITY,
+        };
+      });
+    const rankWeights = [...new Set(entries.map((entry) => entry.rankWeight))].sort((left, right) => left - right);
+    return rankWeights.flatMap((rankWeight) => {
+      const rankedEntries = entries.filter((entry) => entry.rankWeight === rankWeight);
+      if (randomMode && rankedEntries.length > 1) {
+        return shuffleSmsBowerItems(rankedEntries, randomFn).map((entry) => entry.providerId);
+      }
+      return rankedEntries
+        .sort((left, right) => {
+          if (left.price !== right.price) {
+            return left.price - right.price;
+          }
+          return left.index - right.index;
+        })
+        .map((entry) => entry.providerId);
+    });
+  }
+
   function shouldUseSmsBowerRandomMode(state = {}) {
     return Boolean(state?.smsbowerRandomMode);
   }
@@ -693,11 +779,11 @@
           ? resolvedProviderIds
           : (getProviderIdsForCountryId(countryId) || resolvedProviderIds);
         const providerIdAttempts = splitSmsBowerProviderIds(countryProviderIds);
-        const lineAttempts = providerIdAttempts
-          .filter((providerId) => !isSmsBowerProviderIdBlocked(blockedProviderIds, countryId, providerId));
-        if (randomMode && lineAttempts.length > 1) {
-          lineAttempts.splice(0, lineAttempts.length, ...shuffleSmsBowerItems(lineAttempts, randomFn));
-        }
+        const lineAttempts = orderSmsBowerProviderIdAttempts(
+          countryId,
+          providerIdAttempts.filter((providerId) => !isSmsBowerProviderIdBlocked(blockedProviderIds, countryId, providerId)),
+          { randomMode, randomFn }
+        );
         if (providerIdAttempts.length && !lineAttempts.length) {
           noNumbersByCountry.push(`${countryLabel} (${countryId}) all providerIds skipped after SMS timeouts: ${providerIdAttempts.join(',')}`);
           continue;
