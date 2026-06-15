@@ -384,6 +384,7 @@ const {
   SMSBOWER_MAIL_PROVIDER,
   describeSmsBowerMailPayload,
   extractSmsBowerMailCode,
+  extractSmsBowerMailLink,
   isSmsBowerMailPendingCode,
   isSmsBowerMailSuccess,
   joinSmsBowerMailUrl,

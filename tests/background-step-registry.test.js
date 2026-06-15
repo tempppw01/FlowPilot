@@ -24,6 +24,7 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   assert.match(source, /flows\/openai\/background\/session-reader\.js/);
   assert.match(source, /flows\/openai\/background\/publisher-webchat\.js/);
   assert.doesNotMatch(source, /background\/steps\/kiro-device-auth\.js/);
+  assert.match(source, /extractSmsBowerMailCode,[\s\S]*extractSmsBowerMailLink,[\s\S]*isSmsBowerMailPendingCode/);
 
   assert.match(source, /const kiroRegisterRunner = self\.MultiPageBackgroundKiroRegisterRunner\?\.createKiroRegisterRunner\(/);
   assert.match(source, /const kiroDesktopAuthorizeRunner = self\.MultiPageBackgroundKiroDesktopAuthorizeRunner\?\.createKiroDesktopAuthorizeRunner\(/);
