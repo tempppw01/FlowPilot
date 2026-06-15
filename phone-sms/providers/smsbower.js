@@ -386,6 +386,13 @@
     }
   }
 
+  function resolveDefaultCountryCandidates() {
+    return DEFAULT_COUNTRY_CANDIDATES.map((entry) => ({
+      id: normalizeSmsBowerCountryId(entry.id, DEFAULT_COUNTRY_ID),
+      label: normalizeSmsBowerCountryLabel(entry.label, DEFAULT_COUNTRY_LABEL),
+    }));
+  }
+
   function resolveCountryCandidates(state = {}) {
     const candidates = normalizeSmsBowerCountryOrder(state?.smsbowerCountryOrder);
     if (candidates.length) {
@@ -412,10 +419,7 @@
         };
       });
     }
-    return DEFAULT_COUNTRY_CANDIDATES.map((entry) => ({
-      id: normalizeSmsBowerCountryId(entry.id, DEFAULT_COUNTRY_ID),
-      label: normalizeSmsBowerCountryLabel(entry.label, DEFAULT_COUNTRY_LABEL),
-    }));
+    return resolveDefaultCountryCandidates();
   }
 
   function resolveCountryLabel(state = {}, countryId = DEFAULT_COUNTRY_ID) {
@@ -727,8 +731,11 @@
 
   async function requestActivation(state = {}, options = {}, deps = {}) {
     const config = resolveConfig(state, deps);
-    const allCountryCandidates = resolveCountryCandidates(state);
+    const configuredCountryCandidates = resolveCountryCandidates(state);
     const randomMode = shouldUseSmsBowerRandomMode(state);
+    const allCountryCandidates = randomMode
+      ? resolveDefaultCountryCandidates()
+      : configuredCountryCandidates;
     const randomFn = typeof deps.randomFn === 'function' ? deps.randomFn : Math.random;
     if (!allCountryCandidates.length) {
       throw new Error('步骤 9：SMSBower 未选择国家，请先在接码设置中至少选择 1 个国家。');

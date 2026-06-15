@@ -8249,8 +8249,13 @@ function updateSmsBowerCountryOrderMenuSummary(selectedCountries = []) {
     ? SMSBOWER_LOW_PRICE_COUNTRY_ITEMS.length
     : normalized.length;
   const randomModeEnabled = typeof smsbowerRandomModeEnabled !== 'undefined' && Boolean(smsbowerRandomModeEnabled);
+  const randomCandidateCount = typeof SMSBOWER_LOW_PRICE_COUNTRY_ITEMS !== 'undefined'
+    ? SMSBOWER_LOW_PRICE_COUNTRY_ITEMS
+      .map((entry) => normalizeSmsBowerCountryIdValue(entry?.id, 0))
+      .filter((id) => id > 0 && id !== 187).length
+    : normalized.filter((id) => id !== 187).length;
   btnSmsBowerCountryOrderMenu.textContent = randomModeEnabled
-    ? `随机模式 (${normalized.length}/${total})`
+    ? `随机模式 (${randomCandidateCount}/${total})`
     : (normalized.length
       ? `${normalized.map((countryId) => getSmsBowerCountryLabelById(countryId)).join(' / ')} (${normalized.length}/${total})`
       : `??? (0/${total})`);

@@ -308,12 +308,11 @@ test('SMSBower provider continues through a randomized non-USA country queue whe
   assert.equal(activation.providerIds, '3267');
 });
 
-test('SMSBower random mode reshuffles non-USA countries on every activation request', async () => {
+test('SMSBower random mode uses the full non-USA default pool instead of the saved country subset', async () => {
   const requests = [];
-  const randomValues = [0, 0.99];
   const module = loadModule();
   const provider = module.createProvider({
-    randomFn: () => randomValues.shift() ?? 0,
+    randomFn: () => 0,
     fetchImpl: async (url) => {
       const parsedUrl = new URL(url);
       requests.push(parsedUrl);
@@ -322,9 +321,7 @@ test('SMSBower random mode reshuffles non-USA countries on every activation requ
         ok: true,
         status: 200,
         async text() {
-          return country === '6'
-            ? 'ACCESS_NUMBER:176299:+628123456780'
-            : 'ACCESS_NUMBER:176300:+66812345670';
+          return `ACCESS_NUMBER:176299:+${country}8123456780`;
         },
       };
     },
@@ -332,27 +329,32 @@ test('SMSBower random mode reshuffles non-USA countries on every activation requ
 
   const state = {
     smsbowerApiKey: 'key-1',
-    smsbowerCountryOrder: [52, 6, 187],
+    smsbowerCountryOrder: [52, 187],
     smsbowerProviderIds: '3170',
     smsbowerRandomMode: true,
   };
 
-  const firstActivation = await provider.requestActivation(state);
-  const secondActivation = await provider.requestActivation(state);
+  const activation = await provider.requestActivation(state);
 
-  assert.equal(requests[0].searchParams.get('country'), '6');
-  assert.equal(requests[1].searchParams.get('country'), '52');
+  assert.equal(requests[0].searchParams.get('country'), '78');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3237');
   assert.notEqual(requests[0].searchParams.get('country'), '187');
-  assert.notEqual(requests[1].searchParams.get('country'), '187');
-  assert.equal(firstActivation.countryId, 6);
-  assert.equal(secondActivation.countryId, 52);
+  assert.notEqual(requests[0].searchParams.get('country'), '52');
+  assert.equal(activation.countryId, 78);
+  assert.equal(activation.countryLabel, 'France');
 });
 
 test('SMSBower random mode keeps Gold provider IDs before Silver and unknown lines', async () => {
   const requests = [];
+  const randomValues = [
+    ...Array(14).fill(0.999999),
+    0,
+    0.999999,
+    0.999999,
+  ];
   const module = loadModule();
   const provider = module.createProvider({
-    randomFn: () => 0,
+    randomFn: () => randomValues.shift() ?? 0.999999,
     fetchImpl: async (url) => {
       const parsedUrl = new URL(url);
       requests.push(parsedUrl);

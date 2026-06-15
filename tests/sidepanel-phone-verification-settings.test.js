@@ -237,6 +237,7 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /syncSmsBowerProviderIdsFromCountrySelection\(smsbowerCountryOrderSelection,/);
   assert.match(sidepanelSource, /function buildRandomSmsBowerCountryOrder\(randomFn = Math\.random\)/);
   assert.match(sidepanelSource, /id !== 187/);
+  assert.match(sidepanelSource, /randomCandidateCount/);
   assert.match(sidepanelSource, /applySmsBowerCountrySelection\(randomOrder,/);
   assert.match(sidepanelSource, /SMSBower 已启用随机国家队列/);
   assert.match(sidepanelSource, /forceProviderIds:\s*true/);
@@ -253,16 +254,25 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
 
   const api = new Function(`
 const btnSmsBowerCountryOrderMenu = { textContent: '' };
-const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Array.from({ length: 19 }, (_, index) => ({ id: index + 1 }));
+let smsbowerRandomModeEnabled = false;
+const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = [...Array.from({ length: 18 }, (_, index) => ({ id: index + 1 })), { id: 187 }];
 function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value : []; }
+function normalizeSmsBowerCountryIdValue(value) { return Number(value) || 0; }
 function getSmsBowerCountryLabelById(id) {
   return ({ 48: '荷兰', 78: '法国', 6: '印度尼西亚' }[id] || ('Country #' + id));
 }
 ${extractFunction('updateSmsBowerCountryOrderMenuSummary')}
-return { btnSmsBowerCountryOrderMenu, updateSmsBowerCountryOrderMenuSummary };
+return {
+  btnSmsBowerCountryOrderMenu,
+  updateSmsBowerCountryOrderMenuSummary,
+  setRandomModeForTest(value) { smsbowerRandomModeEnabled = Boolean(value); },
+};
 `)();
   api.updateSmsBowerCountryOrderMenuSummary([48, 78, 6]);
   assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, '荷兰 / 法国 / 印度尼西亚 (3/19)');
+  api.setRandomModeForTest(true);
+  api.updateSmsBowerCountryOrderMenuSummary([48, 78, 6]);
+  assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, '随机模式 (18/19)');
 
   const randomApi = new Function(`
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = [{ id: 6 }, { id: 52 }, { id: 187 }];
