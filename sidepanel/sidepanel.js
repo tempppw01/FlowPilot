@@ -535,6 +535,7 @@ const selectSmsBowerCountryOrder = document.getElementById('select-smsbower-coun
 const smsbowerCountryOrderMenuShell = document.getElementById('smsbower-country-order-menu-shell');
 const btnSmsBowerCountryOrderMenu = document.getElementById('btn-smsbower-country-order-menu');
 const smsbowerCountryOrderMenu = document.getElementById('smsbower-country-order-menu');
+const btnSmsBowerCountryOrderRandom = document.getElementById('btn-smsbower-country-order-random');
 const btnSmsBowerCountryOrderClear = document.getElementById('btn-smsbower-country-order-clear');
 const displaySmsBowerCountryOrder = document.getElementById('display-smsbower-country-order');
 const inputSmsBowerProviderIds = document.getElementById('input-smsbower-provider-ids');
@@ -8426,9 +8427,41 @@ function applySmsBowerCountrySelection(countries = [], options = {}) {
     ensureDefault: options.ensureDefault !== false,
     enforceMax: true,
     showLimitToast: false,
+    forceProviderIds: Boolean(options.forceProviderIds),
   });
   updateHeroSmsPlatformDisplay();
   return nextCountries;
+}
+
+function pickRandomSmsBowerCountryId(randomFn = Math.random) {
+  const candidates = SMSBOWER_LOW_PRICE_COUNTRY_ITEMS
+    .map((entry) => normalizeSmsBowerCountryIdValue(entry?.id, 0))
+    .filter((id) => id > 0);
+  if (!candidates.length) {
+    return 0;
+  }
+  const randomValue = Math.max(0, Math.min(0.999999, Number(randomFn()) || 0));
+  const index = Math.floor(randomValue * candidates.length);
+  return candidates[index] || candidates[0];
+}
+
+function randomizeSmsBowerCountryOrder(randomFn = Math.random) {
+  const countryId = pickRandomSmsBowerCountryId(randomFn);
+  if (!countryId) {
+    return [];
+  }
+  const nextOrder = applySmsBowerCountrySelection([countryId], {
+    ensureDefault: false,
+    forceProviderIds: true,
+  });
+  setSmsBowerCountryOrderMenuOpen(false);
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+  updateHeroSmsPlatformDisplay();
+  if (typeof showToast === 'function') {
+    showToast(`SMSBower 已随机选择：${getSmsBowerCountryLabelById(countryId)} (${countryId})`, 'ok', 1800);
+  }
+  return nextOrder;
 }
 
 function toggleSmsBowerCountryInOrder(id = -1) {
@@ -19101,6 +19134,10 @@ selectSmsBowerCountryOrder?.addEventListener('change', () => {
 btnSmsBowerCountryOrderMenu?.addEventListener('click', (event) => {
   event.preventDefault();
   setSmsBowerCountryOrderMenuOpen(btnSmsBowerCountryOrderMenu?.getAttribute('aria-expanded') !== 'true');
+});
+btnSmsBowerCountryOrderRandom?.addEventListener('click', (event) => {
+  event.preventDefault();
+  randomizeSmsBowerCountryOrder();
 });
 btnSmsBowerCountryOrderClear?.addEventListener('click', (event) => {
   event.preventDefault();
