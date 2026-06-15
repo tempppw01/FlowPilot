@@ -336,3 +336,77 @@ return {
     true
   );
 });
+
+test('step 5 post-completion validation recovers when content script bfcache closes on ready page', async () => {
+  const api = new Function(`
+const logs = [];
+const messages = [];
+let waitCalls = 0;
+
+const chrome = {
+  tabs: {
+    async get() {
+      return { url: 'https://auth.openai.com/about-you' };
+    },
+  },
+};
+
+async function waitForTabStableComplete(tabId) {
+  waitCalls += 1;
+  if (tabId !== 99) throw new Error('unexpected tab id');
+  return { url: 'https://chatgpt.com/' };
+}
+
+async function sendToContentScriptResilient(source, message) {
+  messages.push({ source, type: message.type });
+  if (message.type === 'GET_STEP5_SUBMIT_STATE') {
+    throw new Error('The page keeping the extension port is moved into back/forward cache, so the message channel is closed.');
+  }
+  throw new Error('unexpected message type: ' + message.type);
+}
+
+async function addLog(message, level, meta) {
+  logs.push({ message, level, meta });
+}
+
+${extractFunction('parseUrlSafely')}
+${extractFunction('isSignupEntryHost')}
+${extractFunction('isLikelyLoggedInChatgptHomeUrl')}
+${extractFunction('isStep5CompletionChatgptUrl')}
+${extractFunction('isRetryableContentScriptTransportError')}
+${extractFunction('getStep5SubmitStateFromContent')}
+${extractFunction('recoverStep5SubmitRetryPageOnTab')}
+${extractFunction('validateStep5PostCompletion')}
+
+return {
+  async run() {
+    return validateStep5PostCompletion(99, {
+      outcome: 'navigation_started',
+      navigationStarted: true,
+      url: 'https://auth.openai.com/about-you',
+    });
+  },
+  snapshot() {
+    return { logs, messages, waitCalls };
+  },
+};
+`)();
+
+  const result = await api.run();
+  const snapshot = api.snapshot();
+
+  assert.deepStrictEqual(result, {
+    successState: 'logged_in_home',
+    url: 'https://chatgpt.com/',
+    recoveredFromTransportError: true,
+  });
+  assert.deepStrictEqual(
+    snapshot.messages.map(({ type }) => type),
+    ['GET_STEP5_SUBMIT_STATE']
+  );
+  assert.equal(snapshot.waitCalls, 1);
+  assert.equal(
+    snapshot.logs.some(({ message }) => /通信中断.*chatgpt\.com/.test(message)),
+    true
+  );
+});

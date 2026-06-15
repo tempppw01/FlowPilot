@@ -15981,12 +15981,41 @@ async function validateStep5PostCompletion(tabId, completionPayload = {}) {
       };
     }
 
-    const pageState = await getStep5SubmitStateFromContent({
-      timeoutMs: 15000,
-      responseTimeoutMs: 15000,
-      retryDelayMs: 500,
-      logMessage: '步骤 5：资料提交已触发页面跳转，正在确认最终页面状态...',
-    });
+    let pageState = null;
+    try {
+      pageState = await getStep5SubmitStateFromContent({
+        timeoutMs: 15000,
+        responseTimeoutMs: 15000,
+        retryDelayMs: 500,
+        logMessage: '步骤 5：资料提交已触发页面跳转，正在确认最终页面状态...',
+      });
+    } catch (pageStateError) {
+      if (!isRetryableContentScriptTransportError(pageStateError)) {
+        throw pageStateError;
+      }
+      const stableTab = await waitForTabStableComplete(tabId, {
+        timeoutMs: 30000,
+        retryDelayMs: 300,
+        stableMs: 1000,
+        initialDelayMs: 300,
+      }).catch(() => null);
+      const stableUrl = String(stableTab?.url || currentUrl || completionPayload?.url || '').trim();
+      if (stableUrl && isStep5CompletionChatgptUrl(stableUrl)) {
+        await debugLog('后台复核时内容脚本通信中断，但标签页已进入 chatgpt.com，步骤 5 按提交成功处理。', {
+          completionOutcome: String(completionPayload?.outcome || '').trim(),
+          completionUrl: String(completionPayload?.url || '').trim(),
+          navigationStarted: Boolean(completionPayload?.navigationStarted),
+          tabUrl: stableUrl,
+          level: 'warn',
+        });
+        return {
+          successState: 'logged_in_home',
+          url: stableUrl,
+          recoveredFromTransportError: true,
+        };
+      }
+      throw pageStateError;
+    }
     await debugLog('后台复核当前页面状态。', {
       completionOutcome: String(completionPayload?.outcome || '').trim(),
       completionUrl: String(completionPayload?.url || '').trim(),
