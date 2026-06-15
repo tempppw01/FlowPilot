@@ -268,6 +268,45 @@ test('SMSBower provider skips timed-out provider IDs within the same country', a
   assert.equal(activation.providerIds, '2266');
 });
 
+test('SMSBower provider continues through a randomized non-USA country queue when one country has no numbers', async () => {
+  const requests = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    fetchImpl: async (url) => {
+      const parsedUrl = new URL(url);
+      requests.push(parsedUrl);
+      const country = parsedUrl.searchParams.get('country');
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return country === '6'
+            ? 'ACCESS_NUMBER:176298:+628123456789'
+            : 'NO_NUMBERS';
+        },
+      };
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [52, 6],
+    smsbowerProviderIds: '3237,2266,3193,3267',
+  });
+
+  assert.equal(requests[0].searchParams.get('country'), '52');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3237');
+  assert.equal(requests[1].searchParams.get('country'), '52');
+  assert.equal(requests[1].searchParams.get('providerIds'), '2266');
+  assert.equal(requests[2].searchParams.get('country'), '52');
+  assert.equal(requests[2].searchParams.get('providerIds'), '3193');
+  assert.equal(requests[3].searchParams.get('country'), '6');
+  assert.equal(requests[3].searchParams.get('providerIds'), '3267');
+  assert.equal(activation.countryId, 6);
+  assert.equal(activation.countryLabel, 'Indonesia');
+  assert.equal(activation.providerIds, '3267');
+});
+
 test('SMSBower provider tries the next provider ID in the same country when a line has no numbers', async () => {
   const requests = [];
   const module = loadModule();

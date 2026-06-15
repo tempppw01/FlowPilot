@@ -8433,24 +8433,24 @@ function applySmsBowerCountrySelection(countries = [], options = {}) {
   return nextCountries;
 }
 
-function pickRandomSmsBowerCountryId(randomFn = Math.random) {
+function buildRandomSmsBowerCountryOrder(randomFn = Math.random) {
   const candidates = SMSBOWER_LOW_PRICE_COUNTRY_ITEMS
     .map((entry) => normalizeSmsBowerCountryIdValue(entry?.id, 0))
-    .filter((id) => id > 0);
-  if (!candidates.length) {
-    return 0;
+    .filter((id) => id > 0 && id !== 187);
+  for (let index = candidates.length - 1; index > 0; index -= 1) {
+    const randomValue = Math.max(0, Math.min(0.999999, Number(randomFn()) || 0));
+    const swapIndex = Math.floor(randomValue * (index + 1));
+    [candidates[index], candidates[swapIndex]] = [candidates[swapIndex], candidates[index]];
   }
-  const randomValue = Math.max(0, Math.min(0.999999, Number(randomFn()) || 0));
-  const index = Math.floor(randomValue * candidates.length);
-  return candidates[index] || candidates[0];
+  return candidates;
 }
 
 function randomizeSmsBowerCountryOrder(randomFn = Math.random) {
-  const countryId = pickRandomSmsBowerCountryId(randomFn);
-  if (!countryId) {
+  const randomOrder = buildRandomSmsBowerCountryOrder(randomFn);
+  if (!randomOrder.length) {
     return [];
   }
-  const nextOrder = applySmsBowerCountrySelection([countryId], {
+  const nextOrder = applySmsBowerCountrySelection(randomOrder, {
     ensureDefault: false,
     forceProviderIds: true,
   });
@@ -8459,7 +8459,7 @@ function randomizeSmsBowerCountryOrder(randomFn = Math.random) {
   saveSettings({ silent: true }).catch(() => { });
   updateHeroSmsPlatformDisplay();
   if (typeof showToast === 'function') {
-    showToast(`SMSBower 已随机选择：${getSmsBowerCountryLabelById(countryId)} (${countryId})`, 'ok', 1800);
+    showToast(`SMSBower 已启用随机国家队列：${randomOrder.length} 个非美国地区`, 'ok', 1800);
   }
   return nextOrder;
 }

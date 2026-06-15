@@ -230,7 +230,10 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /providerIds: '3170'/);
   assert.match(sidepanelSource, /getSmsBowerProviderIdsForCountryOrder\(smsBowerCountryOrderForProviderIds\)/);
   assert.match(sidepanelSource, /syncSmsBowerProviderIdsFromCountrySelection\(smsbowerCountryOrderSelection,/);
-  assert.match(sidepanelSource, /function randomizeSmsBowerCountryOrder\(randomFn = Math\.random\)/);
+  assert.match(sidepanelSource, /function buildRandomSmsBowerCountryOrder\(randomFn = Math\.random\)/);
+  assert.match(sidepanelSource, /id !== 187/);
+  assert.match(sidepanelSource, /applySmsBowerCountrySelection\(randomOrder,/);
+  assert.match(sidepanelSource, /SMSBower 已启用随机国家队列/);
   assert.match(sidepanelSource, /forceProviderIds:\s*true/);
   assert.doesNotMatch(sidepanelSource, /let\s+smsbowerProviderIdsAutoValue\s*=\s*DEFAULT_SMSBOWER_PROVIDER_IDS/);
   assert.doesNotMatch(sidepanelSource, /inputSmsBowerProviderIds\.value = normalizeSmsBowerProviderIdsValue\(state\?\.smsbowerProviderIds \|\| DEFAULT_SMSBOWER_PROVIDER_IDS\);/);
@@ -254,12 +257,12 @@ return { btnSmsBowerCountryOrderMenu, updateSmsBowerCountryOrderMenuSummary };
   const randomApi = new Function(`
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = [{ id: 6 }, { id: 52 }, { id: 187 }];
 function normalizeSmsBowerCountryIdValue(value) { return Number(value) || 0; }
-${extractFunction('pickRandomSmsBowerCountryId')}
-return { pickRandomSmsBowerCountryId };
+${extractFunction('buildRandomSmsBowerCountryOrder')}
+return { buildRandomSmsBowerCountryOrder };
 `)();
-  assert.equal(randomApi.pickRandomSmsBowerCountryId(() => 0), 6);
-  assert.equal(randomApi.pickRandomSmsBowerCountryId(() => 0.5), 52);
-  assert.equal(randomApi.pickRandomSmsBowerCountryId(() => 0.99), 187);
+  assert.deepStrictEqual(randomApi.buildRandomSmsBowerCountryOrder(() => 0), [52, 6]);
+  assert.deepStrictEqual(randomApi.buildRandomSmsBowerCountryOrder(() => 0.99), [6, 52]);
+  assert.equal(randomApi.buildRandomSmsBowerCountryOrder(() => 0.5).includes(187), false);
 });
 
 test('SMSBower country selection auto-syncs the provider IDs field unless it has been manually overridden', () => {
