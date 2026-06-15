@@ -9995,6 +9995,47 @@ function getErrorMessage(error) {
     .replace(/^PHONE_RESTART_STEP7::/i, '');
 }
 
+async function notifyChromeNotification(payload = {}) {
+  const title = String(payload?.title || '').trim();
+  const message = String(payload?.message || '').trim();
+  if (!title || !message || !chrome?.notifications?.create) {
+    return false;
+  }
+
+  const iconUrl = typeof chrome.runtime?.getURL === 'function'
+    ? chrome.runtime.getURL('icons/icon128.png')
+    : 'icons/icon128.png';
+  const notificationId = `flowpilot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const options = {
+    type: 'basic',
+    iconUrl,
+    title,
+    message: message.slice(0, 260),
+    priority: Math.max(0, Math.min(2, Math.floor(Number(payload?.priority) || 0))),
+    requireInteraction: Boolean(payload?.requireInteraction),
+  };
+
+  try {
+    await new Promise((resolve) => {
+      try {
+        chrome.notifications.create(notificationId, options, () => {
+          if (chrome.runtime?.lastError) {
+            console.warn(LOG_PREFIX, '[notification] create failed', chrome.runtime.lastError.message);
+          }
+          resolve();
+        });
+      } catch (error) {
+        console.warn(LOG_PREFIX, '[notification] create failed', getErrorMessage(error));
+        resolve();
+      }
+    });
+    return true;
+  } catch (error) {
+    console.warn(LOG_PREFIX, '[notification] create failed', getErrorMessage(error));
+    return false;
+  }
+}
+
 function isCloudflareSecurityBlockedError(error) {
   return getErrorMessage(error).startsWith(CLOUDFLARE_SECURITY_BLOCK_ERROR_PREFIX);
 }
@@ -13131,6 +13172,7 @@ const autoRunController = self.MultiPageBackgroundAutoRunController?.createAutoR
   isStopError,
   launchAutoRunTimerPlan,
   normalizeAutoRunFallbackThreadIntervalMinutes,
+  notifyChromeNotification,
   onAutoRunRoundSuccess: (payload = {}) => maybeSwitchIpProxyAfterAutoRunRoundSuccess(payload),
   persistAutoRunTimerPlan,
   resetState,

@@ -16,6 +16,7 @@
     "debugger",
     "browsingData",
     "cookies",
+    "notifications",
     "storage",
     "scripting",
     "activeTab"

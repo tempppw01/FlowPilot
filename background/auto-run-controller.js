@@ -36,6 +36,7 @@
       isStopError,
       launchAutoRunTimerPlan,
       normalizeAutoRunFallbackThreadIntervalMinutes,
+      notifyChromeNotification = async () => false,
       persistAutoRunTimerPlan,
       resetState,
       runAutoSequenceFromNode,
@@ -586,7 +587,14 @@
       const currentRuntime = runtime.get();
       console.error('Auto run loop crashed:', error);
       if (!isStopError(error)) {
-        await addLog(`自动运行异常终止：${getErrorMessage(error) || '未知错误'}`, 'error');
+        const reason = getErrorMessage(error) || '未知错误';
+        await addLog(`自动运行异常终止：${reason}`, 'error');
+        await notifyChromeNotification({
+          title: 'FlowPilot 自动运行异常终止',
+          message: reason,
+          priority: 2,
+          requireInteraction: true,
+        });
       }
 
       runtime.set({ autoRunActive: false, autoRunSessionId: 0 });
@@ -1241,6 +1249,12 @@
       const finalRuntime = runtime.get();
       if (deps.getStopRequested() || stoppedEarly) {
         await addLog(`=== 已停止，完成 ${successfulRuns}/${finalRuntime.autoRunTotalRuns} 轮 ===`, 'warn');
+        await notifyChromeNotification({
+          title: 'FlowPilot 自动运行已停止',
+          message: `完成 ${successfulRuns}/${finalRuntime.autoRunTotalRuns} 轮，请回到面板查看详情。`,
+          priority: 2,
+          requireInteraction: true,
+        });
         await broadcastAutoRunStatus('stopped', {
           currentRun: finalRuntime.autoRunCurrentRun,
           totalRuns: finalRuntime.autoRunTotalRuns,
@@ -1249,6 +1263,16 @@
         });
       } else {
         await addLog(`=== 全部 ${finalRuntime.autoRunTotalRuns} 轮已执行完成，成功 ${successfulRuns} 轮 ===`, 'ok');
+        const finalSummaries = buildAutoRunRoundSummaries(finalRuntime.autoRunTotalRuns, roundSummaries);
+        const failedRuns = finalSummaries.filter((summary) => summary.status === 'failed').length;
+        await notifyChromeNotification({
+          title: failedRuns ? 'FlowPilot 自动运行完成，有失败轮次' : 'FlowPilot 自动运行完成',
+          message: failedRuns
+            ? `成功 ${successfulRuns}/${finalRuntime.autoRunTotalRuns} 轮，失败 ${failedRuns} 轮，请回到面板查看原因。`
+            : `全部 ${finalRuntime.autoRunTotalRuns} 轮已完成。`,
+          priority: failedRuns ? 2 : 1,
+          requireInteraction: Boolean(failedRuns),
+        });
         await broadcastAutoRunStatus('complete', {
           currentRun: finalRuntime.autoRunTotalRuns,
           totalRuns: finalRuntime.autoRunTotalRuns,
