@@ -1,6 +1,9 @@
 (function attachBackgroundStep7(root, factory) {
   root.MultiPageBackgroundStep7 = factory();
 })(typeof self !== 'undefined' ? self : globalThis, function createBackgroundStep7Module() {
+  const RESTART_CURRENT_ATTEMPT_ERROR_PREFIX = 'RESTART_CURRENT_ATTEMPT::';
+  const SMSBOWER_MAIL_PROVIDER = 'smsbower-mail';
+
   function createStep7Executor(deps = {}) {
     const {
       addLog,
@@ -164,6 +167,132 @@
 
     function isStep7PlainVerificationResult(result = {}) {
       return getStep7ResultState(result) === 'verification_page' && !isStep7PhoneVerificationResult(result);
+    }
+
+    function isStep7AlreadyOnVerificationResult(result = {}) {
+      const via = String(result?.via || '').trim();
+      return (
+        via === 'already_on_verification_page'
+        || via === 'already_on_phone_verification_page'
+      ) && (
+        isStep7PlainVerificationResult(result)
+        || isStep7PhoneVerificationResult(result)
+      );
+    }
+
+    function isSmsBowerMailProviderForStep7(state = {}) {
+      const candidates = [
+        state?.mailProvider,
+        state?.emailGenerator,
+        state?.mailConfig?.provider,
+      ].map((value) => String(value || '').trim().toLowerCase());
+      return candidates.includes(SMSBOWER_MAIL_PROVIDER);
+    }
+
+    function buildStep7AlreadyOnVerificationRestartError(result = {}, completionStep = 7) {
+      const stateLabel = getLoginAuthStateLabel(result?.state);
+      const url = String(result?.url || '').trim();
+      const urlPart = url ? `URL: ${url}` : '';
+      return new Error(
+        `${RESTART_CURRENT_ATTEMPT_ERROR_PREFIX}步骤 ${completionStep}：进入 OAuth 登录时认证页已经停留在${stateLabel}，通常是上一轮注册/登录验证码页残留；当前账号登录不可继续，已要求回到步骤 1 重新开始注册。${urlPart}`.trim()
+      );
+    }
+
+    function isRestartCurrentAttemptError(error) {
+      return String(error?.message || error || '').startsWith(RESTART_CURRENT_ATTEMPT_ERROR_PREFIX);
+    }
+
+    async function readStep7AuthState(completionStep, logMessage = '') {
+      const result = await sendToContentScriptResilient(
+        'openai-auth',
+        {
+          type: 'GET_LOGIN_AUTH_STATE',
+          source: 'background',
+          payload: {},
+        },
+        {
+          timeoutMs: 15000,
+          responseTimeoutMs: 15000,
+          retryDelayMs: 600,
+          logMessage: logMessage || '认证页正在切换，等待页面重新就绪后检查登录态...',
+          logStep: completionStep,
+          logStepKey: 'oauth-login',
+        }
+      );
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+      return result || {};
+    }
+
+    async function recoverSmsBowerAlreadyOnVerificationPage(currentState = {}, oauthUrl = '', result = {}, completionStep = 7) {
+      if (!isSmsBowerMailProviderForStep7(currentState)) {
+        return null;
+      }
+      if (!oauthUrl) {
+        return null;
+      }
+
+      await addLog(
+        `步骤 ${completionStep}：SMSBower TempMail 登录阶段检测到认证页已停留在${getLoginAuthStateLabel(result.state)}，将尝试使用当前 ChatGPT 已登录态重新进入 OAuth，避免继续获取 SMSBower 重发验证码。`,
+        'warn',
+        { step: completionStep, stepKey: 'oauth-login' }
+      );
+
+      try {
+        await reuseOrCreateTab('openai-auth', 'https://chatgpt.com/', { forceNew: true });
+        const chatgptState = await readStep7AuthState(
+          completionStep,
+          `步骤 ${completionStep}：正在打开 ChatGPT 主页确认当前账号是否已有登录态...`
+        );
+        await addLog(
+          `步骤 ${completionStep}：ChatGPT 登录态探测结果：${getLoginAuthStateLabel(chatgptState.state)}。`,
+          'info',
+          { step: completionStep, stepKey: 'oauth-login' }
+        );
+
+        await reuseOrCreateTab('openai-auth', oauthUrl, { forceNew: false });
+        const oauthState = await readStep7AuthState(
+          completionStep,
+          `步骤 ${completionStep}：正在用已登录态重新打开 OAuth 链接...`
+        );
+
+        if (
+          isStep7OauthConsentResult(oauthState)
+          || isStep7AddPhoneResult(oauthState)
+          || isStep7PhoneVerificationResult(oauthState)
+        ) {
+          await addLog(
+            `步骤 ${completionStep}：已通过现有登录态跳过 SMSBower 登录验证码，当前页面：${getLoginAuthStateLabel(oauthState.state)}。`,
+            'ok',
+            { step: completionStep, stepKey: 'oauth-login' }
+          );
+          return buildStep7CompletionPayload(
+            {
+              ...oauthState,
+              skipLoginVerificationStep: true,
+              directOAuthConsentPage: isStep7OauthConsentResult(oauthState),
+            },
+            currentState,
+            resolveStep7LoginIdentifierType(currentState),
+            String(currentState?.signupPhoneNumber || '').trim()
+          );
+        }
+
+        await addLog(
+          `步骤 ${completionStep}：重新打开 OAuth 后仍未进入可跳过验证码的页面（当前：${getLoginAuthStateLabel(oauthState.state)}），将按 SMSBower 旧验证码处理。`,
+          'warn',
+          { step: completionStep, stepKey: 'oauth-login' }
+        );
+        return null;
+      } catch (error) {
+        await addLog(
+          `步骤 ${completionStep}：尝试使用已登录态跳过 SMSBower 登录验证码失败：${error.message}`,
+          'warn',
+          { step: completionStep, stepKey: 'oauth-login' }
+        );
+        return null;
+      }
     }
 
     function buildStep7CompletionPayload(result = {}, currentState = {}, currentIdentifierType = '', currentPhoneNumber = '') {
@@ -384,6 +513,22 @@
           }
 
           if (isStep6SuccessResult(result)) {
+            if (isStep7AlreadyOnVerificationResult(result)) {
+              const recoveredPayload = await recoverSmsBowerAlreadyOnVerificationPage(
+                currentState,
+                oauthUrl,
+                result,
+                completionStep
+              );
+              if (recoveredPayload) {
+                await completeNodeFromBackground(state?.nodeId || 'oauth-login', recoveredPayload);
+                return;
+              }
+              if (isSmsBowerMailProviderForStep7(currentState)) {
+                throw buildStep7AlreadyOnVerificationRestartError(result, completionStep);
+              }
+            }
+
             const completionPayload = buildStep7CompletionPayload(
               result,
               { ...(currentState || {}), visibleStep: completionStep },
@@ -416,6 +561,9 @@
           throw new Error(`步骤 ${completionStep}：认证页未返回可识别的登录结果。`);
         } catch (err) {
           throwIfStopped(err);
+          if (isRestartCurrentAttemptError(err)) {
+            throw err;
+          }
           if (isAddPhoneAuthFailure(err)) {
             const latestAddPhoneState = typeof getState === 'function'
               ? await getState().catch(() => state)

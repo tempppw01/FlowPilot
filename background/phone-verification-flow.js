@@ -81,6 +81,7 @@
     const PHONE_RESEND_THROTTLED_ERROR_PREFIX = 'PHONE_RESEND_THROTTLED::';
     const PHONE_RESEND_BANNED_NUMBER_ERROR_PREFIX = 'PHONE_RESEND_BANNED_NUMBER::';
     const PHONE_RESEND_SERVER_ERROR_PREFIX = 'PHONE_RESEND_SERVER_ERROR::';
+    const PHONE_WHATSAPP_VERIFICATION_ERROR_PREFIX = 'PHONE_WHATSAPP_VERIFICATION_CHANNEL::';
     const PHONE_ROUTE_405_RECOVERY_FAILED_ERROR_PREFIX = 'PHONE_ROUTE_405_RECOVERY_FAILED::';
     const PHONE_MANUAL_FREE_REUSE_ERROR_PREFIX = 'PHONE_MANUAL_FREE_REUSE::';
     const PHONE_AUTO_FREE_REUSE_PREPARE_ERROR_PREFIX = 'PHONE_AUTO_FREE_REUSE_PREPARE::';
@@ -618,6 +619,7 @@
         phone_max_usage_exceeded: '手机号达到使用上限',
         resend_server_error: '重发短信后进入服务器错误页',
         whatsapp_resend_channel: '页面重发入口切换为 WhatsApp 通道',
+        whatsapp_verification_channel: 'OpenAI 已改用 WhatsApp 发送验证码',
         unknown: '未知',
       };
       if (reasonMap[normalized]) {
@@ -1279,6 +1281,22 @@
         return true;
       }
       return /this\s+page\s+isn['’]?t\s+working|currently\s+unable\s+to\s+handle\s+this\s+request|http\s+error\s+500|500\s+internal\s+server\s+error/i.test(message);
+    }
+
+    function isPhoneWhatsappVerificationChannelError(error) {
+      const message = String(error?.message || error || '').trim();
+      if (!message) {
+        return false;
+      }
+      return message.startsWith(PHONE_WHATSAPP_VERIFICATION_ERROR_PREFIX);
+    }
+
+    function buildPhoneWhatsappVerificationChannelError(message = '') {
+      const text = String(message || '').trim();
+      if (text.startsWith(PHONE_WHATSAPP_VERIFICATION_ERROR_PREFIX)) {
+        return new Error(text);
+      }
+      return new Error(`${PHONE_WHATSAPP_VERIFICATION_ERROR_PREFIX}${text || 'OpenAI 已通过 WhatsApp 发送手机验证码。'}`);
     }
 
     function buildPhoneResendServerError(error) {
@@ -3021,6 +3039,12 @@
                 if (pageError?.reason === 'resend_server_error') {
                   throw buildPhoneResendServerError(pageError.message);
                 }
+                if (
+                  pageError?.reason === 'whatsapp_verification_channel'
+                  || pageError?.reason === 'whatsapp_resend_channel'
+                ) {
+                  throw buildPhoneWhatsappVerificationChannelError(pageError.message || 'OpenAI 已通过 WhatsApp 发送手机验证码。');
+                }
                 if (pageError?.reason === 'resend_throttled') {
                   if (shouldTreatResendThrottledAsBanned(state)) {
                     throw buildHighRiskResendThrottledError(pageError.message);
@@ -3078,6 +3102,18 @@
                 code: '',
                 replaceNumber: true,
                 reason: 'resend_server_error',
+              };
+            }
+            if (isPhoneWhatsappVerificationChannelError(error)) {
+              await addLog(
+                `步骤 9：检测到 OpenAI 已通过 WhatsApp 向号码 ${normalizedActivation.phoneNumber} 发送验证码，当前接码平台无法读取 WhatsApp 消息，立即返回手机号输入页并更换号码。${error.message.replace(PHONE_WHATSAPP_VERIFICATION_ERROR_PREFIX, '')}`,
+                'warn'
+              );
+              await clearPhoneRuntimeCountdown();
+              return {
+                code: '',
+                replaceNumber: true,
+                reason: 'whatsapp_verification_channel',
               };
             }
             if (isPhoneResendThrottledError(error)) {

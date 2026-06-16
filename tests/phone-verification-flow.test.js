@@ -7350,6 +7350,132 @@ test('phone verification helper replaces number immediately when resend is throt
   assert.equal(messages.includes('RETURN_TO_ADD_PHONE'), true);
 });
 
+test('phone verification helper replaces number immediately when OpenAI sends the code via WhatsApp', async () => {
+  const requests = [];
+  const messages = [];
+  const submittedNumbers = [];
+  const logs = [];
+  let currentState = {
+    heroSmsApiKey: 'demo-key',
+    heroSmsCountryId: 52,
+    heroSmsCountryLabel: 'Thailand',
+    verificationResendCount: 0,
+    phoneVerificationReplacementLimit: 2,
+    phoneCodeWaitSeconds: 60,
+    phoneCodeTimeoutWindows: 2,
+    phoneCodePollIntervalSeconds: 1,
+    phoneCodePollMaxRounds: 2,
+    currentPhoneActivation: null,
+    reusablePhoneActivation: null,
+  };
+
+  const numbers = [
+    { activationId: '905001', phoneNumber: '66951110501' },
+    { activationId: '905002', phoneNumber: '66951110502' },
+  ];
+  let numberIndex = 0;
+
+  const helpers = api.createPhoneVerificationHelpers({
+    addLog: async (message, level = 'info') => {
+      logs.push({ message, level });
+    },
+    ensureStep8SignupPageReady: async () => {},
+    fetchImpl: async (url) => {
+      const parsedUrl = new URL(url);
+      requests.push(parsedUrl);
+      const action = parsedUrl.searchParams.get('action');
+      const id = parsedUrl.searchParams.get('id');
+      if (action === 'getPrices') {
+        return { ok: true, text: async () => buildHeroSmsPricesPayload() };
+      }
+      if (action === 'getNumber') {
+        const nextNumber = numbers[numberIndex];
+        numberIndex += 1;
+        return { ok: true, text: async () => `ACCESS_NUMBER:${nextNumber.activationId}:${nextNumber.phoneNumber}` };
+      }
+      if (action === 'getStatus') {
+        return {
+          ok: true,
+          text: async () => (id === '905001' ? 'STATUS_WAIT_CODE' : 'STATUS_OK:654321'),
+        };
+      }
+      if (action === 'setStatus') {
+        return { ok: true, text: async () => `STATUS_UPDATED:${id}` };
+      }
+      throw new Error(`Unexpected HeroSMS action: ${action}`);
+    },
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => defaultTimeoutMs,
+    getState: async () => ({ ...currentState }),
+    sendToContentScriptResilient: async (_source, message) => {
+      messages.push(message.type);
+      if (message.type === 'SUBMIT_PHONE_NUMBER') {
+        submittedNumbers.push(message.payload.phoneNumber);
+        return {
+          phoneVerificationPage: true,
+          url: 'https://auth.openai.com/phone-verification',
+        };
+      }
+      if (message.type === 'CHECK_PHONE_RESEND_ERROR') {
+        if (submittedNumbers[submittedNumbers.length - 1] === '66951110501') {
+          return {
+            hasError: true,
+            reason: 'whatsapp_verification_channel',
+            message: '通过 WhatsApp 发送到 +66 95 111 0501 重新发送 WhatsApp 消息',
+            channel: 'whatsapp',
+            url: 'https://auth.openai.com/phone-verification',
+          };
+        }
+        return {
+          hasError: false,
+          reason: '',
+          message: '',
+          url: 'https://auth.openai.com/phone-verification',
+        };
+      }
+      if (message.type === 'RETURN_TO_ADD_PHONE' || message.type === 'STEP8_GET_STATE') {
+        return {
+          addPhonePage: true,
+          phoneVerificationPage: false,
+          url: 'https://auth.openai.com/add-phone',
+        };
+      }
+      if (message.type === 'SUBMIT_PHONE_VERIFICATION_CODE') {
+        assert.equal(message.payload.code, '654321');
+        return {
+          success: true,
+          consentReady: true,
+          url: 'https://auth.openai.com/authorize',
+        };
+      }
+      throw new Error(`Unexpected content-script message: ${message.type}`);
+    },
+    setState: async (updates) => {
+      currentState = { ...currentState, ...updates };
+    },
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  const result = await helpers.completePhoneVerificationFlow(1, {
+    addPhonePage: true,
+    phoneVerificationPage: false,
+    url: 'https://auth.openai.com/add-phone',
+  });
+
+  assert.deepStrictEqual(result, {
+    success: true,
+    consentReady: true,
+    url: 'https://auth.openai.com/authorize',
+  });
+  assert.deepStrictEqual(submittedNumbers, ['66951110501', '66951110502']);
+  assert.equal(messages.includes('CHECK_PHONE_RESEND_ERROR'), true);
+  assert.equal(messages.includes('RETURN_TO_ADD_PHONE'), true);
+  assert.equal(
+    logs.some((entry) => /WhatsApp/.test(entry.message) && /更换号码/.test(entry.message)),
+    true
+  );
+});
+
 test('phone verification helper replaces number immediately when phone-verification route is stuck on 405 retry page', async () => {
   const requests = [];
   const messages = [];

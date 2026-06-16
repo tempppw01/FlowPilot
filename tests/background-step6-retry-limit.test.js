@@ -138,6 +138,103 @@ test('step 7 retries up to configured limit and then fails', async () => {
   assert.equal(events.completed, 0);
 });
 
+test('step 7 skips SMSBower login code when existing login state reaches add-phone after OAuth refresh', async () => {
+  const source = fs.readFileSync('flows/openai/background/steps/oauth-login.js', 'utf8');
+  const globalScope = {};
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundStep7;`)(globalScope);
+
+  const events = {
+    refreshCalls: 0,
+    sendCalls: 0,
+    completions: [],
+    tabUrls: [],
+    logs: [],
+  };
+
+  const executor = api.createStep7Executor({
+    addLog: async (message, level = 'info') => {
+      events.logs.push({ message, level });
+    },
+    completeNodeFromBackground: async (step, payload) => {
+      events.completions.push({ step, payload });
+    },
+    getErrorMessage: (error) => error?.message || String(error || ''),
+    getLoginAuthStateLabel: (state) => {
+      if (state === 'verification_page') return '登录验证码页';
+      if (state === 'logged_in_home') return 'ChatGPT 已登录主页';
+      if (state === 'add_phone_page') return '手机号页';
+      return state || 'unknown';
+    },
+    getState: async () => ({
+      email: 'user@example.com',
+      password: 'secret',
+      mailProvider: 'smsbower-mail',
+      emailGenerator: 'smsbower-mail',
+    }),
+    isStep6RecoverableResult: (result) => result?.step6Outcome === 'recoverable',
+    isStep6SuccessResult: (result) => result?.step6Outcome === 'success',
+    refreshOAuthUrlBeforeStep6: async () => {
+      events.refreshCalls += 1;
+      return `https://oauth.example/${events.refreshCalls}`;
+    },
+    reuseOrCreateTab: async (_source, url) => {
+      events.tabUrls.push(url);
+    },
+    sendToContentScriptResilient: async (_source, message) => {
+      events.sendCalls += 1;
+      if (message.type === 'GET_LOGIN_AUTH_STATE') {
+        if (events.tabUrls[events.tabUrls.length - 1] === 'https://chatgpt.com/') {
+          return {
+            state: 'logged_in_home',
+            url: 'https://chatgpt.com/',
+          };
+        }
+        return {
+          state: 'add_phone_page',
+          addPhonePage: true,
+          url: 'https://auth.openai.com/add-phone',
+        };
+      }
+      return {
+        step6Outcome: 'success',
+        state: 'verification_page',
+        via: 'already_on_verification_page',
+        url: 'https://auth.openai.com/email-verification',
+        loginVerificationRequestedAt: null,
+      };
+    },
+    STEP6_MAX_ATTEMPTS: 3,
+    throwIfStopped: () => {},
+  });
+
+  await executor.executeStep7({
+    email: 'user@example.com',
+    password: 'secret',
+    mailProvider: 'smsbower-mail',
+    emailGenerator: 'smsbower-mail',
+  });
+
+  assert.equal(events.refreshCalls, 1);
+  assert.equal(events.sendCalls, 3);
+  assert.deepStrictEqual(events.tabUrls, [
+    'https://oauth.example/1',
+    'https://chatgpt.com/',
+    'https://oauth.example/1',
+  ]);
+  assert.deepStrictEqual(events.completions, [
+    {
+      step: 'oauth-login',
+      payload: {
+        loginVerificationRequestedAt: null,
+        skipLoginVerificationStep: true,
+        addPhonePage: true,
+        phoneVerificationPage: false,
+      },
+    },
+  ]);
+  assert.equal(events.logs.some(({ message }) => /避免继续获取 SMSBower 重发验证码/.test(message)), true);
+});
+
 test('step 7 preserves visible step when refreshing OAuth after retry', async () => {
   const source = fs.readFileSync('flows/openai/background/steps/oauth-login.js', 'utf8');
   const globalScope = {};

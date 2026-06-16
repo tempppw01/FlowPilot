@@ -3061,7 +3061,7 @@ function getStep4PostVerificationState(options = {}) {
     };
   }
 
-  if (isLikelyLoggedInChatgptHomeUrl()) {
+  if (typeof isLikelyLoggedInChatgptHomeUrl === 'function' && isLikelyLoggedInChatgptHomeUrl()) {
     return {
       state: 'logged_in_home',
       skipProfileStep: true,
@@ -4565,6 +4565,13 @@ function inspectLoginAuthState() {
     };
   }
 
+  if (typeof isLikelyLoggedInChatgptHomeUrl === 'function' && isLikelyLoggedInChatgptHomeUrl()) {
+    return {
+      ...baseState,
+      state: 'logged_in_home',
+    };
+  }
+
   if (verificationVisible) {
     return {
       ...baseState,
@@ -4639,6 +4646,8 @@ function getLoginAuthStateLabel(snapshot) {
       return 'OAuth 授权页';
     case 'choose_account_page':
       return 'OpenAI choose account page';
+    case 'logged_in_home':
+      return 'ChatGPT 已登录主页';
     case 'entry_page':
       return '登录入口页';
     case 'add_phone_page':

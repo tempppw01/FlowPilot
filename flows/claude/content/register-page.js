@@ -5,6 +5,10 @@ const CLAUDE_OFFICIAL_URL = 'https://claude.ai/';
 const CLAUDE_EMAIL_ENTRY_TEXT_PATTERN = /continue\s+with\s+email|sign\s+up\s+with\s+email|log\s+in\s+with\s+email|email/i;
 const CLAUDE_CONTINUE_TEXT_PATTERN = /continue|next|submit|log\s*in|sign\s*up|\u7ee7\u7eed|\u4e0b\u4e00\u6b65|\u767b\u5f55|\u6ce8\u518c/i;
 const CLAUDE_SENT_LINK_TEXT_PATTERN = /check\s+your\s+email|sent\s+(?:you\s+)?(?:a\s+)?(?:link|email)|magic\s+link|verify\s+your\s+email/i;
+const CLAUDE_CREATE_ACCOUNT_TEXT_PATTERN = /create\s+account/i;
+const CLAUDE_FREE_PLAN_TEXT_PATTERN = /use\s+claude\s+for\s+free|free\s+plan|get\s+started\s+for\s+free/i;
+const CLAUDE_SKIP_TEXT_PATTERN = /\bskip\b|skip\s+for\s+now|not\s+now|do\s+this\s+later/i;
+const CLAUDE_SETUP_LATER_TEXT_PATTERN = /set\s+up\s+later|setup\s+later|do\s+this\s+later|not\s+now/i;
 
 function isVisibleClaudeElement(element) {
   if (!element || !(element instanceof Element)) return false;
@@ -37,6 +41,22 @@ function findClaudeClickableByText(pattern) {
   return Array.from(document.querySelectorAll(selectors)).find((element) => {
     if (!isVisibleClaudeElement(element)) return false;
     return pattern.test(getClaudeElementText(element));
+  }) || null;
+}
+
+function findClaudeVisibleTextInput() {
+  return Array.from(document.querySelectorAll([
+    'input:not([type])',
+    'input[type="text"]',
+    'input[name*="name" i]',
+    'input[autocomplete*="name" i]',
+    'input[placeholder*="name" i]',
+    'input[aria-label*="name" i]',
+    'textarea',
+  ].join(', '))).find((element) => {
+    if (!isVisibleClaudeElement(element)) return false;
+    const type = String(element.getAttribute('type') || '').trim().toLowerCase();
+    return !['hidden', 'email', 'password', 'checkbox', 'radio', 'submit', 'button'].includes(type);
   }) || null;
 }
 
@@ -115,6 +135,32 @@ function findClaudeSubmitButton(emailInput = null) {
     || null;
 }
 
+function findClaudeTermsCheckbox() {
+  const visibleCheckbox = Array.from(document.querySelectorAll('input[type="checkbox"], [role="checkbox"]'))
+    .find(isVisibleClaudeElement);
+  if (visibleCheckbox) return visibleCheckbox;
+
+  const labels = Array.from(document.querySelectorAll('label, [role="checkbox"], button, div, span'))
+    .filter(isVisibleClaudeElement);
+  return labels.find((element) => /agree|terms|acceptable\s+use|at\s+least\s+18/i.test(getClaudeElementText(element))) || null;
+}
+
+async function clickClaudeByText(pattern, description, options = {}) {
+  const element = await waitForClaude(() => findClaudeClickableByText(pattern), {
+    timeoutMs: options.timeoutMs || 45000,
+    intervalMs: options.intervalMs || 300,
+  });
+  if (!element) {
+    throw new Error(`${description} button was not found.`);
+  }
+  simulateClaudeClick(element);
+  await sleep(Number(options.afterClickMs) || 1200);
+  return {
+    submitted: true,
+    ...getClaudePageState(),
+  };
+}
+
 function getClaudePageState() {
   const pageText = String(document.body?.innerText || '').replace(/\s+/g, ' ').trim();
   const emailInput = findClaudeEmailInput();
@@ -124,6 +170,24 @@ function getClaudePageState() {
       url: location.href,
       emailInput,
       continueButton: findClaudeSubmitButton(emailInput),
+    };
+  }
+  if (/let'?s\s+create\s+your\s+account|create\s+account|acceptable\s+use\s+policy/i.test(pageText)) {
+    return {
+      state: 'create_account',
+      url: location.href,
+    };
+  }
+  if (/plans\s+that\s+grow\s+with\s+you|use\s+claude\s+for\s+free|get\s+pro\s+plan|get\s+max\s+plan/i.test(pageText)) {
+    return {
+      state: 'plan_selection',
+      url: location.href,
+    };
+  }
+  if (/set\s+up\s+later|skip|continue|what\s+should\s+we\s+call\s+you|your\s+name/i.test(pageText)) {
+    return {
+      state: 'onboarding',
+      url: location.href,
     };
   }
   if (CLAUDE_SENT_LINK_TEXT_PATTERN.test(pageText)) {
@@ -162,7 +226,23 @@ async function openClaudeOfficialPage() {
   };
 }
 
-async function submitClaudeEmail(payload = {}) {
+async function waitClaudeOfficialPageLoaded() {
+  const readyState = await waitForClaude(() => {
+    const state = getClaudePageState();
+    if (state.state !== 'loading') return state;
+    return findClaudeEmailInput() || findClaudeClickableByText(CLAUDE_EMAIL_ENTRY_TEXT_PATTERN) ? state : null;
+  }, { timeoutMs: 90000, intervalMs: 500 });
+  if (!readyState) {
+    throw new Error('Claude page did not finish loading into a usable state.');
+  }
+  return {
+    submitted: true,
+    state: readyState.state || getClaudePageState().state,
+    url: readyState.url || location.href,
+  };
+}
+
+async function fillClaudeEmail(payload = {}) {
   const email = String(payload.email || '').trim();
   if (!email) {
     throw new Error('Claude email is empty.');
@@ -173,6 +253,21 @@ async function submitClaudeEmail(payload = {}) {
   }
   fillInput(input, email);
   await sleep(200);
+  return {
+    submitted: true,
+    state: 'email_filled',
+    url: location.href,
+    email,
+  };
+}
+
+async function submitClaudeEmail(payload = {}) {
+  const email = String(payload.email || '').trim();
+  const input = findClaudeEmailInput();
+  if (email && input && String(input.value || '').trim().toLowerCase() !== email.toLowerCase()) {
+    fillInput(input, email);
+    await sleep(200);
+  }
   const button = findClaudeSubmitButton(input);
   if (!button) {
     throw new Error('Claude email submit button was not found.');
@@ -189,12 +284,82 @@ async function submitClaudeEmail(payload = {}) {
   };
 }
 
+async function createClaudeAccount() {
+  const checkbox = await waitForClaude(findClaudeTermsCheckbox, { timeoutMs: 45000, intervalMs: 300 });
+  if (!checkbox) {
+    throw new Error('Claude account terms checkbox was not found.');
+  }
+  const checked = checkbox.matches?.('input[type="checkbox"]') ? checkbox.checked : checkbox.getAttribute?.('aria-checked') === 'true';
+  if (!checked) {
+    simulateClaudeClick(checkbox);
+    await sleep(300);
+  }
+  return clickClaudeByText(CLAUDE_CREATE_ACCOUNT_TEXT_PATTERN, 'Claude create account', { afterClickMs: 2000 });
+}
+
+async function selectClaudeFreePlan() {
+  return clickClaudeByText(CLAUDE_FREE_PLAN_TEXT_PATTERN, 'Claude free plan', { afterClickMs: 2000 });
+}
+
+async function skipClaudeOnboarding() {
+  return clickClaudeByText(CLAUDE_SKIP_TEXT_PATTERN, 'Claude skip', { afterClickMs: 1200 });
+}
+
+async function continueClaudeOnboarding() {
+  return clickClaudeByText(CLAUDE_CONTINUE_TEXT_PATTERN, 'Claude continue', { afterClickMs: 1200 });
+}
+
+async function submitClaudeRandomName(payload = {}) {
+  const fullName = String(payload.fullName || payload.name || '').trim();
+  if (!fullName) {
+    throw new Error('Claude random name is empty.');
+  }
+  const input = await waitForClaude(findClaudeVisibleTextInput, { timeoutMs: 45000, intervalMs: 300 });
+  if (!input) {
+    throw new Error('Claude name input was not found.');
+  }
+  fillInput(input, fullName);
+  await sleep(200);
+  const button = findClaudeClickableByText(CLAUDE_CONTINUE_TEXT_PATTERN);
+  if (!button) {
+    throw new Error('Claude name continue button was not found.');
+  }
+  simulateClaudeClick(button);
+  await sleep(1200);
+  return {
+    submitted: true,
+    ...getClaudePageState(),
+    fullName,
+  };
+}
+
+async function setUpClaudeLater() {
+  return clickClaudeByText(CLAUDE_SETUP_LATER_TEXT_PATTERN, 'Claude set up later', { afterClickMs: 2000 });
+}
+
 async function executeClaudeCommand(command, payload = {}) {
   switch (command) {
     case 'claude-open-official-page':
       return openClaudeOfficialPage(payload);
+    case 'claude-wait-official-page':
+      return waitClaudeOfficialPageLoaded(payload);
+    case 'claude-fill-email':
+      return fillClaudeEmail(payload);
     case 'claude-submit-email':
+    case 'claude-submit-email-and-fetch-link':
       return submitClaudeEmail(payload);
+    case 'claude-create-account':
+      return createClaudeAccount(payload);
+    case 'claude-select-free-plan':
+      return selectClaudeFreePlan(payload);
+    case 'claude-skip-onboarding':
+      return skipClaudeOnboarding(payload);
+    case 'claude-continue-onboarding':
+      return continueClaudeOnboarding(payload);
+    case 'claude-submit-random-name':
+      return submitClaudeRandomName(payload);
+    case 'claude-set-up-later':
+      return setUpClaudeLater(payload);
     case 'GET_PAGE_STATE':
       return { state: getClaudePageState().state, url: location.href };
     default:

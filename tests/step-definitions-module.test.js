@@ -263,9 +263,17 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
     claudeSteps.map((step) => step.key),
     [
       'claude-open-official-page',
-      'claude-submit-email',
-      'claude-fetch-login-link',
+      'claude-wait-official-page',
+      'claude-fill-email',
+      'claude-submit-email-and-fetch-link',
       'claude-open-login-link',
+      'claude-create-account',
+      'claude-select-free-plan',
+      'claude-skip-onboarding',
+      'claude-continue-onboarding',
+      'claude-submit-random-name',
+      'claude-set-up-later',
+      'claude-extract-session-key',
     ]
   );
   assert.equal(claudeSteps.every((step) => step.flowId === 'claude'), true);
@@ -273,16 +281,37 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
   assert.equal(claudeSteps[0].sourceId, 'claude-register-page');
   assert.deepStrictEqual(
     claudeSteps.map((step) => step.title),
-    ['打开 Claude 官网', '获取邮箱并填写', '获取邮箱登录链接', '打开登录链接']
+    [
+      '清理 Cookie 并打开 Claude',
+      '等待 Claude 加载完成',
+      '获取 acz 邮箱并填写',
+      '提交邮箱并轮询登录链接',
+      '打开邮箱魔法链接',
+      '勾选同意并创建账号',
+      '选择免费账号',
+      '点击 Skip 跳过',
+      '继续引导',
+      '生成随机英文名并继续',
+      '选择 Set up later',
+      '获取 sessionKey',
+    ]
   );
-  assert.deepStrictEqual(api.getStepIds({ activeFlowId: 'claude' }), [1, 2, 3, 4]);
-  assert.equal(api.getLastStepId({ activeFlowId: 'claude' }), 4);
+  assert.deepStrictEqual(api.getStepIds({ activeFlowId: 'claude' }), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.equal(api.getLastStepId({ activeFlowId: 'claude' }), 12);
   assert.deepStrictEqual(
     api.getNodes({ activeFlowId: 'claude' }).map((node) => node.next),
     [
-      ['claude-submit-email'],
-      ['claude-fetch-login-link'],
+      ['claude-wait-official-page'],
+      ['claude-fill-email'],
+      ['claude-submit-email-and-fetch-link'],
       ['claude-open-login-link'],
+      ['claude-create-account'],
+      ['claude-select-free-plan'],
+      ['claude-skip-onboarding'],
+      ['claude-continue-onboarding'],
+      ['claude-submit-random-name'],
+      ['claude-set-up-later'],
+      ['claude-extract-session-key'],
       [],
     ]
   );

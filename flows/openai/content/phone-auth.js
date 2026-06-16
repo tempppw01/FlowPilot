@@ -30,6 +30,7 @@
     const PHONE_RESEND_THROTTLED_PATTERN = /tried\s+to\s+resend\s+too\s+many\s+times|please\s+try\s+again\s+later|too\s+many\s+resend|resend\s+too\s+many|发送.*过于频繁|稍后再试|重试次数过多|再送信.*多すぎ|しばらくしてから|後でもう一度/i;
     const PHONE_RESEND_BANNED_NUMBER_PATTERN = /无法向此电话号码发送短信|无法向此手机号发送短信|无法发送短信到此电话号码|无法发送短信到此手机号|この電話番号に(?:SMS|テキスト|メッセージ)を送信できません|電話番号に送信できません|can(?:not|'t)\s+send\s+(?:an?\s+)?(?:sms|text(?:\s+message)?)\s+to\s+(?:this|that)\s+(?:phone\s+)?number|unable\s+to\s+send\s+(?:an?\s+)?(?:sms|text(?:\s+message)?)\s+to\s+(?:this|that)\s+(?:phone\s+)?number/i;
     const PHONE_RESEND_SERVER_ERROR_PATTERN = /this\s+page\s+isn['’]?t\s+working|currently\s+unable\s+to\s+handle\s+this\s+request|http\s+error\s+500|500\s+internal\s+server\s+error/i;
+    const PHONE_WHATSAPP_VERIFICATION_PATTERN = /(?:通过|透過|經由|经由).{0,30}whats\s*app.{0,60}(?:发送|傳送|送出)|(?:sent|send|delivered).{0,80}(?:via|through|by).{0,20}whats\s*app|whats\s*app.{0,40}(?:message|消息|訊息|验证码|驗證碼|確認コード|認証コード|code)|(?:重新发送|重新傳送|再次发送|再次傳送|resend|send\s+again).{0,40}whats\s*app/i;
     const PHONE_ROUTE_405_PATTERN = /405\s+method\s+not\s+allowed|route\s+error.*405|did\s+not\s+provide\s+an?\s+[`'"]?action|post\s+request\s+to\s+["']?\/phone-verification/i;
     const PHONE_ROUTE_405_MAX_RECOVERY_CLICKS = 3;
     const rootScope = typeof self !== 'undefined' ? self : globalThis;
@@ -663,6 +664,21 @@
       return combined || 'OpenAI contact-verification page returned HTTP ERROR 500 after resend.';
     }
 
+    function getWhatsappPhoneVerificationText() {
+      if (typeof isPhoneVerificationPageReady === 'function' && !isPhoneVerificationPageReady()) {
+        return '';
+      }
+      const pageSnapshot = String(getPageTextSnapshot?.() || '').replace(/\s+/g, ' ').trim();
+      if (!pageSnapshot || !/whats\s*app/i.test(pageSnapshot)) {
+        return '';
+      }
+      if (!PHONE_WHATSAPP_VERIFICATION_PATTERN.test(pageSnapshot)) {
+        return '';
+      }
+      const concise = pageSnapshot.match(PHONE_WHATSAPP_VERIFICATION_PATTERN);
+      return String(concise?.[0] || pageSnapshot).trim();
+    }
+
     function checkPhoneResendError() {
       const maxUsageText = getAddPhoneErrorText();
       if (maxUsageText && PHONE_MAX_USAGE_EXCEEDED_PATTERN.test(maxUsageText)) {
@@ -670,6 +686,17 @@
           hasError: true,
           reason: 'phone_max_usage_exceeded',
           message: maxUsageText,
+          url: location.href,
+        };
+      }
+
+      const whatsappVerificationText = getWhatsappPhoneVerificationText();
+      if (whatsappVerificationText) {
+        return {
+          hasError: true,
+          reason: 'whatsapp_verification_channel',
+          message: whatsappVerificationText,
+          channel: 'whatsapp',
           url: location.href,
         };
       }

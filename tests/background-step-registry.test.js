@@ -50,9 +50,17 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   assert.match(source, /'grok-extract-sso-cookie': \(state\) => grokRegisterRunner\.executeGrokExtractSsoCookie\(state\)/);
   assert.match(source, /'grok-upload-sso-to-webchat2api': \(state\) => grokWebchat2ApiPublisher\.executeGrokUploadSsoToWebchat2Api\(state\)/);
   assert.match(source, /'claude-open-official-page': \(state\) => claudeRegisterRunner\.executeClaudeOpenOfficialPage\(state\)/);
-  assert.match(source, /'claude-submit-email': \(state\) => claudeRegisterRunner\.executeClaudeSubmitEmail\(state\)/);
-  assert.match(source, /'claude-fetch-login-link': \(state\) => claudeRegisterRunner\.executeClaudeFetchLoginLink\(state\)/);
+  assert.match(source, /'claude-wait-official-page': \(state\) => claudeRegisterRunner\.executeClaudeWaitOfficialPageLoaded\(state\)/);
+  assert.match(source, /'claude-fill-email': \(state\) => claudeRegisterRunner\.executeClaudeFillEmail\(state\)/);
+  assert.match(source, /'claude-submit-email-and-fetch-link': \(state\) => claudeRegisterRunner\.executeClaudeSubmitEmailAndFetchLink\(state\)/);
   assert.match(source, /'claude-open-login-link': \(state\) => claudeRegisterRunner\.executeClaudeOpenLoginLink\(state\)/);
+  assert.match(source, /'claude-create-account': \(state\) => claudeRegisterRunner\.executeClaudeCreateAccount\(state\)/);
+  assert.match(source, /'claude-select-free-plan': \(state\) => claudeRegisterRunner\.executeClaudeSelectFreePlan\(state\)/);
+  assert.match(source, /'claude-skip-onboarding': \(state\) => claudeRegisterRunner\.executeClaudeSkipOnboarding\(state\)/);
+  assert.match(source, /'claude-continue-onboarding': \(state\) => claudeRegisterRunner\.executeClaudeContinueOnboarding\(state\)/);
+  assert.match(source, /'claude-submit-random-name': \(state\) => claudeRegisterRunner\.executeClaudeSubmitRandomName\(state\)/);
+  assert.match(source, /'claude-set-up-later': \(state\) => claudeRegisterRunner\.executeClaudeSetUpLater\(state\)/);
+  assert.match(source, /'claude-extract-session-key': \(state\) => claudeRegisterRunner\.executeClaudeExtractSessionKey\(state\)/);
   assert.match(source, /'openai-upload-session-to-webchat': \(state\) => openAiWebchatPublisher\.executeOpenAiUploadSessionToWebchat\(state\)/);
 
   assert.match(
@@ -65,7 +73,7 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   );
   assert.match(
     source,
-    /'claude-open-official-page',[\s\S]*'claude-submit-email',[\s\S]*'claude-fetch-login-link',[\s\S]*'claude-open-login-link'/
+    /'claude-open-official-page',[\s\S]*'claude-wait-official-page',[\s\S]*'claude-fill-email',[\s\S]*'claude-submit-email-and-fetch-link',[\s\S]*'claude-open-login-link',[\s\S]*'claude-create-account',[\s\S]*'claude-select-free-plan',[\s\S]*'claude-skip-onboarding',[\s\S]*'claude-continue-onboarding',[\s\S]*'claude-submit-random-name',[\s\S]*'claude-set-up-later',[\s\S]*'claude-extract-session-key'/
   );
   assert.match(source, /'openai-upload-session-to-webchat'/);
 });

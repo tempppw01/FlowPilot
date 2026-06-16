@@ -6,6 +6,11 @@
   const DEFAULT_CLAUDE_PAGE_TIMEOUT_MS = 90 * 1000;
   const DEFAULT_CLAUDE_LINK_MAX_ATTEMPTS = 12;
   const DEFAULT_CLAUDE_LINK_INTERVAL_MS = 5000;
+  const CLAUDE_SMSBOWER_MAIL_SERVICE_CODE = 'acz';
+  const CLAUDE_COOKIE_CLEAR_DOMAINS = Object.freeze([
+    'claude.ai',
+    'anthropic.com',
+  ]);
 
   function cleanString(value = '') {
     return String(value ?? '').trim();
@@ -36,6 +41,7 @@
       completeNodeFromBackground,
       ensureContentScriptReadyOnTab = null,
       fetchSmsBowerMailAddress = null,
+      generateRandomName = null,
       getState = async () => ({}),
       getTabId = async () => null,
       isTabAlive = async () => false,
@@ -51,6 +57,7 @@
       throwIfStopped = () => {},
       waitForTabStableComplete = null,
       CLAUDE_REGISTER_INJECT_FILES = null,
+      markCurrentRegistrationAccountUsed = null,
     } = deps;
 
     if (typeof completeNodeFromBackground !== 'function') {
@@ -178,111 +185,133 @@
       return result || {};
     }
 
-    async function executeClaudeOpenOfficialPage(state = {}) {
-      const nodeId = cleanString(state?.nodeId) || 'claude-open-official-page';
-      const currentState = await getExecutionState(state);
-      try {
-        const tabId = await ensureClaudeRegisterTab(currentState, { openIfMissing: true });
-        await activateTab(tabId);
-        await persistState({
-          claudeRegisterTabId: tabId,
-          claudePageUrl: CLAUDE_OFFICIAL_URL,
-          ...buildClaudeRuntimePatch({
-            session: {
-              registerTabId: tabId,
-              startedAt: Date.now(),
-              pageUrl: CLAUDE_OFFICIAL_URL,
-              lastError: '',
-            },
-          }),
-        });
-        await ensureContentReady(tabId);
-        const result = await sendClaudeCommand(nodeId, {}, {
-          step: 1,
-          timeoutMs: DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
-          logMessage: '\u6b65\u9aa4 1\uff1a\u6b63\u5728\u6253\u5f00 Claude \u5b98\u7f51...',
-        });
-        await log('\u6b65\u9aa4 1\uff1a\u5df2\u6253\u5f00 Claude \u5b98\u7f51\u3002', 'ok', nodeId);
-        await completeNode(nodeId, {
-          claudeRegisterTabId: tabId,
-          claudePageState: result.state || 'claude_page',
-          claudePageUrl: result.url || CLAUDE_OFFICIAL_URL,
-          ...buildClaudeRuntimePatch({
-            session: {
-              registerTabId: tabId,
-              startedAt: Date.now(),
-              pageState: result.state || 'claude_page',
-              pageUrl: result.url || CLAUDE_OFFICIAL_URL,
-              lastError: '',
-            },
-            register: {
-              status: 'official_page_opened',
-            },
-          }),
-        });
-      } catch (error) {
-        const message = getErrorMessage(error);
-        await persistState(buildClaudeRuntimePatch({
-          session: { lastError: message },
-          register: { status: 'error' },
-        }));
-        await log(`\u6b65\u9aa4 1\uff1a${message}`, 'error', nodeId);
-        throw error;
-      }
+    function shouldClearClaudeCookie(cookie = {}) {
+      const domain = cleanString(cookie.domain).replace(/^\.+/, '').toLowerCase();
+      return CLAUDE_COOKIE_CLEAR_DOMAINS.some((target) => (
+        domain === target || domain.endsWith(`.${target}`)
+      ));
     }
 
-    async function executeClaudeSubmitEmail(state = {}) {
-      const nodeId = cleanString(state?.nodeId) || 'claude-submit-email';
+    function buildCookieRemovalUrl(cookie = {}) {
+      const host = cleanString(cookie.domain).replace(/^\.+/, '').toLowerCase();
+      const path = cleanString(cookie.path) || '/';
+      return `https://${host}${path.startsWith('/') ? path : `/${path}`}`;
+    }
+
+    async function clearClaudeCookiesBeforeStep1() {
+      const nodeId = 'claude-open-official-page';
+      if (!chrome?.cookies?.getAll || !chrome.cookies?.remove) {
+        await log('步骤 1：当前浏览器不支持 cookies API，跳过 Claude Cookie 清理。', 'warn', nodeId);
+        return;
+      }
+
+      const stores = chrome.cookies.getAllCookieStores
+        ? await chrome.cookies.getAllCookieStores()
+        : [{ id: undefined }];
+      let removedCount = 0;
+      const seen = new Set();
+
+      for (const store of stores) {
+        const storeId = store?.id;
+        const cookies = await chrome.cookies.getAll(storeId ? { storeId } : {}).catch(() => []);
+        for (const cookie of cookies || []) {
+          if (!shouldClearClaudeCookie(cookie)) {
+            continue;
+          }
+          const key = [
+            cookie.storeId || storeId || '',
+            cookie.domain || '',
+            cookie.path || '',
+            cookie.name || '',
+            cookie.partitionKey ? JSON.stringify(cookie.partitionKey) : '',
+          ].join('|');
+          if (seen.has(key)) {
+            continue;
+          }
+          seen.add(key);
+          try {
+            const details = {
+              url: buildCookieRemovalUrl(cookie),
+              name: cookie.name,
+            };
+            if (cookie.storeId) {
+              details.storeId = cookie.storeId;
+            }
+            if (cookie.partitionKey) {
+              details.partitionKey = cookie.partitionKey;
+            }
+            const removed = await chrome.cookies.remove(details);
+            if (removed) {
+              removedCount += 1;
+            }
+          } catch (error) {
+            console.warn('[MultiPage:claude-register] remove cookie failed', {
+              domain: cookie?.domain,
+              name: cookie?.name,
+              message: getErrorMessage(error),
+            });
+          }
+        }
+      }
+      await log(`步骤 1：已清理 Claude/Anthropic Cookie ${removedCount} 个。`, removedCount ? 'ok' : 'info', nodeId);
+    }
+
+    async function readClaudeSessionKeyFromChrome() {
+      if (!chrome?.cookies?.get && !chrome?.cookies?.getAll) {
+        return '';
+      }
+
+      if (chrome?.cookies?.get) {
+        const candidates = [
+          { url: 'https://claude.ai/', name: 'sessionKey' },
+          { url: 'https://www.claude.ai/', name: 'sessionKey' },
+        ];
+        for (const details of candidates) {
+          const cookie = await chrome.cookies.get(details).catch(() => null);
+          const value = cleanString(cookie?.value);
+          if (value) {
+            return value;
+          }
+        }
+      }
+
+      const cookies = chrome?.cookies?.getAll
+        ? await chrome.cookies.getAll({}).catch(() => [])
+        : [];
+      const match = (cookies || []).find((cookie) => (
+        cleanString(cookie?.name) === 'sessionKey'
+        && cleanString(cookie?.value)
+        && shouldClearClaudeCookie(cookie)
+      ));
+      return cleanString(match?.value);
+    }
+
+    function resolveClaudeFullName(currentState = {}) {
+      const existing = cleanString(currentState.claudeFullName || currentState.fullName || currentState.name);
+      if (existing) {
+        return existing;
+      }
+      const generated = typeof generateRandomName === 'function' ? generateRandomName() : null;
+      return cleanString(generated?.fullName || generated?.name)
+        || [cleanString(generated?.firstName), cleanString(generated?.lastName)].filter(Boolean).join(' ')
+        || 'Alex Morgan';
+    }
+
+    async function executeClaudeContentStep(state = {}, options = {}) {
+      const nodeId = cleanString(state?.nodeId) || options.nodeId;
       const currentState = await getExecutionState(state);
       try {
-        if (typeof fetchSmsBowerMailAddress !== 'function') {
-          throw new Error('Claude \u90ae\u7bb1\u6ce8\u518c\u7f3a\u5c11 SMSBower TempMail \u83b7\u53d6\u80fd\u529b\u3002');
-        }
         const tabId = await ensureClaudeRegisterTab(currentState, { openIfMissing: false });
         await activateTab(tabId);
         await ensureContentReady(tabId);
-        const smsBowerState = {
-          ...currentState,
-          mailProvider: SMSBOWER_MAIL_PROVIDER,
-        };
-        const email = cleanString(await fetchSmsBowerMailAddress(smsBowerState, {
-          generateNew: true,
-          preserveAccountIdentity: true,
-        })).toLowerCase();
-        if (!email) {
-          throw new Error('SMSBower TempMail \u672a\u8fd4\u56de\u53ef\u7528\u90ae\u7bb1\u3002');
-        }
-        const requestedAt = Date.now();
-        await persistState({
-          claudeEmail: email,
-          claudeLoginLinkRequestedAt: requestedAt,
-          mailProvider: SMSBOWER_MAIL_PROVIDER,
-          email,
-          accountIdentifierType: 'email',
-          accountIdentifier: email,
-          ...buildClaudeRuntimePatch({
-            register: {
-              email,
-              loginLinkRequestedAt: requestedAt,
-              status: 'email_submitting',
-            },
-          }),
+        const result = await sendClaudeCommand(options.command || nodeId, options.payload || {}, {
+          step: options.step,
+          timeoutMs: options.timeoutMs || DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
+          logMessage: options.logMessage || '',
         });
-        const result = await sendClaudeCommand(nodeId, { email }, {
-          step: 2,
-          timeoutMs: DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
-          logMessage: '\u6b65\u9aa4 2\uff1a\u6b63\u5728\u586b\u5199 Claude \u6ce8\u518c\u90ae\u7bb1...',
-        });
-        await log(`\u6b65\u9aa4 2\uff1a\u5df2\u63d0\u4ea4 Claude \u90ae\u7bb1 ${email}\u3002`, 'ok', nodeId);
-        await completeNode(nodeId, {
-          claudeEmail: email,
-          claudeLoginLinkRequestedAt: requestedAt,
+        const patch = {
           claudePageState: result.state || '',
           claudePageUrl: result.url || '',
-          mailProvider: SMSBOWER_MAIL_PROVIDER,
-          email,
-          accountIdentifierType: 'email',
-          accountIdentifier: email,
           ...buildClaudeRuntimePatch({
             session: {
               pageState: result.state || '',
@@ -290,9 +319,50 @@
               lastError: '',
             },
             register: {
-              email,
-              loginLinkRequestedAt: requestedAt,
-              status: 'login_link_requested',
+              status: options.status || result.state || 'advanced',
+              ...(options.registerPatch || {}),
+            },
+          }),
+          ...(options.patch || {}),
+        };
+        await log(options.successMessage || `步骤 ${options.step}：Claude 页面步骤已完成。`, 'ok', nodeId);
+        await completeNode(nodeId, patch);
+      } catch (error) {
+        const message = getErrorMessage(error);
+        await persistState(buildClaudeRuntimePatch({
+          session: { lastError: message },
+          register: { status: 'error' },
+        }));
+        await log(`步骤 ${options.step}：${message}`, 'error', nodeId);
+        throw error;
+      }
+    }
+
+    async function executeClaudeOpenOfficialPage(state = {}) {
+      const nodeId = cleanString(state?.nodeId) || 'claude-open-official-page';
+      const currentState = await getExecutionState(state);
+      try {
+        await clearClaudeCookiesBeforeStep1();
+        const tabId = await ensureClaudeRegisterTab(currentState, { openIfMissing: true });
+        await activateTab(tabId);
+        if (chrome?.tabs?.update) {
+          await chrome.tabs.update(tabId, { url: CLAUDE_OFFICIAL_URL, active: true });
+        }
+        await log('步骤 1：已清理 Claude Cookie 并打开 Claude 官网。', 'ok', nodeId);
+        await completeNode(nodeId, {
+          claudeRegisterTabId: tabId,
+          claudePageState: 'opening',
+          claudePageUrl: CLAUDE_OFFICIAL_URL,
+          ...buildClaudeRuntimePatch({
+            session: {
+              registerTabId: tabId,
+              startedAt: Date.now(),
+              pageState: 'opening',
+              pageUrl: CLAUDE_OFFICIAL_URL,
+              lastError: '',
+            },
+            register: {
+              status: 'official_page_opening',
             },
           }),
         });
@@ -302,33 +372,166 @@
           session: { lastError: message },
           register: { status: 'error' },
         }));
-        await log(`\u6b65\u9aa4 2\uff1a${message}`, 'error', nodeId);
+        await log(`步骤 1：${message}`, 'error', nodeId);
         throw error;
       }
     }
 
-    async function executeClaudeFetchLoginLink(state = {}) {
-      const nodeId = cleanString(state?.nodeId) || 'claude-fetch-login-link';
+    async function executeClaudeWaitOfficialPageLoaded(state = {}) {
+      const nodeId = cleanString(state?.nodeId) || 'claude-wait-official-page';
+      const currentState = await getExecutionState(state);
+      try {
+        const tabId = await ensureClaudeRegisterTab(currentState, { openIfMissing: false });
+        await activateTab(tabId);
+        await ensureContentReady(tabId, {
+          timeoutMs: DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
+          stableMs: 1800,
+          initialDelayMs: 800,
+          logMessage: '步骤 2：正在等待 Claude 页面加载完成...',
+        });
+        const result = await sendClaudeCommand(nodeId, {}, {
+          step: 2,
+          timeoutMs: DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
+          logMessage: '步骤 2：正在确认 Claude 注册页可用...',
+        });
+        await log('步骤 2：Claude 页面已加载完成。', 'ok', nodeId);
+        await completeNode(nodeId, {
+          claudeRegisterTabId: tabId,
+          claudePageState: result.state || 'email_entry',
+          claudePageUrl: result.url || CLAUDE_OFFICIAL_URL,
+          ...buildClaudeRuntimePatch({
+            session: {
+              registerTabId: tabId,
+              pageState: result.state || 'email_entry',
+              pageUrl: result.url || CLAUDE_OFFICIAL_URL,
+              lastError: '',
+            },
+            register: {
+              status: 'official_page_ready',
+            },
+          }),
+        });
+      } catch (error) {
+        const message = getErrorMessage(error);
+        await persistState(buildClaudeRuntimePatch({
+          session: { lastError: message },
+          register: { status: 'error' },
+        }));
+        await log(`步骤 2：${message}`, 'error', nodeId);
+        throw error;
+      }
+    }
+
+    async function executeClaudeFillEmail(state = {}) {
+      const nodeId = cleanString(state?.nodeId) || 'claude-fill-email';
+      const currentState = await getExecutionState(state);
+      try {
+        if (typeof fetchSmsBowerMailAddress !== 'function') {
+          throw new Error('Claude 邮箱注册缺少 SMSBower TempMail 获取能力。');
+        }
+        const tabId = await ensureClaudeRegisterTab(currentState, { openIfMissing: false });
+        await activateTab(tabId);
+        await ensureContentReady(tabId);
+        const smsBowerState = {
+          ...currentState,
+          mailProvider: SMSBOWER_MAIL_PROVIDER,
+          smsbowerMailServiceCode: CLAUDE_SMSBOWER_MAIL_SERVICE_CODE,
+        };
+        const email = cleanString(await fetchSmsBowerMailAddress(smsBowerState, {
+          generateNew: true,
+          preserveAccountIdentity: true,
+        })).toLowerCase();
+        if (!email) {
+          throw new Error('SMSBower TempMail 未返回可用邮箱。');
+        }
+        const requestedAt = Date.now();
+        await persistState({
+          claudeEmail: email,
+          claudeLoginLinkRequestedAt: requestedAt,
+          mailProvider: SMSBOWER_MAIL_PROVIDER,
+          smsbowerMailServiceCode: CLAUDE_SMSBOWER_MAIL_SERVICE_CODE,
+          email,
+          accountIdentifierType: 'email',
+          accountIdentifier: email,
+          ...buildClaudeRuntimePatch({
+            register: {
+              email,
+              loginLinkRequestedAt: requestedAt,
+              status: 'email_filling',
+            },
+          }),
+        });
+        const result = await sendClaudeCommand(nodeId, { email }, {
+          step: 3,
+          timeoutMs: DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
+          logMessage: '步骤 3：正在填写 Claude 注册邮箱...',
+        });
+        await log(`步骤 3：已获取 acz 服务 Claude 邮箱并填写 ${email}。`, 'ok', nodeId);
+        await completeNode(nodeId, {
+          claudeEmail: email,
+          claudeLoginLinkRequestedAt: requestedAt,
+          claudePageState: result.state || 'email_filled',
+          claudePageUrl: result.url || '',
+          mailProvider: SMSBOWER_MAIL_PROVIDER,
+          smsbowerMailServiceCode: CLAUDE_SMSBOWER_MAIL_SERVICE_CODE,
+          email,
+          accountIdentifierType: 'email',
+          accountIdentifier: email,
+          ...buildClaudeRuntimePatch({
+            session: {
+              pageState: result.state || 'email_filled',
+              pageUrl: result.url || '',
+              lastError: '',
+            },
+            register: {
+              email,
+              loginLinkRequestedAt: requestedAt,
+              status: 'email_filled',
+            },
+          }),
+        });
+      } catch (error) {
+        const message = getErrorMessage(error);
+        await persistState(buildClaudeRuntimePatch({
+          session: { lastError: message },
+          register: { status: 'error' },
+        }));
+        await log(`步骤 3：${message}`, 'error', nodeId);
+        throw error;
+      }
+    }
+
+    async function executeClaudeSubmitEmailAndFetchLink(state = {}) {
+      const nodeId = cleanString(state?.nodeId) || 'claude-submit-email-and-fetch-link';
       const currentState = await getExecutionState(state);
       try {
         if (typeof pollSmsBowerMailLink !== 'function') {
-          throw new Error('Claude \u90ae\u7bb1\u767b\u5f55\u94fe\u63a5\u7f3a\u5c11 SMSBower TempMail \u8f6e\u8be2\u80fd\u529b\u3002');
+          throw new Error('Claude 邮箱登录链接缺少 SMSBower TempMail 轮询能力。');
         }
         const runtimeState = readClaudeRuntime(currentState);
         const email = cleanString(currentState.claudeEmail || runtimeState.register?.email || currentState.email).toLowerCase();
         if (!email) {
-          throw new Error('\u7f3a\u5c11 Claude \u6ce8\u518c\u90ae\u7bb1\uff0c\u8bf7\u5148\u6267\u884c\u6b65\u9aa4 2\u3002');
+          throw new Error('缺少 Claude 注册邮箱，请先执行步骤 3。');
         }
-        const pollResult = await pollSmsBowerMailLink(3, {
+        const tabId = await ensureClaudeRegisterTab(currentState, { openIfMissing: false });
+        await activateTab(tabId);
+        await ensureContentReady(tabId);
+        await sendClaudeCommand('claude-submit-email', { email }, {
+          step: 4,
+          timeoutMs: DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
+          logMessage: '步骤 4：正在提交 Claude 邮箱...',
+        });
+        const pollResult = await pollSmsBowerMailLink(4, {
           ...currentState,
           mailProvider: SMSBOWER_MAIL_PROVIDER,
+          smsbowerMailServiceCode: CLAUDE_SMSBOWER_MAIL_SERVICE_CODE,
           activeFlowId: 'claude',
           flowId: 'claude',
-          visibleStep: 3,
+          visibleStep: 4,
           claudeEmail: email,
           email,
         }, {
-          actionLabel: 'Claude \u90ae\u7bb1\u767b\u5f55\u94fe\u63a5',
+          actionLabel: 'Claude 邮箱登录链接',
           hostFilters: ['claude.ai', 'anthropic.com'],
           intervalMs: DEFAULT_CLAUDE_LINK_INTERVAL_MS,
           maxAttempts: DEFAULT_CLAUDE_LINK_MAX_ATTEMPTS,
@@ -336,9 +539,9 @@
         });
         const loginLink = cleanString(pollResult?.link || pollResult?.url);
         if (!loginLink) {
-          throw new Error('\u672a\u80fd\u83b7\u53d6\u5230 Claude \u90ae\u7bb1\u767b\u5f55\u94fe\u63a5\u3002');
+          throw new Error('未能获取到 Claude 邮箱登录链接。');
         }
-        await log('\u6b65\u9aa4 3\uff1a\u5df2\u83b7\u53d6 Claude \u90ae\u7bb1\u767b\u5f55\u94fe\u63a5\u3002', 'ok', nodeId);
+        await log('步骤 4：已提交邮箱并获取 Claude 邮箱登录链接。', 'ok', nodeId);
         await completeNode(nodeId, {
           claudeEmail: email,
           claudeLoginLink: loginLink,
@@ -361,7 +564,7 @@
           session: { lastError: message },
           register: { status: 'error' },
         }));
-        await log(`\u6b65\u9aa4 3\uff1a${message}`, 'error', nodeId);
+        await log(`步骤 4：${message}`, 'error', nodeId);
         throw error;
       }
     }
@@ -373,7 +576,7 @@
         const runtimeState = readClaudeRuntime(currentState);
         const loginLink = cleanString(currentState.claudeLoginLink || runtimeState.register?.loginLink);
         if (!loginLink) {
-          throw new Error('\u7f3a\u5c11 Claude \u90ae\u7bb1\u767b\u5f55\u94fe\u63a5\uff0c\u8bf7\u5148\u6267\u884c\u6b65\u9aa4 3\u3002');
+          throw new Error('缺少 Claude 邮箱登录链接，请先执行步骤 4。');
         }
         let parsed = null;
         try {
@@ -409,12 +612,11 @@
         } else {
           await sleepWithStop(1500);
         }
-        await log('\u6b65\u9aa4 4\uff1a\u5df2\u6253\u5f00 Claude \u90ae\u7bb1\u767b\u5f55\u94fe\u63a5\u3002', 'ok', nodeId);
+        await log('步骤 5：已打开 Claude 邮箱魔法链接。', 'ok', nodeId);
         await completeNode(nodeId, {
           claudeRegisterTabId: tabId,
           claudeLoginLink: loginLink,
           claudePageUrl: loginLink,
-          claudeCompletedAt: Date.now(),
           ...buildClaudeRuntimePatch({
             session: {
               registerTabId: tabId,
@@ -425,7 +627,6 @@
             register: {
               loginLink,
               status: 'login_link_opened',
-              completedAt: Date.now(),
             },
           }),
         });
@@ -435,22 +636,150 @@
           session: { lastError: message },
           register: { status: 'error' },
         }));
-        await log(`\u6b65\u9aa4 4\uff1a${message}`, 'error', nodeId);
+        await log(`步骤 5：${message}`, 'error', nodeId);
+        throw error;
+      }
+    }
+
+    async function executeClaudeCreateAccount(state = {}) {
+      return executeClaudeContentStep(state, {
+        nodeId: 'claude-create-account',
+        step: 6,
+        status: 'account_created',
+        successMessage: '步骤 6：已勾选同意并确认新建 Claude 账号。',
+      });
+    }
+
+    async function executeClaudeSelectFreePlan(state = {}) {
+      return executeClaudeContentStep(state, {
+        nodeId: 'claude-select-free-plan',
+        step: 7,
+        status: 'free_plan_selected',
+        successMessage: '步骤 7：已选择 Claude 免费账号。',
+      });
+    }
+
+    async function executeClaudeSkipOnboarding(state = {}) {
+      return executeClaudeContentStep(state, {
+        nodeId: 'claude-skip-onboarding',
+        step: 8,
+        status: 'onboarding_skipped',
+        successMessage: '步骤 8：已点击 Skip 跳过。',
+      });
+    }
+
+    async function executeClaudeContinueOnboarding(state = {}) {
+      return executeClaudeContentStep(state, {
+        nodeId: 'claude-continue-onboarding',
+        step: 9,
+        status: 'onboarding_continued',
+        successMessage: '步骤 9：已继续 Claude 引导流程。',
+      });
+    }
+
+    async function executeClaudeSubmitRandomName(state = {}) {
+      const nodeId = cleanString(state?.nodeId) || 'claude-submit-random-name';
+      const currentState = await getExecutionState(state);
+      const fullName = resolveClaudeFullName(currentState);
+      return executeClaudeContentStep(state, {
+        nodeId,
+        step: 10,
+        payload: { fullName },
+        patch: {
+          claudeFullName: fullName,
+        },
+        registerPatch: { fullName },
+        status: 'name_submitted',
+        successMessage: `步骤 10：已填写随机英文名 ${fullName} 并继续。`,
+      });
+    }
+
+    async function executeClaudeSetUpLater(state = {}) {
+      return executeClaudeContentStep(state, {
+        nodeId: 'claude-set-up-later',
+        step: 11,
+        status: 'setup_later_selected',
+        successMessage: '步骤 11：已选择 Set up later。',
+      });
+    }
+
+    async function executeClaudeExtractSessionKey(state = {}) {
+      const nodeId = cleanString(state?.nodeId) || 'claude-extract-session-key';
+      const currentState = await getExecutionState(state);
+      try {
+        const tabId = await ensureClaudeRegisterTab(currentState, { openIfMissing: false });
+        await activateTab(tabId);
+        await sleepWithStop(2000);
+        let sessionKey = await readClaudeSessionKeyFromChrome();
+        if (!sessionKey) {
+          await ensureContentReady(tabId);
+          sessionKey = await readClaudeSessionKeyFromChrome();
+        }
+        if (!sessionKey) {
+          throw new Error('未找到 Claude sessionKey Cookie。');
+        }
+        const completedAt = Date.now();
+        const completionPatch = {
+          claudeSessionKey: sessionKey,
+          claudeSessionKeys: [sessionKey],
+          claudeSessionKeyExtractedAt: completedAt,
+          claudeCompletedAt: completedAt,
+          claudeRegisterStatus: 'completed',
+          ...buildClaudeRuntimePatch({
+            register: {
+              status: 'completed',
+              completedAt,
+            },
+            session: {
+              currentSessionKey: sessionKey,
+              sessionKeys: [sessionKey],
+              extractedAt: completedAt,
+              lastError: '',
+            },
+          }),
+        };
+        if (typeof markCurrentRegistrationAccountUsed === 'function') {
+          await markCurrentRegistrationAccountUsed({
+            ...currentState,
+            ...completionPatch,
+          }, {
+            logPrefix: 'Claude 注册成功',
+            level: 'ok',
+          });
+        }
+        await log('步骤 12：已获取 Claude sessionKey。', 'ok', nodeId);
+        await completeNode(nodeId, completionPatch);
+      } catch (error) {
+        const message = getErrorMessage(error);
+        await persistState(buildClaudeRuntimePatch({
+          session: { lastError: message },
+          register: { status: 'error' },
+        }));
+        await log(`步骤 12：${message}`, 'error', nodeId);
         throw error;
       }
     }
 
     return {
-      executeClaudeFetchLoginLink,
+      executeClaudeCreateAccount,
+      executeClaudeExtractSessionKey,
+      executeClaudeFillEmail,
       executeClaudeOpenLoginLink,
       executeClaudeOpenOfficialPage,
-      executeClaudeSubmitEmail,
+      executeClaudeSelectFreePlan,
+      executeClaudeSetUpLater,
+      executeClaudeSkipOnboarding,
+      executeClaudeSubmitEmailAndFetchLink,
+      executeClaudeSubmitRandomName,
+      executeClaudeContinueOnboarding,
+      executeClaudeWaitOfficialPageLoaded,
     };
   }
 
   return {
     CLAUDE_OFFICIAL_URL,
     CLAUDE_REGISTER_PAGE_SOURCE_ID,
+    CLAUDE_SMSBOWER_MAIL_SERVICE_CODE,
     DEFAULT_CLAUDE_LINK_INTERVAL_MS,
     DEFAULT_CLAUDE_LINK_MAX_ATTEMPTS,
     DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
