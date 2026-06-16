@@ -12914,6 +12914,9 @@ async function appendAndBroadcastAccountRunRecord(status, stateOverride = null, 
     return null;
   }
 
+  if (typeof setState === 'function') {
+    await setState({ flowStartTime: null, runStartedAt: null });
+  }
   await broadcastAccountRunHistoryUpdate();
   return record;
 }

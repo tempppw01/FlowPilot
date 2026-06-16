@@ -385,6 +385,7 @@
       }
 
       const finishedAt = String(record.finishedAt || record.recordedAt || '').trim();
+      const startedAt = String(record.startedAt || record.runStartedAt || record.flowStartedAt || '').trim();
       const failureDetail = finalStatus === 'failed' || finalStatus === 'stopped'
         ? String(record.failureDetail || record.reason || '').trim()
         : '';
@@ -416,6 +417,7 @@
         phoneNumber,
         password,
         finalStatus,
+        ...(startedAt ? { startedAt } : {}),
         finishedAt,
         retryCount,
         failureLabel: resolveFailureLabel(finalStatus, rawFailureLabel, computedFailureLabel, failedNodeId, failedStep),
@@ -498,6 +500,11 @@
       const autoRunContext = source === 'auto' ? buildAutoRunContextFromState(state) : null;
       const retryCount = source === 'auto' ? getRetryCountFromState(state) : 0;
       const finishedAt = new Date().toISOString();
+      const startedAtValue = state.runStartedAt || state.flowStartTime || state.flowStartedAt || '';
+      const startedAtTimestamp = Number(startedAtValue);
+      const startedAt = Number.isFinite(startedAtTimestamp) && startedAtTimestamp > 0
+        ? new Date(startedAtTimestamp).toISOString()
+        : String(startedAtValue || '').trim();
       const flowId = String(state.flowId || state.activeFlowId || '').trim();
       const runId = String(state.runId || state.activeRunId || '').trim();
 
@@ -511,6 +518,7 @@
         phoneNumber,
         password,
         finalStatus,
+        ...(startedAt ? { startedAt } : {}),
         finishedAt,
         retryCount,
         failureLabel: buildFailureLabel(finalStatus, failedNodeId, failedStep, failureDetail, state),

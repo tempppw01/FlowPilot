@@ -96,12 +96,15 @@
     <div id="settings-card" class="data-card">
       <div class="data-row" id="row-flow-selector">
         <span class="data-label">注册</span>
-        <select id="select-flow" class="data-select" aria-label="Flow 选择">
-          <option value="openai" selected>Codex / OpenAI</option>
-          <option value="kiro">Kiro</option>
-          <option value="grok">Grok</option>
-          <option value="claude">Claude</option>
-        </select>
+        <div class="data-inline">
+          <select id="select-flow" class="data-select" aria-label="Flow 选择">
+            <option value="openai" selected>Codex / OpenAI</option>
+            <option value="kiro">Kiro</option>
+            <option value="grok">Grok</option>
+            <option value="claude">Claude</option>
+          </select>
+          <div id="flow-execution-stats" class="data-metrics-label" title="当前 Flow 的注册成功率与平均耗时"></div>
+        </div>
       </div>
       <div class="data-row" id="row-source-selector">
         <span id="label-source-selector" class="data-label">来源</span>

@@ -41,6 +41,8 @@ test('sidepanel html exposes flow selector and kiro source fields', () => {
   const visibleHtml = stripHtmlComments(sidepanelHtml);
   [
     'id="select-flow"',
+    'id="flow-execution-stats"',
+    'class="data-metrics-label"',
     '<option value="grok">Grok</option>',
     '<option value="claude">Claude</option>',
     'id="label-source-selector"',

@@ -36,6 +36,7 @@ const btnIgnoreRelease = document.getElementById('btn-ignore-release');
 const btnOpenRelease = document.getElementById('btn-open-release');
 const settingsCard = document.getElementById('settings-card');
 const selectFlow = document.getElementById('select-flow');
+const flowExecutionStats = document.getElementById('flow-execution-stats');
 const accountContributionPanel = document.getElementById('contribution-mode-panel');
 const accountContributionBadge = document.getElementById('contribution-mode-badge');
 const accountContributionText = document.getElementById('contribution-mode-text');
@@ -3500,6 +3501,125 @@ function shouldOfferAutoModeChoice(state = latestState) {
   return hasSavedProgress(state) && getFirstUnfinishedStep(state) !== null;
 }
 
+function normalizeMetricTimestamp(value) {
+  if (value === null || value === undefined || value === '') {
+    return 0;
+  }
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue) && numericValue > 0) {
+    return numericValue;
+  }
+  const parsed = Date.parse(String(value || ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getRecordFinalStatusForMetrics(record = {}) {
+  const normalized = String(record.finalStatus || record.status || '').trim().toLowerCase();
+  if (normalized === 'success') {
+    return 'success';
+  }
+  if (normalized === 'failed' || /_failed$/.test(normalized) || /^node:[^:]+:failed$/.test(normalized)) {
+    return 'failed';
+  }
+  if (normalized === 'stopped' || /_stopped$/.test(normalized) || /^node:[^:]+:stopped$/.test(normalized)) {
+    return 'stopped';
+  }
+  return '';
+}
+
+function formatMetricDuration(durationMs) {
+  const totalSeconds = Math.max(0, Math.round(Number(durationMs) / 1000));
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
+    return '--';
+  }
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h${String(minutes).padStart(2, '0')}m`;
+  }
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function summarizeFlowExecutionStats(state = latestState) {
+  const activeFlowId = typeof normalizeFlowId === 'function'
+    ? normalizeFlowId(state?.activeFlowId || state?.flowId || selectFlow?.value || DEFAULT_ACTIVE_FLOW_ID, DEFAULT_ACTIVE_FLOW_ID)
+    : (String(state?.activeFlowId || state?.flowId || selectFlow?.value || DEFAULT_ACTIVE_FLOW_ID).trim().toLowerCase() || DEFAULT_ACTIVE_FLOW_ID);
+  const records = Array.isArray(state?.accountRunHistory) ? state.accountRunHistory : [];
+  const flowRecords = records.filter((record) => {
+    if (!record || typeof record !== 'object') {
+      return false;
+    }
+    const recordFlowId = String(record.flowId || record.activeFlowId || '').trim().toLowerCase();
+    return recordFlowId ? recordFlowId === activeFlowId : activeFlowId === DEFAULT_ACTIVE_FLOW_ID;
+  });
+  let total = 0;
+  let success = 0;
+  let failed = 0;
+  let stopped = 0;
+  const successDurations = [];
+
+  flowRecords.forEach((record) => {
+    const status = getRecordFinalStatusForMetrics(record);
+    if (!status) {
+      return;
+    }
+    total += 1;
+    if (status === 'success') {
+      success += 1;
+      const startedAt = normalizeMetricTimestamp(record.startedAt || record.runStartedAt || record.flowStartedAt);
+      const finishedAt = normalizeMetricTimestamp(record.finishedAt || record.recordedAt || record.completedAt);
+      if (startedAt > 0 && finishedAt > startedAt) {
+        successDurations.push(finishedAt - startedAt);
+      }
+    } else if (status === 'failed') {
+      failed += 1;
+    } else if (status === 'stopped') {
+      stopped += 1;
+    }
+  });
+
+  const successRate = total > 0 ? Math.round((success / total) * 100) : null;
+  const avgDurationMs = successDurations.length
+    ? successDurations.reduce((sum, duration) => sum + duration, 0) / successDurations.length
+    : null;
+  return {
+    activeFlowId,
+    total,
+    success,
+    failed,
+    stopped,
+    successRate,
+    avgDurationMs,
+    durationSampleCount: successDurations.length,
+  };
+}
+
+function renderFlowExecutionStats(state = latestState) {
+  if (!flowExecutionStats) {
+    return;
+  }
+  const summary = summarizeFlowExecutionStats(state);
+  flowExecutionStats.classList.remove('is-empty', 'is-good', 'is-warning', 'is-poor');
+  if (!summary.total) {
+    flowExecutionStats.textContent = '成功率 -- · 平均 --';
+    flowExecutionStats.title = '暂无注册记录，完成一次注册后开始统计成功率和平均耗时。';
+    flowExecutionStats.classList.add('is-empty');
+    return;
+  }
+  const rateText = `${summary.successRate}%`;
+  const avgText = summary.avgDurationMs ? formatMetricDuration(summary.avgDurationMs) : '--';
+  flowExecutionStats.textContent = `成功率 ${rateText} · 平均 ${avgText}`;
+  flowExecutionStats.title = `当前注册链路：成功 ${summary.success}/${summary.total}，失败 ${summary.failed}，停止 ${summary.stopped}；平均耗时样本 ${summary.durationSampleCount} 条。`;
+  if (summary.successRate >= 80) {
+    flowExecutionStats.classList.add('is-good');
+  } else if (summary.successRate >= 50) {
+    flowExecutionStats.classList.add('is-warning');
+  } else {
+    flowExecutionStats.classList.add('is-poor');
+  }
+}
+
 function syncLatestState(nextState) {
   const normalizedNextState = {
     ...(nextState || {}),
@@ -3543,6 +3663,9 @@ function syncLatestState(nextState) {
     : selectedTargetId;
 
   renderAccountRecords(latestState);
+  if (typeof renderFlowExecutionStats === 'function') {
+    renderFlowExecutionStats(latestState);
+  }
 }
 
 function isContributionModeActiveForFlow(state = latestState, flowId = undefined) {

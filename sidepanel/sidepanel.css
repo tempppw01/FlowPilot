@@ -2128,6 +2128,35 @@ header {
   text-align-last: center;
 }
 
+.data-metrics-label {
+  flex: 0 1 168px;
+  min-width: 128px;
+  max-width: 190px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.data-metrics-label.is-empty {
+  color: var(--text-muted);
+}
+
+.data-metrics-label.is-good {
+  color: var(--green);
+}
+
+.data-metrics-label.is-warning {
+  color: var(--amber);
+}
+
+.data-metrics-label.is-poor {
+  color: var(--red);
+}
+
 .data-input[readonly] {
   color: var(--text-secondary);
   background: var(--bg-surface);
