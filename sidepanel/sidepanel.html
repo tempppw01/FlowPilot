@@ -836,36 +836,42 @@
           <span class="section-label">SMSBower TempMail</span>
           <span class="data-value">自动购买临时邮箱并通过 API 获取验证码</span>
         </div>
-      </div>
-      <div class="data-row">
-        <span class="data-label">API Key</span>
-        <div class="input-with-icon">
-          <input type="password" id="input-smsbower-mail-api-key" class="data-input data-input-with-icon mono"
-            placeholder="请输入 SMSBower API Key" />
-          <button id="btn-toggle-smsbower-mail-api-key" class="input-icon-btn" type="button"
-            data-password-toggle="input-smsbower-mail-api-key" data-show-label="显示 SMSBower API Key"
-            data-hide-label="隐藏 SMSBower API Key" aria-label="显示 SMSBower API Key" title="显示 SMSBower API Key"></button>
+        <div class="section-mini-actions">
+          <button id="btn-toggle-smsbower-mail-section" class="btn btn-ghost btn-xs" type="button"
+            aria-expanded="true" aria-controls="smsbower-mail-settings-body">收起设置</button>
         </div>
       </div>
-      <div class="data-row">
-        <span class="data-label">Base URL</span>
-        <input type="text" id="input-smsbower-mail-base-url" class="data-input mono"
-          placeholder="https://smsbower.page/api/mail" />
-      </div>
-      <div class="data-row">
-        <span class="data-label">服务代码</span>
-        <input type="text" id="input-smsbower-mail-service-code" class="data-input mono"
-          placeholder="dr" />
-      </div>
-      <div class="data-row">
-        <span class="data-label">域名</span>
-        <input type="text" id="input-smsbower-mail-domain" class="data-input mono"
-          placeholder="gmail.com" />
-      </div>
-      <div class="data-row">
-        <span class="data-label">最高价格</span>
-        <input type="text" id="input-smsbower-mail-max-price" class="data-input mono"
-          placeholder="0.134" />
+      <div id="smsbower-mail-settings-body" class="smsbower-mail-settings-body">
+        <div class="data-row">
+          <span class="data-label">API Key</span>
+          <div class="input-with-icon">
+            <input type="password" id="input-smsbower-mail-api-key" class="data-input data-input-with-icon mono"
+              placeholder="请输入 SMSBower API Key" />
+            <button id="btn-toggle-smsbower-mail-api-key" class="input-icon-btn" type="button"
+              data-password-toggle="input-smsbower-mail-api-key" data-show-label="显示 SMSBower API Key"
+              data-hide-label="隐藏 SMSBower API Key" aria-label="显示 SMSBower API Key" title="显示 SMSBower API Key"></button>
+          </div>
+        </div>
+        <div class="data-row">
+          <span class="data-label">Base URL</span>
+          <input type="text" id="input-smsbower-mail-base-url" class="data-input mono"
+            placeholder="https://smsbower.page/api/mail" />
+        </div>
+        <div class="data-row">
+          <span class="data-label">服务代码</span>
+          <input type="text" id="input-smsbower-mail-service-code" class="data-input mono"
+            placeholder="dr" />
+        </div>
+        <div class="data-row">
+          <span class="data-label">域名</span>
+          <input type="text" id="input-smsbower-mail-domain" class="data-input mono"
+            placeholder="gmail.com" />
+        </div>
+        <div class="data-row">
+          <span class="data-label">最高价格</span>
+          <input type="text" id="input-smsbower-mail-max-price" class="data-input mono"
+            placeholder="0.134" />
+        </div>
       </div>
     </div>
     <div id="hotmail-section" class="data-card hotmail-card" style="display:none;">

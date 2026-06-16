@@ -883,6 +883,11 @@ header {
   justify-content: flex-end;
 }
 
+.smsbower-mail-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .data-row {
   display: flex;
   align-items: center;

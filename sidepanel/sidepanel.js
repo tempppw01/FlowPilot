@@ -319,6 +319,8 @@ const yydsMailSection = document.getElementById('yyds-mail-section');
 const inputYydsMailApiKey = document.getElementById('input-yyds-mail-api-key');
 const inputYydsMailBaseUrl = document.getElementById('input-yyds-mail-base-url');
 const smsbowerMailSection = document.getElementById('smsbower-mail-section');
+const btnToggleSmsBowerMailSection = document.getElementById('btn-toggle-smsbower-mail-section');
+const smsbowerMailSettingsBody = document.getElementById('smsbower-mail-settings-body');
 const inputSmsBowerMailApiKey = document.getElementById('input-smsbower-mail-api-key');
 const inputSmsBowerMailBaseUrl = document.getElementById('input-smsbower-mail-base-url');
 const inputSmsBowerMailServiceCode = document.getElementById('input-smsbower-mail-service-code');
@@ -1205,6 +1207,55 @@ function initPhoneVerificationSectionExpandedState() {
   }
 }
 
+const SMSBOWER_MAIL_SECTION_EXPANDED_STORAGE_KEY = 'multipage-smsbower-mail-section-expanded';
+let smsbowerMailSectionExpanded = true;
+
+function readSmsBowerMailSectionExpanded() {
+  try {
+    return window.localStorage?.getItem(SMSBOWER_MAIL_SECTION_EXPANDED_STORAGE_KEY) !== '0';
+  } catch (err) {
+    return true;
+  }
+}
+
+function persistSmsBowerMailSectionExpanded(expanded) {
+  try {
+    if (expanded) {
+      window.localStorage?.removeItem(SMSBOWER_MAIL_SECTION_EXPANDED_STORAGE_KEY);
+    } else {
+      window.localStorage?.setItem(SMSBOWER_MAIL_SECTION_EXPANDED_STORAGE_KEY, '0');
+    }
+  } catch (err) {
+    // Ignore storage errors; the current in-memory state is enough for this session.
+  }
+}
+
+function updateSmsBowerMailSectionCollapseUI() {
+  const expanded = Boolean(smsbowerMailSectionExpanded);
+  if (smsbowerMailSettingsBody) {
+    smsbowerMailSettingsBody.hidden = !expanded;
+  }
+  if (btnToggleSmsBowerMailSection) {
+    btnToggleSmsBowerMailSection.textContent = expanded ? '收起设置' : '展开设置';
+    btnToggleSmsBowerMailSection.title = expanded ? '收起 SMSBower TempMail 设置' : '展开 SMSBower TempMail 设置';
+    btnToggleSmsBowerMailSection.setAttribute('aria-expanded', String(expanded));
+  }
+}
+
+function setSmsBowerMailSectionExpanded(expanded) {
+  smsbowerMailSectionExpanded = Boolean(expanded);
+  persistSmsBowerMailSectionExpanded(smsbowerMailSectionExpanded);
+  updateSmsBowerMailSectionCollapseUI();
+}
+
+function toggleSmsBowerMailSectionExpanded() {
+  setSmsBowerMailSectionExpanded(!smsbowerMailSectionExpanded);
+}
+
+function initSmsBowerMailSectionExpandedState() {
+  smsbowerMailSectionExpanded = readSmsBowerMailSectionExpanded();
+  updateSmsBowerMailSectionCollapseUI();
+}
 function getStepDefinitionsForMode(plusModeEnabled = false, options = {}) {
   const defaultFlowId = typeof DEFAULT_ACTIVE_FLOW_ID !== 'undefined' ? DEFAULT_ACTIVE_FLOW_ID : 'openai';
   const defaultMethod = typeof DEFAULT_PLUS_PAYMENT_METHOD !== 'undefined' ? DEFAULT_PLUS_PAYMENT_METHOD : 'paypal';
@@ -14901,6 +14952,7 @@ function updateMailProviderUI() {
   }
   if (typeof smsbowerMailSection !== 'undefined' && smsbowerMailSection) {
     smsbowerMailSection.style.display = showSmsBowerMailSettings ? '' : 'none';
+    updateSmsBowerMailSectionCollapseUI();
   }
   if (typeof rowCloudMailBaseUrl !== 'undefined' && rowCloudMailBaseUrl) rowCloudMailBaseUrl.style.display = showCloudMailSettings ? '' : 'none';
   if (typeof rowCloudMailAdminEmail !== 'undefined' && rowCloudMailAdminEmail) rowCloudMailAdminEmail.style.display = showCloudMailSettings ? '' : 'none';
@@ -16801,6 +16853,9 @@ btnTogglePassword.addEventListener('click', () => {
   syncPasswordToggleLabel();
 });
 
+btnToggleSmsBowerMailSection?.addEventListener('click', () => {
+  toggleSmsBowerMailSectionExpanded();
+});
 btnToggleVpsPassword.addEventListener('click', () => {
   inputVpsPassword.type = inputVpsPassword.type === 'password' ? 'text' : 'password';
   syncVpsPasswordToggleLabel();
@@ -20820,6 +20875,9 @@ if (typeof initIpProxySectionExpandedState === 'function') {
 }
 if (typeof initPhoneVerificationSectionExpandedState === 'function') {
   initPhoneVerificationSectionExpandedState();
+}
+if (typeof initSmsBowerMailSectionExpandedState === 'function') {
+  initSmsBowerMailSectionExpandedState();
 }
 applyPhoneSmsProviderOrderSelection([], { ensureDefault: false, syncProvider: false });
 updateSettingsSaveState();
