@@ -3541,6 +3541,89 @@ function formatMetricDuration(durationMs) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+function normalizeFlowStepMetricEntry(value = {}) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const successCount = Math.max(0, Math.floor(Number(source.successCount ?? source.success ?? source.completed) || 0));
+  const failureCount = Math.max(0, Math.floor(Number(source.failureCount ?? source.failed ?? source.failures) || 0));
+  const stoppedCount = Math.max(0, Math.floor(Number(source.stoppedCount ?? source.stopped) || 0));
+  const skippedCount = Math.max(0, Math.floor(Number(source.skippedCount ?? source.skipped) || 0));
+  const durationSampleCount = Math.max(0, Math.floor(Number(source.durationSampleCount ?? source.samples) || 0));
+  const totalSuccessDurationMs = Math.max(0, Math.floor(Number(source.totalSuccessDurationMs ?? source.totalDurationMs) || 0));
+  const total = successCount + failureCount + stoppedCount;
+  const avgDurationMs = Number(source.avgSuccessDurationMs) > 0
+    ? Number(source.avgSuccessDurationMs)
+    : (durationSampleCount > 0 && totalSuccessDurationMs > 0 ? totalSuccessDurationMs / durationSampleCount : null);
+  const successRate = total > 0
+    ? Math.round((successCount / total) * 100)
+    : null;
+  return {
+    successCount,
+    failureCount,
+    stoppedCount,
+    skippedCount,
+    durationSampleCount,
+    totalSuccessDurationMs,
+    total,
+    successRate,
+    avgDurationMs,
+  };
+}
+
+function getFlowStepMetricSummary(nodeId, state = latestState) {
+  const normalizedNodeId = String(nodeId || '').trim();
+  const metricsByNode = state?.flowStepMetricsByNode && typeof state.flowStepMetricsByNode === 'object'
+    ? state.flowStepMetricsByNode
+    : {};
+  return normalizeFlowStepMetricEntry(metricsByNode[normalizedNodeId]);
+}
+
+function formatFlowStepMetricText(nodeId, state = latestState) {
+  const summary = getFlowStepMetricSummary(nodeId, state);
+  const rateText = summary.total > 0 ? `${summary.successRate}%` : '--';
+  const avgText = summary.avgDurationMs ? formatMetricDuration(summary.avgDurationMs) : '--';
+  return `${rateText} · ${avgText}`;
+}
+
+function formatFlowStepMetricTitle(node = {}, state = latestState) {
+  const nodeId = String(node?.nodeId || '').trim();
+  const summary = getFlowStepMetricSummary(nodeId, state);
+  const title = String(node?.title || nodeId || '流程步骤').trim();
+  if (!summary.total && !summary.skippedCount) {
+    return `${title}\n暂无该步骤统计；完成/失败/停止后会记录成功率和平均耗时。`;
+  }
+  const avgText = summary.avgDurationMs ? formatMetricDuration(summary.avgDurationMs) : '--';
+  return `${title}\n成功率：${summary.total > 0 ? `${summary.successRate}%` : '--'}（成功 ${summary.successCount}/${summary.total || 0}，失败 ${summary.failureCount}，停止 ${summary.stoppedCount}）\n平均耗时：${avgText}（成功样本 ${summary.durationSampleCount} 条）${summary.skippedCount ? `\n跳过次数：${summary.skippedCount}` : ''}`;
+}
+
+function renderFlowStepMetrics(state = latestState) {
+  document.querySelectorAll('.step-metrics').forEach((el) => {
+    const nodeId = String(el.dataset.nodeId || '').trim();
+    if (!nodeId) {
+      el.textContent = '-- · --';
+      el.className = 'step-metrics is-empty';
+      return;
+    }
+    const summary = getFlowStepMetricSummary(nodeId, state);
+    el.textContent = formatFlowStepMetricText(nodeId, state);
+    el.className = 'step-metrics';
+    if (!summary.total) {
+      el.classList.add('is-empty');
+    } else if (summary.successRate >= 80) {
+      el.classList.add('is-good');
+    } else if (summary.successRate >= 50) {
+      el.classList.add('is-warning');
+    } else {
+      el.classList.add('is-poor');
+    }
+    const node = workflowNodes.find((item) => String(item.nodeId || '').trim() === nodeId) || { nodeId };
+    el.title = formatFlowStepMetricTitle(node, state);
+    const button = el.closest('.step-btn');
+    if (button) {
+      button.title = el.title;
+    }
+  });
+}
+
 function summarizeFlowExecutionStats(state = latestState) {
   const activeFlowId = typeof normalizeFlowId === 'function'
     ? normalizeFlowId(state?.activeFlowId || state?.flowId || selectFlow?.value || DEFAULT_ACTIVE_FLOW_ID, DEFAULT_ACTIVE_FLOW_ID)
@@ -12867,10 +12950,14 @@ function renderStepsList() {
   stepsList.innerHTML = workflowNodes.map((node) => {
     const step = getStepIdByNodeIdForCurrentMode(node.nodeId);
     const nodeId = String(node.nodeId || '').trim();
+    const metricTitle = formatFlowStepMetricTitle(node, latestState);
     return `
     <div class="step-row" data-step="${step}" data-node-id="${escapeHtml(nodeId)}" data-step-key="${escapeHtml(node.executeKey || nodeId)}">
       <div class="step-indicator" data-step="${step}" data-node-id="${escapeHtml(nodeId)}"><span class="step-num">${step || node.displayOrder || ''}</span></div>
-      <button class="step-btn" data-step="${step}" data-node-id="${escapeHtml(nodeId)}" data-step-key="${escapeHtml(node.executeKey || nodeId)}">${escapeHtml(node.title)}</button>
+      <button class="step-btn" data-step="${step}" data-node-id="${escapeHtml(nodeId)}" data-step-key="${escapeHtml(node.executeKey || nodeId)}" title="${escapeHtml(metricTitle)}">
+        <span class="step-title">${escapeHtml(node.title)}</span>
+        <span class="step-metrics" data-node-id="${escapeHtml(nodeId)}">${escapeHtml(formatFlowStepMetricText(nodeId, latestState))}</span>
+      </button>
       <span class="step-status" data-step="${step}" data-node-id="${escapeHtml(nodeId)}"></span>
     </div>
   `;
@@ -12882,6 +12969,7 @@ function renderStepsList() {
 
   initializeManualStepActions();
   applyStepExecutionRangeState(latestState);
+  renderFlowStepMetrics(latestState);
   renderStepStatuses();
   updateButtonStates();
 }
@@ -15812,6 +15900,9 @@ function renderSingleStepStatus(step, status) {
 }
 
 function renderStepStatuses(state = latestState) {
+  if (typeof renderFlowStepMetrics === 'function') {
+    renderFlowStepMetrics(state);
+  }
   if (typeof getNodeStatuses === 'function' && typeof NODE_IDS !== 'undefined') {
     const statuses = getNodeStatuses(state);
     for (const nodeId of NODE_IDS) {
@@ -20560,6 +20651,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
         renderStepStatuses(latestState);
         updateButtonStates();
+      }
+      if (
+        message.payload.flowStepMetricsByNode !== undefined
+        || message.payload.nodeRunStartedAt !== undefined
+      ) {
+        renderFlowStepMetrics(latestState);
       }
       if (message.payload.autoRunFallbackThreadIntervalMinutes !== undefined) {
         inputAutoSkipFailuresThreadIntervalMinutes.value = String(

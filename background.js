@@ -850,6 +850,7 @@ const PERSISTENT_ALIAS_STATE_KEYS = [
   'icloudAliasCacheAt',
 ];
 const ACCOUNT_RUN_HISTORY_STORAGE_KEY = 'accountRunHistory';
+const FLOW_STEP_METRICS_STORAGE_KEY = 'flowStepMetricsByNode';
 const SIGNUP_METHOD_EMAIL = 'email';
 const SIGNUP_METHOD_PHONE = 'phone';
 const DEFAULT_SIGNUP_METHOD = SIGNUP_METHOD_EMAIL;
@@ -1624,6 +1625,8 @@ const DEFAULT_STATE = {
   activeRunId: '',
   currentNodeId: '',
   nodeStatuses: { ...DEFAULT_NODE_STATUSES },
+  nodeRunStartedAt: {},
+  flowStepMetricsByNode: {}, // 节点耗时/成功率统计，实际持久化在 chrome.storage.local。
   runtimeState: runtimeStateHelpers?.buildDefaultRuntimeState?.() || null,
   ...CONTRIBUTION_RUNTIME_DEFAULTS,
   accounts: [], // 已生成账号记录：{ email, password, createdAt }。
@@ -4489,18 +4492,197 @@ async function getPersistedAliasState() {
   }
 }
 
+function normalizeFlowStepMetricEntry(value = {}) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const successCount = Math.max(0, Math.floor(Number(source.successCount ?? source.success ?? source.completed) || 0));
+  const failureCount = Math.max(0, Math.floor(Number(source.failureCount ?? source.failed ?? source.failures) || 0));
+  const stoppedCount = Math.max(0, Math.floor(Number(source.stoppedCount ?? source.stopped) || 0));
+  const skippedCount = Math.max(0, Math.floor(Number(source.skippedCount ?? source.skipped) || 0));
+  const durationSampleCount = Math.max(0, Math.floor(Number(source.durationSampleCount ?? source.samples) || 0));
+  const totalSuccessDurationMs = Math.max(0, Math.floor(Number(source.totalSuccessDurationMs ?? source.totalDurationMs) || 0));
+  const lastDurationMs = Math.max(0, Math.floor(Number(source.lastDurationMs) || 0));
+  const lastStartedAt = Math.max(0, Math.floor(Number(source.lastStartedAt) || 0));
+  const lastFinishedAt = Math.max(0, Math.floor(Number(source.lastFinishedAt) || 0));
+  const lastSuccessAt = Math.max(0, Math.floor(Number(source.lastSuccessAt) || 0));
+  const lastFailureAt = Math.max(0, Math.floor(Number(source.lastFailureAt) || 0));
+  const lastStoppedAt = Math.max(0, Math.floor(Number(source.lastStoppedAt) || 0));
+  const total = successCount + failureCount + stoppedCount;
+  const normalized = {
+    successCount,
+    failureCount,
+    stoppedCount,
+    skippedCount,
+    durationSampleCount,
+    totalSuccessDurationMs,
+  };
+  if (lastDurationMs) normalized.lastDurationMs = lastDurationMs;
+  if (lastStartedAt) normalized.lastStartedAt = lastStartedAt;
+  if (lastFinishedAt) normalized.lastFinishedAt = lastFinishedAt;
+  if (lastSuccessAt) normalized.lastSuccessAt = lastSuccessAt;
+  if (lastFailureAt) normalized.lastFailureAt = lastFailureAt;
+  if (lastStoppedAt) normalized.lastStoppedAt = lastStoppedAt;
+  if (total > 0) normalized.total = total;
+  if (durationSampleCount > 0 && totalSuccessDurationMs > 0) {
+    normalized.avgSuccessDurationMs = Math.round(totalSuccessDurationMs / durationSampleCount);
+  }
+  if (total > 0) {
+    normalized.successRate = Math.round((successCount / total) * 100);
+  }
+  return normalized;
+}
+
+function normalizeFlowStepMetricsByNode(value = {}) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return Object.entries(source).reduce((metrics, [nodeId, entry]) => {
+    const normalizedNodeId = String(nodeId || '').trim();
+    if (!normalizedNodeId) {
+      return metrics;
+    }
+    const normalizedEntry = normalizeFlowStepMetricEntry(entry);
+    if (
+      normalizedEntry.successCount > 0
+      || normalizedEntry.failureCount > 0
+      || normalizedEntry.stoppedCount > 0
+      || normalizedEntry.skippedCount > 0
+      || normalizedEntry.durationSampleCount > 0
+    ) {
+      metrics[normalizedNodeId] = normalizedEntry;
+    }
+    return metrics;
+  }, {});
+}
+
+async function getPersistedFlowStepMetricsByNode() {
+  try {
+    const stored = await chrome.storage.local.get(FLOW_STEP_METRICS_STORAGE_KEY);
+    return normalizeFlowStepMetricsByNode(stored?.[FLOW_STEP_METRICS_STORAGE_KEY]);
+  } catch (err) {
+    console.warn(LOG_PREFIX, 'Failed to read flow step metrics:', err?.message || err);
+    return {};
+  }
+}
+
+async function setPersistedFlowStepMetricsByNode(metrics) {
+  const normalizedMetrics = normalizeFlowStepMetricsByNode(metrics);
+  await chrome.storage.local.set({
+    [FLOW_STEP_METRICS_STORAGE_KEY]: normalizedMetrics,
+  });
+  return normalizedMetrics;
+}
+
+function normalizeFlowStepMetricStatus(status = '') {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'success') return 'success';
+  if (normalized === 'completed') return 'success';
+  if (normalized === 'failed') return 'failed';
+  if (normalized === 'stopped') return 'stopped';
+  if (normalized === 'skipped' || normalized === 'manual_completed') return 'skipped';
+  return '';
+}
+
+function buildNextFlowStepMetricEntry(previous = {}, status = '', timing = {}) {
+  const normalizedStatus = normalizeFlowStepMetricStatus(status);
+  const base = normalizeFlowStepMetricEntry(previous);
+  if (!normalizedStatus) {
+    return base;
+  }
+  const startedAt = Math.max(0, Math.floor(Number(timing.startedAt) || 0));
+  const finishedAt = Math.max(0, Math.floor(Number(timing.finishedAt) || Date.now()));
+  const durationMs = startedAt > 0 && finishedAt > startedAt ? finishedAt - startedAt : 0;
+  const next = {
+    ...base,
+    lastFinishedAt: finishedAt,
+    ...(startedAt ? { lastStartedAt: startedAt } : {}),
+    ...(durationMs ? { lastDurationMs: durationMs } : {}),
+  };
+
+  if (normalizedStatus === 'success') {
+    next.successCount = base.successCount + 1;
+    if (durationMs > 0) {
+      next.durationSampleCount = base.durationSampleCount + 1;
+      next.totalSuccessDurationMs = base.totalSuccessDurationMs + durationMs;
+    }
+    next.lastSuccessAt = finishedAt;
+  } else if (normalizedStatus === 'failed') {
+    next.failureCount = base.failureCount + 1;
+    next.lastFailureAt = finishedAt;
+  } else if (normalizedStatus === 'stopped') {
+    next.stoppedCount = base.stoppedCount + 1;
+    next.lastStoppedAt = finishedAt;
+  } else if (normalizedStatus === 'skipped') {
+    next.skippedCount = base.skippedCount + 1;
+  }
+
+  return normalizeFlowStepMetricEntry(next);
+}
+
+async function recordFlowStepMetricForNode(nodeId, status, options = {}) {
+  const normalizedNodeId = String(nodeId || '').trim();
+  const normalizedStatus = normalizeFlowStepMetricStatus(status);
+  if (!normalizedNodeId || !normalizedStatus) {
+    return null;
+  }
+  const state = options.state || await getState();
+  const finishedAt = Math.max(0, Math.floor(Number(options.finishedAt) || Date.now()));
+  const startedAt = Math.max(0, Math.floor(
+    Number(options.startedAt)
+    || Number(state?.nodeRunStartedAt?.[normalizedNodeId])
+    || 0
+  ));
+  const currentMetrics = await getPersistedFlowStepMetricsByNode();
+  const nextMetrics = normalizeFlowStepMetricsByNode({
+    ...currentMetrics,
+    [normalizedNodeId]: buildNextFlowStepMetricEntry(currentMetrics[normalizedNodeId], status, {
+      startedAt,
+      finishedAt,
+    }),
+  });
+  let latestNodeRunStartedAt = { ...(state?.nodeRunStartedAt || {}) };
+  try {
+    const latestRuntime = await chrome.storage.session.get('nodeRunStartedAt');
+    latestNodeRunStartedAt = {
+      ...latestNodeRunStartedAt,
+      ...(latestRuntime?.nodeRunStartedAt || {}),
+    };
+  } catch (err) {
+    console.warn(LOG_PREFIX, 'Failed to read latest node start times:', err?.message || err);
+  }
+  const nextNodeRunStartedAt = { ...latestNodeRunStartedAt };
+  const latestStartedAt = Math.max(0, Math.floor(Number(nextNodeRunStartedAt[normalizedNodeId]) || 0));
+  if (!startedAt || !latestStartedAt || latestStartedAt === startedAt) {
+    delete nextNodeRunStartedAt[normalizedNodeId];
+  }
+  await Promise.all([
+    setPersistedFlowStepMetricsByNode(nextMetrics),
+    setState({ nodeRunStartedAt: nextNodeRunStartedAt }),
+  ]);
+  broadcastDataUpdate({
+    flowStepMetricsByNode: nextMetrics,
+    nodeRunStartedAt: nextNodeRunStartedAt,
+  });
+  return nextMetrics[normalizedNodeId] || null;
+}
+
+function scheduleFlowStepMetricRecord(nodeId, status, options = {}) {
+  recordFlowStepMetricForNode(nodeId, status, options).catch((error) => {
+    console.warn(LOG_PREFIX, 'Failed to record flow step metric:', error?.message || error);
+  });
+}
+
 async function getState() {
-  const [state, persistedSettings, persistedAliasState, accountRunHistory] = await Promise.all([
+  const [state, persistedSettings, persistedAliasState, accountRunHistory, flowStepMetricsByNode] = await Promise.all([
     chrome.storage.session.get(null),
     getPersistedSettings(),
     getPersistedAliasState(),
     accountRunHistoryHelpers?.getPersistedAccountRunHistory?.() || [],
+    getPersistedFlowStepMetricsByNode(),
   ]);
   return buildStateViewWithRuntimeState({
     ...DEFAULT_STATE,
     ...persistedSettings,
     ...persistedAliasState,
     ...state,
+    flowStepMetricsByNode,
     accountRunHistory,
   });
 }
@@ -9911,16 +10093,32 @@ async function setNodeStatus(nodeId, status) {
     throw new Error('setNodeStatus 缺少 nodeId。');
   }
   const state = await getState();
+  const previousStatus = String(state.nodeStatuses?.[normalizedNodeId] || '').trim();
   const nodeStatuses = { ...(state.nodeStatuses || {}) };
   nodeStatuses[normalizedNodeId] = status;
-  await setState({
+  const updates = {
     nodeStatuses,
     currentNodeId: normalizedNodeId,
-  });
+  };
+  if (status === 'running') {
+    updates.nodeRunStartedAt = {
+      ...(state.nodeRunStartedAt || {}),
+      [normalizedNodeId]: Date.now(),
+    };
+  }
+  await setState(updates);
   chrome.runtime.sendMessage({
     type: 'NODE_STATUS_CHANGED',
     payload: { nodeId: normalizedNodeId, status },
   }).catch(() => { });
+  if (normalizeFlowStepMetricStatus(status) && previousStatus !== status) {
+    scheduleFlowStepMetricRecord(normalizedNodeId, status, {
+      state: {
+        ...state,
+        ...updates,
+      },
+    });
+  }
   if (isStepDoneStatus(status) && typeof appendSuccessfulAccountRunRecordIfFlowComplete === 'function') {
     appendSuccessfulAccountRunRecordIfFlowComplete({
       ...state,
