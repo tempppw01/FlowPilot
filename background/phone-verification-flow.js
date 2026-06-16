@@ -245,15 +245,27 @@
                 : stats
             ) || 0)
           ));
+          const failureCount = Math.max(0, Math.floor(Number(
+            stats && typeof stats === 'object' && !Array.isArray(stats)
+              ? (stats.failureCount ?? stats.failed ?? stats.failures)
+              : 0
+          ) || 0));
           const lastSuccessAt = Math.max(0, Math.floor(Number(
             stats && typeof stats === 'object' && !Array.isArray(stats)
               ? stats.lastSuccessAt
               : 0
           ) || 0));
-          if (successCount > 0 || lastSuccessAt > 0) {
+          const lastFailureAt = Math.max(0, Math.floor(Number(
+            stats && typeof stats === 'object' && !Array.isArray(stats)
+              ? stats.lastFailureAt
+              : 0
+          ) || 0));
+          if (successCount > 0 || failureCount > 0 || lastSuccessAt > 0 || lastFailureAt > 0) {
             normalizedProviderStats[providerKey] = {
               successCount,
+              ...(failureCount ? { failureCount } : {}),
               ...(lastSuccessAt ? { lastSuccessAt } : {}),
+              ...(lastFailureAt ? { lastFailureAt } : {}),
             };
           }
         });
@@ -1292,7 +1304,52 @@
             SMSBOWER_SUCCESS_WEIGHT_MAX_COUNT,
             Math.max(0, Math.floor(Number(previous.successCount ?? previous.success ?? previous.count) || 0)) + 1
           ),
+          ...(previous.failureCount ? { failureCount: Math.max(0, Math.floor(Number(previous.failureCount) || 0)) } : {}),
           lastSuccessAt: now,
+          ...(previous.lastFailureAt ? { lastFailureAt: Math.max(0, Math.floor(Number(previous.lastFailureAt) || 0)) } : {}),
+        };
+      });
+      nextWeights[countryKey] = countryWeights;
+      await setPhoneRuntimeState({
+        [SMSBOWER_SUCCESS_WEIGHT_STATE_KEY]: normalizeSmsBowerSuccessWeights(nextWeights),
+      });
+    }
+
+    async function recordSmsBowerActivationFailure(state = {}, activation = {}, reason = '') {
+      const normalizedActivation = normalizeActivation(activation);
+      if (!normalizedActivation || normalizedActivation.provider !== PHONE_SMS_PROVIDER_SMSBOWER) {
+        return;
+      }
+      const countryKey = String(
+        getProviderActivationCountryKey(state, normalizedActivation)
+        || normalizedActivation.countryId
+        || ''
+      ).trim();
+      if (!/^\d+$/.test(countryKey)) {
+        return;
+      }
+      const providerIds = normalizeSmsBowerProviderIdList(normalizedActivation.providerIds);
+      if (!providerIds.length) {
+        return;
+      }
+      const latestState = typeof getState === 'function'
+        ? await getState().catch(() => state)
+        : state;
+      const nextWeights = normalizeSmsBowerSuccessWeights(
+        latestState?.[SMSBOWER_SUCCESS_WEIGHT_STATE_KEY]
+      );
+      const now = Date.now();
+      const countryWeights = {
+        ...(nextWeights[countryKey] || {}),
+      };
+      providerIds.forEach((providerId) => {
+        const previous = countryWeights[providerId] || {};
+        countryWeights[providerId] = {
+          successCount: Math.max(0, Math.floor(Number(previous.successCount ?? previous.success ?? previous.count) || 0)),
+          failureCount: Math.max(0, Math.floor(Number(previous.failureCount ?? previous.failed ?? previous.failures) || 0)) + 1,
+          ...(previous.lastSuccessAt ? { lastSuccessAt: Math.max(0, Math.floor(Number(previous.lastSuccessAt) || 0)) } : {}),
+          lastFailureAt: now,
+          ...(reason ? { lastFailureReason: String(reason || '').trim().slice(0, 80) } : {}),
         };
       });
       nextWeights[countryKey] = countryWeights;
@@ -4773,6 +4830,7 @@
           ) {
             await setCountryPriceFloorFromActivation(activation, replaceReason || 'sms_timeout');
             await markSmsBowerProviderIdTimeout(activation, replaceReason || 'sms_timeout');
+            await recordSmsBowerActivationFailure(state, activation, replaceReason || 'sms_timeout');
             await markCountrySmsFailure(activation.countryId, replaceReason || 'sms_timeout', activation.provider);
           }
           await markPreferredActivationExhausted(replaceReason || 'replace_number');

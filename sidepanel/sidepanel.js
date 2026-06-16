@@ -3666,6 +3666,9 @@ function syncLatestState(nextState) {
   if (typeof renderFlowExecutionStats === 'function') {
     renderFlowExecutionStats(latestState);
   }
+  if (typeof renderSmsBowerCountryOrderMenu === 'function') {
+    renderSmsBowerCountryOrderMenu();
+  }
 }
 
 function isContributionModeActiveForFlow(state = latestState, flowId = undefined) {
@@ -7236,6 +7239,67 @@ function getSmsBowerCountryPriceById(id) {
   return String(getSmsBowerCountryItemById(countryId)?.price || '').trim();
 }
 
+function normalizeSmsBowerLineStatEntry(value = {}) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return {
+    successCount: Math.max(0, Math.floor(Number(source.successCount ?? source.success ?? source.count) || 0)),
+    failureCount: Math.max(0, Math.floor(Number(source.failureCount ?? source.failed ?? source.failures) || 0)),
+    lastSuccessAt: Math.max(0, Math.floor(Number(source.lastSuccessAt) || 0)),
+    lastFailureAt: Math.max(0, Math.floor(Number(source.lastFailureAt) || 0)),
+  };
+}
+
+function getSmsBowerCountrySuccessStats(countryId, state = latestState) {
+  const countryKey = String(normalizeSmsBowerCountryIdValue(countryId, 0) || '').trim();
+  const countryStats = countryKey && state?.smsbowerSuccessWeightsByCountry && typeof state.smsbowerSuccessWeightsByCountry === 'object'
+    ? state.smsbowerSuccessWeightsByCountry[countryKey]
+    : null;
+  const lineStats = [];
+  if (countryStats && typeof countryStats === 'object' && !Array.isArray(countryStats)) {
+    Object.entries(countryStats).forEach(([providerId, rawStats]) => {
+      const normalizedProviderId = normalizeSmsBowerProviderIdsValue(providerId);
+      if (!normalizedProviderId) {
+        return;
+      }
+      const stats = normalizeSmsBowerLineStatEntry(rawStats);
+      if (stats.successCount || stats.failureCount || stats.lastSuccessAt || stats.lastFailureAt) {
+        lineStats.push({ providerId: normalizedProviderId, ...stats });
+      }
+    });
+  }
+  const successCount = lineStats.reduce((sum, entry) => sum + entry.successCount, 0);
+  const failureCount = lineStats.reduce((sum, entry) => sum + entry.failureCount, 0);
+  const total = successCount + failureCount;
+  const successRate = total > 0 ? Math.round((successCount / total) * 100) : null;
+  const lastSuccessAt = Math.max(0, ...lineStats.map((entry) => entry.lastSuccessAt || 0));
+  const lastFailureAt = Math.max(0, ...lineStats.map((entry) => entry.lastFailureAt || 0));
+  return { successCount, failureCount, total, successRate, lastSuccessAt, lastFailureAt, lineStats };
+}
+
+function formatSmsBowerCountrySuccessStatsText(countryId, state = latestState) {
+  const stats = getSmsBowerCountrySuccessStats(countryId, state);
+  if (!stats.total) {
+    return '成功率 --';
+  }
+  return `成功率 ${stats.successRate}% ${stats.successCount}/${stats.total}`;
+}
+
+function formatSmsBowerCountrySuccessStatsTitle(countryId, state = latestState) {
+  const stats = getSmsBowerCountrySuccessStats(countryId, state);
+  if (!stats.total) {
+    return '暂无接码成功率样本';
+  }
+  const lineText = stats.lineStats
+    .sort((left, right) => (right.successCount - left.successCount) || (left.providerId.localeCompare(right.providerId)))
+    .map((entry) => {
+      const total = entry.successCount + entry.failureCount;
+      const rate = total > 0 ? Math.round((entry.successCount / total) * 100) : 0;
+      return `${entry.providerId}: ${rate}% ${entry.successCount}/${total}`;
+    })
+    .join('；');
+  return `SMSBower 接码成功率：${stats.successRate}%（${stats.successCount}/${stats.total}）${lineText ? `\n线路：${lineText}` : ''}`;
+}
+
 function getSmsBowerCountrySearchTextById(id) {
   const countryId = normalizeSmsBowerCountryIdValue(id, 0);
   if (!countryId) {
@@ -7252,6 +7316,7 @@ function getSmsBowerCountrySearchTextById(id) {
     item?.providerIds,
     countryId,
     item?.price,
+    formatSmsBowerCountrySuccessStatsText(countryId),
   ].filter(Boolean).join(' ')).trim();
 }
 
@@ -8551,16 +8616,18 @@ function renderSmsBowerCountryOrderMenu() {
     item.classList.toggle('is-active', active);
     const labelText = document.createElement('span');
     labelText.className = 'hero-sms-country-menu-item-label';
-    labelText.textContent = label;
+    labelText.textContent = `${label} · ${formatSmsBowerCountrySuccessStatsText(countryId)}`;
     const badge = document.createElement('span');
     badge.className = 'hero-sms-country-menu-item-badge';
     badge.textContent = active ? `#${orderIndex}` : '';
     item.appendChild(labelText);
     item.appendChild(badge);
+    item.title = formatSmsBowerCountrySuccessStatsTitle(countryId);
     item.dataset.searchText = String([
       option.textContent || '',
       countryId,
       getSmsBowerCountrySearchTextById(countryId),
+      formatSmsBowerCountrySuccessStatsText(countryId),
     ].filter(Boolean).join(' ')).trim();
     item.setAttribute('aria-pressed', active ? 'true' : 'false');
     item.addEventListener('click', (event) => {

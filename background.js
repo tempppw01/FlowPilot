@@ -9921,6 +9921,18 @@ async function setNodeStatus(nodeId, status) {
     type: 'NODE_STATUS_CHANGED',
     payload: { nodeId: normalizedNodeId, status },
   }).catch(() => { });
+  if (isStepDoneStatus(status) && typeof appendSuccessfulAccountRunRecordIfFlowComplete === 'function') {
+    appendSuccessfulAccountRunRecordIfFlowComplete({
+      ...state,
+      nodeStatuses,
+      currentNodeId: normalizedNodeId,
+    }, {
+      completedNodeId: normalizedNodeId,
+      completedStatus: status,
+    }).catch((error) => {
+      console.warn(LOG_PREFIX, 'Failed to append completed flow account run record:', error?.message || error);
+    });
+  }
 }
 
 function isStopError(error) {
@@ -11784,6 +11796,37 @@ async function reportCompletedNodeSideEffectError(nodeId, error) {
   await addLog(`已完成，但完成后的收尾处理失败：${message}`, 'warn', { nodeId });
 }
 
+async function appendSuccessfulAccountRunRecordIfFlowComplete(stateOverride = null, options = {}) {
+  if (!accountRunHistoryHelpers?.appendAccountRunRecord) {
+    return null;
+  }
+  const state = stateOverride || await getState();
+  if (state?.autoRunning && !options.allowAutoRunning) {
+    return null;
+  }
+  const nodeIds = typeof getExecutionAllowedNodeIdsForState === 'function'
+    ? getExecutionAllowedNodeIdsForState(state)
+    : getNodeIdsForState(state);
+  const activeNodeIds = (Array.isArray(nodeIds) ? nodeIds : []).filter(Boolean);
+  if (!activeNodeIds.length) {
+    return null;
+  }
+  const completedNodeId = String(options.completedNodeId || state?.currentNodeId || '').trim();
+  const completedStatus = String(options.completedStatus || '').trim();
+  const lastNodeId = typeof getLastNodeIdForState === 'function'
+    ? String(getLastNodeIdForState(state) || '').trim()
+    : '';
+  if (completedStatus === 'completed' && completedNodeId && lastNodeId && completedNodeId === lastNodeId) {
+    return null;
+  }
+  const statuses = normalizeStatusMapForNodes(state?.nodeStatuses || {}, state);
+  const allDone = activeNodeIds.every((nodeId) => isStepDoneStatus(statuses[nodeId]));
+  if (!allDone) {
+    return null;
+  }
+  return appendAndBroadcastAccountRunRecord('success', state);
+}
+
 async function completeNodeFromBackground(nodeId, payload = {}) {
   const normalizedNodeId = String(nodeId || '').trim();
   if (!normalizedNodeId) {
@@ -12412,12 +12455,10 @@ async function executeNode(nodeId, options = {}) {
     while (true) {
       state = await getState();
 
-      // Set flow start time on first step
-      const firstNodeIdForFlow = typeof getNodeIdsForState === 'function'
-        ? String(getNodeIdsForState(state)?.[0] || '').trim()
-        : '';
-      if (normalizedNodeId === firstNodeIdForFlow && !state.flowStartTime) {
+      // Start timing on the first executed node of this attempt, including manual mid-flow resumes.
+      if (!state.flowStartTime && typeof setState === 'function') {
         await setState({ flowStartTime: Date.now() });
+        state = await getState();
       }
 
       const activeStepRegistry = getStepRegistryForState(state);
