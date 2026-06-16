@@ -336,22 +336,17 @@ test('SMSBower random mode uses the full non-USA default pool instead of the sav
 
   const activation = await provider.requestActivation(state);
 
-  assert.equal(requests[0].searchParams.get('country'), '78');
-  assert.equal(requests[0].searchParams.get('providerIds'), '3237');
+  assert.equal(requests[0].searchParams.get('country'), '48');
+  assert.equal(requests[0].searchParams.get('providerIds'), '2442');
   assert.notEqual(requests[0].searchParams.get('country'), '187');
   assert.notEqual(requests[0].searchParams.get('country'), '52');
-  assert.equal(activation.countryId, 78);
-  assert.equal(activation.countryLabel, 'France');
+  assert.equal(activation.countryId, 48);
+  assert.equal(activation.countryLabel, 'Netherlands');
 });
 
 test('SMSBower random mode keeps Gold provider IDs before Silver and unknown lines', async () => {
   const requests = [];
-  const randomValues = [
-    ...Array(14).fill(0.999999),
-    0,
-    0.999999,
-    0.999999,
-  ];
+  const randomValues = [0.2, ...Array(17).fill(0), 0];
   const module = loadModule();
   const provider = module.createProvider({
     randomFn: () => randomValues.shift() ?? 0.999999,
@@ -380,6 +375,44 @@ test('SMSBower random mode keeps Gold provider IDs before Silver and unknown lin
   assert.notEqual(requests[0].searchParams.get('providerIds'), '2266');
   assert.equal(activation.countryId, 33);
   assert.match(activation.providerIds, /^(3243|2236|3253|3160)$/);
+});
+
+test('SMSBower random mode weights countries and provider IDs with recent successful code records', async () => {
+  const requests = [];
+  const randomValues = [0.3, ...Array(17).fill(0), 0.3];
+  const module = loadModule();
+  const provider = module.createProvider({
+    randomFn: () => randomValues.shift() ?? 0,
+    fetchImpl: async (url) => {
+      const parsedUrl = new URL(url);
+      requests.push(parsedUrl);
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return 'ACCESS_NUMBER:176302:+573001234569';
+        },
+      };
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [52, 187],
+    smsbowerProviderIds: '3170',
+    smsbowerRandomMode: true,
+    smsbowerSuccessWeightsByCountry: {
+      33: {
+        3160: { successCount: 6, lastSuccessAt: Date.now() },
+      },
+    },
+  });
+
+  assert.equal(requests[0].searchParams.get('country'), '33');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3160');
+  assert.equal(activation.countryId, 33);
+  assert.equal(activation.countryLabel, 'Colombia');
+  assert.equal(activation.providerIds, '3160');
 });
 
 test('SMSBower provider tries the next provider ID in the same country when a line has no numbers', async () => {

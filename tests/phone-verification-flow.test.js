@@ -258,6 +258,61 @@ test('phone verification helper preserves SMSBower provider in registry fallback
   assert.equal(activation.serviceCode, 'dr');
 });
 
+test('phone verification helper records SMSBower success weights after code verification succeeds', async () => {
+  const finishCalls = [];
+  const root = {
+    PhoneSmsProviderRegistry: {
+      createProvider: (providerId) => ({
+        finishActivation: async (_state, activation) => {
+          finishCalls.push({ providerId, activation });
+          return 'ACCESS_ACTIVATION';
+        },
+        normalizeActivation: (record) => record,
+        canPersistReusableActivation: () => false,
+        canPreserveActivationForFreeReuse: () => false,
+      }),
+    },
+  };
+  const registryApi = new Function('self', `${source}; return self.MultiPageBackgroundPhoneVerification;`)(root);
+  let currentState = {
+    phoneSmsProvider: 'smsbower',
+    smsbowerApiKey: 'smsbower-key',
+    smsbowerServiceCode: 'dr',
+    smsbowerCountryOrder: [33],
+    smsbowerProviderIds: '3160',
+    signupPhoneActivation: {
+      activationId: 'smsbower-success-1',
+      phoneNumber: '+573001234569',
+      provider: 'smsbower',
+      serviceCode: 'dr',
+      countryId: 33,
+      countryLabel: 'Colombia',
+      providerIds: '3160',
+      successfulUses: 0,
+      maxUses: 1,
+    },
+  };
+  const helpers = registryApi.createPhoneVerificationHelpers({
+    addLog: async () => {},
+    ensureStep8SignupPageReady: async () => {},
+    getState: async () => ({ ...currentState }),
+    sendToContentScriptResilient: async () => ({}),
+    setState: async (updates) => {
+      currentState = { ...currentState, ...updates };
+    },
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  await helpers.finalizeSignupPhoneActivationAfterSuccess(currentState);
+
+  assert.equal(finishCalls.length, 1);
+  assert.equal(finishCalls[0].providerId, 'smsbower');
+  assert.deepStrictEqual(currentState.smsbowerSuccessWeightsByCountry?.['33']?.['3160']?.successCount, 1);
+  assert.equal(typeof currentState.smsbowerSuccessWeightsByCountry?.['33']?.['3160']?.lastSuccessAt, 'number');
+  assert.equal(currentState.signupPhoneCompletedActivation.providerIds, '3160');
+});
+
 test('phone verification helper creates MaDao adapter through provider registry when available', async () => {
   const createCalls = [];
   const requests = [];

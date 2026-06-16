@@ -34,6 +34,7 @@
     const PHONE_ACTIVATION_STATE_KEY = 'currentPhoneActivation';
     const PHONE_VERIFICATION_CODE_STATE_KEY = 'currentPhoneVerificationCode';
     const SMSBOWER_PROVIDER_TIMEOUT_SKIP_STATE_KEY = 'smsbowerTimedOutProviderIdsByCountry';
+    const SMSBOWER_SUCCESS_WEIGHT_STATE_KEY = 'smsbowerSuccessWeightsByCountry';
     const REUSABLE_PHONE_ACTIVATION_STATE_KEY = 'reusablePhoneActivation';
     const REUSABLE_PHONE_ACTIVATION_POOL_STATE_KEY = 'phoneReusableActivationPool';
     const FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY = 'freeReusablePhoneActivation';
@@ -90,6 +91,9 @@
     const FREE_PHONE_REUSE_PREPARE_MAX_ROUNDS = 10;
     const PHONE_SMS_FAILURE_SKIP_THRESHOLD = 2;
     const MAX_ACTIVATION_PRICE_HINTS = 256;
+    const SMSBOWER_SUCCESS_WEIGHT_MAX_COUNT = 20;
+    const SMSBOWER_SUCCESS_WEIGHT_MAX_COUNTRIES = 32;
+    const SMSBOWER_SUCCESS_WEIGHT_MAX_LINES_PER_COUNTRY = 32;
     const HERO_SMS_COUNTRY_BY_PHONE_PREFIX = Object.freeze([
       { prefix: '84', id: 10, iso: 'VN', label: 'Vietnam' },
       { prefix: '66', id: 52, iso: 'TH', label: 'Thailand' },
@@ -215,6 +219,60 @@
         }
       });
       return normalized;
+    }
+
+    function normalizeSmsBowerSuccessWeights(value = {}) {
+      const normalized = {};
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return normalized;
+      }
+      Object.entries(value).forEach(([countryId, providerStats]) => {
+        const countryKey = String(countryId || '').trim();
+        if (!/^\d+$/.test(countryKey) || !providerStats || typeof providerStats !== 'object' || Array.isArray(providerStats)) {
+          return;
+        }
+        const normalizedProviderStats = {};
+        Object.entries(providerStats).forEach(([providerId, stats]) => {
+          const providerKey = normalizeSmsBowerProviderIdList(providerId)[0] || '';
+          if (!providerKey) {
+            return;
+          }
+          const successCount = Math.max(0, Math.min(
+            SMSBOWER_SUCCESS_WEIGHT_MAX_COUNT,
+            Math.floor(Number(
+              stats && typeof stats === 'object' && !Array.isArray(stats)
+                ? (stats.successCount ?? stats.success ?? stats.count)
+                : stats
+            ) || 0)
+          ));
+          const lastSuccessAt = Math.max(0, Math.floor(Number(
+            stats && typeof stats === 'object' && !Array.isArray(stats)
+              ? stats.lastSuccessAt
+              : 0
+          ) || 0));
+          if (successCount > 0 || lastSuccessAt > 0) {
+            normalizedProviderStats[providerKey] = {
+              successCount,
+              ...(lastSuccessAt ? { lastSuccessAt } : {}),
+            };
+          }
+        });
+        const providerEntries = Object.entries(normalizedProviderStats)
+          .sort((left, right) => Number(right[1]?.lastSuccessAt || 0) - Number(left[1]?.lastSuccessAt || 0))
+          .slice(0, SMSBOWER_SUCCESS_WEIGHT_MAX_LINES_PER_COUNTRY);
+        if (providerEntries.length) {
+          normalized[countryKey] = Object.fromEntries(providerEntries);
+        }
+      });
+      return Object.fromEntries(
+        Object.entries(normalized)
+          .sort((left, right) => {
+            const leftLatest = Math.max(...Object.values(left[1]).map((entry) => Number(entry?.lastSuccessAt || 0)));
+            const rightLatest = Math.max(...Object.values(right[1]).map((entry) => Number(entry?.lastSuccessAt || 0)));
+            return rightLatest - leftLatest;
+          })
+          .slice(0, SMSBOWER_SUCCESS_WEIGHT_MAX_COUNTRIES)
+      );
     }
 
     function buildPhoneSmsCodeKey(message = {}) {
@@ -1200,6 +1258,49 @@
       });
     }
 
+    async function recordSmsBowerActivationSuccess(state = {}, activation = {}) {
+      const normalizedActivation = normalizeActivation(activation);
+      if (!normalizedActivation || normalizedActivation.provider !== PHONE_SMS_PROVIDER_SMSBOWER) {
+        return;
+      }
+      const countryKey = String(
+        getProviderActivationCountryKey(state, normalizedActivation)
+        || normalizedActivation.countryId
+        || ''
+      ).trim();
+      if (!/^\d+$/.test(countryKey)) {
+        return;
+      }
+      const providerIds = normalizeSmsBowerProviderIdList(normalizedActivation.providerIds);
+      if (!providerIds.length) {
+        return;
+      }
+      const latestState = typeof getState === 'function'
+        ? await getState().catch(() => state)
+        : state;
+      const nextWeights = normalizeSmsBowerSuccessWeights(
+        latestState?.[SMSBOWER_SUCCESS_WEIGHT_STATE_KEY]
+      );
+      const now = Date.now();
+      const countryWeights = {
+        ...(nextWeights[countryKey] || {}),
+      };
+      providerIds.forEach((providerId) => {
+        const previous = countryWeights[providerId] || {};
+        countryWeights[providerId] = {
+          successCount: Math.min(
+            SMSBOWER_SUCCESS_WEIGHT_MAX_COUNT,
+            Math.max(0, Math.floor(Number(previous.successCount ?? previous.success ?? previous.count) || 0)) + 1
+          ),
+          lastSuccessAt: now,
+        };
+      });
+      nextWeights[countryKey] = countryWeights;
+      await setPhoneRuntimeState({
+        [SMSBOWER_SUCCESS_WEIGHT_STATE_KEY]: normalizeSmsBowerSuccessWeights(nextWeights),
+      });
+    }
+
     async function persistFreeReusableActivation(activation) {
       await setPhoneRuntimeState({
         [FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY]: normalizeFreeReusablePhoneActivation(activation),
@@ -1770,6 +1871,7 @@
         throw new Error(`${getPhoneSmsProviderLabel(getActivationProviderId(normalizedActivation, state))} 不支持完成接码订单。`);
       }
       await provider.finishActivation(scopedState, normalizedActivation);
+      await recordSmsBowerActivationSuccess(state, normalizedActivation);
     }
 
     async function cancelPhoneActivation(state = {}, activation) {

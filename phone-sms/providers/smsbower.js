@@ -88,6 +88,9 @@
     bronze: 2,
     standard: 3,
   });
+  const SUCCESS_WEIGHT_MAX_BONUS = 12;
+  const SUCCESS_WEIGHT_RECENT_BONUS = 3;
+  const SUCCESS_WEIGHT_RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
   const COUNTRY_BY_PHONE_PREFIX = Object.freeze([
     { prefix: '1', id: 187, iso: 'US', label: 'USA' },
     { prefix: '66', id: 52, iso: 'TH', label: 'Thailand' },
@@ -607,6 +610,97 @@
     return next;
   }
 
+  function normalizeSmsBowerSuccessWeights(value = {}) {
+    const normalized = {};
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return normalized;
+    }
+    Object.entries(value).forEach(([countryId, providerStats]) => {
+      const countryKey = String(countryId || '').trim();
+      if (!/^\d+$/.test(countryKey) || !providerStats || typeof providerStats !== 'object' || Array.isArray(providerStats)) {
+        return;
+      }
+      const countryStats = {};
+      Object.entries(providerStats).forEach(([providerId, stats]) => {
+        const providerKey = normalizeSmsBowerProviderIds(providerId, '');
+        if (!providerKey) {
+          return;
+        }
+        const successCount = Math.max(0, Math.floor(Number(
+          stats && typeof stats === 'object' && !Array.isArray(stats)
+            ? (stats.successCount ?? stats.success ?? stats.count)
+            : stats
+        ) || 0));
+        const lastSuccessAt = Math.max(0, Math.floor(Number(
+          stats && typeof stats === 'object' && !Array.isArray(stats)
+            ? stats.lastSuccessAt
+            : 0
+        ) || 0));
+        if (successCount > 0 || lastSuccessAt > 0) {
+          countryStats[providerKey] = {
+            successCount,
+            ...(lastSuccessAt ? { lastSuccessAt } : {}),
+          };
+        }
+      });
+      if (Object.keys(countryStats).length) {
+        normalized[countryKey] = countryStats;
+      }
+    });
+    return normalized;
+  }
+
+  function getSmsBowerSuccessWeightBonus(successStats = null, now = Date.now()) {
+    if (!successStats || typeof successStats !== 'object') {
+      return 0;
+    }
+    const successCount = Math.max(0, Math.floor(Number(successStats.successCount ?? successStats.success ?? successStats.count) || 0));
+    const lastSuccessAt = Math.max(0, Math.floor(Number(successStats.lastSuccessAt) || 0));
+    const countBonus = Math.min(SUCCESS_WEIGHT_MAX_BONUS, successCount * 2);
+    const recentBonus = lastSuccessAt > 0 && now - lastSuccessAt <= SUCCESS_WEIGHT_RECENT_WINDOW_MS
+      ? SUCCESS_WEIGHT_RECENT_BONUS
+      : 0;
+    return countBonus + recentBonus;
+  }
+
+  function getSmsBowerProviderSuccessStats(successWeights = {}, countryId, providerId) {
+    const countryKey = String(normalizeSmsBowerCountryId(countryId, 0) || '').trim();
+    const providerKey = normalizeSmsBowerProviderIds(providerId, '');
+    return countryKey && providerKey ? (successWeights?.[countryKey]?.[providerKey] || null) : null;
+  }
+
+  function getSmsBowerCountrySuccessWeightBonus(successWeights = {}, countryId, now = Date.now()) {
+    const countryKey = String(normalizeSmsBowerCountryId(countryId, 0) || '').trim();
+    const countryStats = countryKey ? successWeights?.[countryKey] : null;
+    if (!countryStats || typeof countryStats !== 'object' || Array.isArray(countryStats)) {
+      return 0;
+    }
+    return Object.values(countryStats).reduce((total, stats) => (
+      total + getSmsBowerSuccessWeightBonus(stats, now)
+    ), 0);
+  }
+
+  function weightedShuffleSmsBowerEntries(entries = [], getWeight = () => 1, randomFn = Math.random) {
+    const remaining = Array.isArray(entries) ? [...entries] : [];
+    const shuffled = [];
+    const getRandom = typeof randomFn === 'function' ? randomFn : Math.random;
+    while (remaining.length) {
+      const weights = remaining.map((entry) => Math.max(1, Number(getWeight(entry)) || 1));
+      const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+      let cursor = Math.max(0, Math.min(0.999999, Number(getRandom()) || 0)) * totalWeight;
+      let selectedIndex = 0;
+      for (let index = 0; index < weights.length; index += 1) {
+        cursor -= weights[index];
+        if (cursor < 0) {
+          selectedIndex = index;
+          break;
+        }
+      }
+      shuffled.push(remaining.splice(selectedIndex, 1)[0]);
+    }
+    return shuffled;
+  }
+
   function getSmsBowerProviderLineMetadata(countryId, providerId) {
     const normalizedCountryId = resolveSmsBowerCountryId(countryId, 0);
     const normalizedProviderId = normalizeSmsBowerProviderIds(providerId, '');
@@ -624,22 +718,30 @@
   function orderSmsBowerProviderIdAttempts(countryId, providerIds = [], options = {}) {
     const randomMode = Boolean(options?.randomMode);
     const randomFn = typeof options?.randomFn === 'function' ? options.randomFn : Math.random;
+    const successWeights = normalizeSmsBowerSuccessWeights(options?.successWeights);
+    const now = Math.max(0, Math.floor(Number(options?.now) || Date.now()));
     const entries = (Array.isArray(providerIds) ? providerIds : [])
       .map((providerId, index) => {
         const metadata = getSmsBowerProviderLineMetadata(countryId, providerId);
         const price = Number(metadata?.price);
+        const successStats = getSmsBowerProviderSuccessStats(successWeights, countryId, providerId);
         return {
           providerId,
           index,
           rankWeight: getSmsBowerProviderRankWeight(metadata?.rank),
           price: Number.isFinite(price) ? price : Number.POSITIVE_INFINITY,
+          successWeight: 1 + getSmsBowerSuccessWeightBonus(successStats, now),
         };
       });
     const rankWeights = [...new Set(entries.map((entry) => entry.rankWeight))].sort((left, right) => left - right);
     return rankWeights.flatMap((rankWeight) => {
       const rankedEntries = entries.filter((entry) => entry.rankWeight === rankWeight);
       if (randomMode && rankedEntries.length > 1) {
-        return shuffleSmsBowerItems(rankedEntries, randomFn).map((entry) => entry.providerId);
+        return weightedShuffleSmsBowerEntries(
+          rankedEntries,
+          (entry) => entry.successWeight,
+          randomFn
+        ).map((entry) => entry.providerId);
       }
       return rankedEntries
         .sort((left, right) => {
@@ -656,7 +758,7 @@
     return Boolean(state?.smsbowerRandomMode);
   }
 
-  function resolveSmsBowerRandomCountryCandidates(countryCandidates = [], randomFn = Math.random) {
+  function resolveSmsBowerRandomCountryCandidates(countryCandidates = [], randomFn = Math.random, successWeights = {}) {
     const nonUsCandidates = countryCandidates.filter(
       (entry) => normalizeSmsBowerCountryId(entry?.id, 0) !== DEFAULT_COUNTRY_ID
     );
@@ -665,7 +767,13 @@
       : DEFAULT_COUNTRY_CANDIDATES.filter(
         (entry) => normalizeSmsBowerCountryId(entry?.id, 0) !== DEFAULT_COUNTRY_ID
       );
-    return shuffleSmsBowerItems(candidates, randomFn);
+    const normalizedSuccessWeights = normalizeSmsBowerSuccessWeights(successWeights);
+    const now = Date.now();
+    return weightedShuffleSmsBowerEntries(
+      candidates,
+      (entry) => 1 + getSmsBowerCountrySuccessWeightBonus(normalizedSuccessWeights, entry?.id, now),
+      randomFn
+    );
   }
 
   function normalizeBlockedProviderIds(value = []) {
@@ -756,7 +864,11 @@
       }
     }
     if (randomMode) {
-      countryCandidates = resolveSmsBowerRandomCountryCandidates(countryCandidates, randomFn);
+      countryCandidates = resolveSmsBowerRandomCountryCandidates(
+        countryCandidates,
+        randomFn,
+        state?.smsbowerSuccessWeightsByCountry
+      );
     }
     const priceRange = resolvePriceRange(state);
     if (priceRange.invalidRange) {
@@ -789,7 +901,7 @@
         const lineAttempts = orderSmsBowerProviderIdAttempts(
           countryId,
           providerIdAttempts.filter((providerId) => !isSmsBowerProviderIdBlocked(blockedProviderIds, countryId, providerId)),
-          { randomMode, randomFn }
+          { randomMode, randomFn, successWeights: state?.smsbowerSuccessWeightsByCountry }
         );
         if (providerIdAttempts.length && !lineAttempts.length) {
           noNumbersByCountry.push(`${countryLabel} (${countryId}) all providerIds skipped after SMS timeouts: ${providerIdAttempts.join(',')}`);

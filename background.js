@@ -1565,6 +1565,7 @@ const PERSISTED_SETTING_DEFAULTS = {
   smsbowerMinPrice: '',
   smsbowerMaxPrice: DEFAULT_SMSBOWER_MAX_PRICE,
   smsbowerRandomMode: false,
+  smsbowerSuccessWeightsByCountry: {},
   phonePreferredActivation: null,
 };
 
