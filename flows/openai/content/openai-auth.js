@@ -7417,7 +7417,45 @@ function isStep5SubmitButtonClickable(button) {
   return true;
 }
 
+const STEP5_REGISTRATION_READY_PAGE_PATTERN = /你已准备就绪|你已经准备就绪|已准备就绪|you're\s+all\s+set|you\s+are\s+all\s+set|you'?re\s+ready|準備ができました|準備完了/i;
+
+function isStep5RegistrationReadyPage(rawUrl = location.href) {
+  try {
+    const parsed = new URL(String(rawUrl || '').trim());
+    const host = String(parsed.hostname || '').toLowerCase();
+    if (!['auth.openai.com', 'auth0.openai.com', 'accounts.openai.com'].includes(host)) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+
+  if (typeof document === 'undefined' || !document?.body) {
+    return false;
+  }
+
+  const pageText = typeof getPageTextSnapshot === 'function'
+    ? getPageTextSnapshot()
+    : String(document.body?.innerText || document.body?.textContent || '').replace(/\s+/g, ' ').trim();
+  if (!STEP5_REGISTRATION_READY_PAGE_PATTERN.test(pageText)) {
+    return false;
+  }
+
+  const continueButton = typeof getPrimaryContinueButton === 'function'
+    ? getPrimaryContinueButton()
+    : null;
+  if (!continueButton) {
+    return true;
+  }
+  const actionText = typeof getActionText === 'function'
+    ? getActionText(continueButton)
+    : String(continueButton?.textContent || continueButton?.value || '').trim();
+  return !actionText || /继续|continue|続行|続ける/i.test(actionText);
+}
 function isStep5ProfileStillVisible() {
+  if (isStep5RegistrationReadyPage()) {
+    return false;
+  }
   if (isStep5ProfilePageUrl()) {
     return true;
   }
@@ -7433,6 +7471,13 @@ function getStep5PostSubmitSuccessState() {
   if (isStep5CompletionChatgptUrl()) {
     return {
       state: 'logged_in_home',
+      url: location.href,
+    };
+  }
+
+  if (isStep5RegistrationReadyPage()) {
+    return {
+      state: 'registration_ready_page',
       url: location.href,
     };
   }

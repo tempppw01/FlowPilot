@@ -11979,6 +11979,48 @@ async function executeStepViaCompletionSignal(step, timeoutMs = 0) {
   return executeNodeViaCompletionSignal(nodeId, timeoutMs);
 }
 
+function isStep5RegistrationReadyPageUrl(rawUrl = '') {
+  const parsed = parseUrlSafely(rawUrl);
+  if (!parsed) {
+    return false;
+  }
+  const host = String(parsed.hostname || '').toLowerCase();
+  return ['auth.openai.com', 'auth0.openai.com', 'accounts.openai.com'].includes(host);
+}
+
+async function inspectStep5RegistrationReadyPageOnTab(tabId) {
+  if (!Number.isInteger(tabId) || !chrome?.scripting?.executeScript) {
+    return null;
+  }
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      const normalize = (value = '') => String(value || '').replace(/\s+/g, ' ').trim();
+      const text = normalize(document.body?.innerText || document.body?.textContent || '');
+      const readyPattern = /你已准备就绪|你已经准备就绪|已准备就绪|you're\s+all\s+set|you\s+are\s+all\s+set|you'?re\s+ready|準備ができました|準備完了/i;
+      const continuePattern = /继续|continue|続行|続ける/i;
+      const actions = Array.from(document.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"], a'))
+        .map((element) => normalize(element?.innerText || element?.textContent || element?.value || element?.getAttribute?.('aria-label') || element?.getAttribute?.('title') || ''))
+        .filter(Boolean);
+      return {
+        url: String(location.href || ''),
+        readyPage: readyPattern.test(text),
+        hasContinueAction: actions.some((entry) => continuePattern.test(entry)),
+        textSample: text.slice(0, 240),
+      };
+    },
+  }).catch(() => null);
+  const snapshot = Array.isArray(results) ? results.find((entry) => entry?.result)?.result : null;
+  if (!snapshot || !snapshot.readyPage) {
+    return null;
+  }
+  return {
+    successState: 'registration_ready_page',
+    url: String(snapshot.url || '').trim(),
+    readyPage: true,
+    hasContinueAction: Boolean(snapshot.hasContinueAction),
+  };
+}
 async function completeStep5FromTabUrlAfterTransportError(sourceError = null) {
   const signupTabId = await getTabId('openai-auth').catch(() => null);
   if (!Number.isInteger(signupTabId)) {
@@ -11992,23 +12034,43 @@ async function completeStep5FromTabUrlAfterTransportError(sourceError = null) {
     initialDelayMs: 300,
   }).catch(() => null);
   const currentUrl = String(tab?.url || '').trim();
-  if (!currentUrl || !isStep5CompletionChatgptUrl(currentUrl)) {
-    return null;
+  if (currentUrl && isStep5CompletionChatgptUrl(currentUrl)) {
+    const payload = {
+      profileSubmitted: true,
+      postSubmitChecked: true,
+      outcome: 'logged_in_home',
+      url: currentUrl,
+      recoveredFromTransportError: true,
+    };
+    await addLog(
+      `步骤 5 [调试] 内容脚本通信中断，但后台确认标签页已进入 chatgpt.com，按提交成功收尾。原始错误：${getErrorMessage(sourceError)}`,
+      'warn',
+      { step: 5, stepKey: 'fill-profile' }
+    );
+    return payload;
   }
 
-  const payload = {
-    profileSubmitted: true,
-    postSubmitChecked: true,
-    outcome: 'logged_in_home',
-    url: currentUrl,
-    recoveredFromTransportError: true,
-  };
-  await addLog(
-    `步骤 5 [调试] 内容脚本通信中断，但后台确认标签页已进入 chatgpt.com，按提交成功收尾。原始错误：${getErrorMessage(sourceError)}`,
-    'warn',
-    { step: 5, stepKey: 'fill-profile' }
-  );
-  return payload;
+  if (currentUrl && isStep5RegistrationReadyPageUrl(currentUrl)) {
+    const readyPageState = await inspectStep5RegistrationReadyPageOnTab(signupTabId).catch(() => null);
+    if (readyPageState?.successState === 'registration_ready_page') {
+      const readyUrl = readyPageState.url || currentUrl;
+      const payload = {
+        profileSubmitted: true,
+        postSubmitChecked: true,
+        outcome: 'registration_ready_page',
+        url: readyUrl,
+        recoveredFromTransportError: true,
+      };
+      await addLog(
+        `步骤 5 [调试] 内容脚本通信中断，但后台确认认证页已进入“你已准备就绪”完成页，按资料提交成功收尾。原始错误：${getErrorMessage(sourceError)}`,
+        'warn',
+        { step: 5, stepKey: 'fill-profile' }
+      );
+      return payload;
+    }
+  }
+
+  return null;
 }
 
 function getLatestLogTimestamp(logs = [], fallback = 0) {
@@ -16099,6 +16161,23 @@ async function validateStep5PostCompletion(tabId, completionPayload = {}) {
           recoveredFromTransportError: true,
         };
       }
+      if (stableUrl && isStep5RegistrationReadyPageUrl(stableUrl)) {
+        const readyPageState = await inspectStep5RegistrationReadyPageOnTab(tabId).catch(() => null);
+        if (readyPageState?.successState === 'registration_ready_page') {
+          await debugLog('后台复核时内容脚本通信中断，但认证页已进入“你已准备就绪”完成页，步骤 5 按提交成功处理。', {
+            completionOutcome: String(completionPayload?.outcome || '').trim(),
+            completionUrl: String(completionPayload?.url || '').trim(),
+            navigationStarted: Boolean(completionPayload?.navigationStarted),
+            tabUrl: readyPageState.url || stableUrl,
+            level: 'warn',
+          });
+          return {
+            successState: 'registration_ready_page',
+            url: readyPageState.url || stableUrl,
+            recoveredFromTransportError: true,
+          };
+        }
+      }
       throw pageStateError;
     }
     await debugLog('后台复核当前页面状态。', {
@@ -16145,6 +16224,18 @@ async function validateStep5PostCompletion(tabId, completionPayload = {}) {
         initialDelayMs: 300,
       }).catch(() => null);
       continue;
+    }
+
+    if (pageState.successState === 'registration_ready_page') {
+      await debugLog(`后台复核确认资料提交完成页：${pageState.successState}`, {
+        completionOutcome: String(completionPayload?.outcome || '').trim(),
+        completionUrl: String(completionPayload?.url || '').trim(),
+        navigationStarted: Boolean(completionPayload?.navigationStarted),
+        tabUrl: currentUrl,
+        pageState,
+        level: 'ok',
+      });
+      return pageState;
     }
 
     if (pageState.successState === 'logged_in_home' && isStep5CompletionChatgptUrl(pageState.url)) {

@@ -51,6 +51,14 @@ function extractFunction(name) {
   return source.slice(start, end);
 }
 
+function extractConstDeclaration(name) {
+  const pattern = new RegExp(`const\\s+${name}\\s*=\\s*[^;]+;`);
+  const match = source.match(pattern);
+  if (!match) {
+    throw new Error(`missing const ${name}`);
+  }
+  return match[0];
+}
 function getStep5OutcomeBundle() {
   return [
     extractFunction('getStep5ProfilePathPatterns'),
@@ -63,6 +71,8 @@ function getStep5OutcomeBundle() {
     extractFunction('getStep5SubmitButton'),
     extractFunction('waitForStep5SubmitButton'),
     extractFunction('isStep5SubmitButtonClickable'),
+    extractConstDeclaration('STEP5_REGISTRATION_READY_PAGE_PATTERN'),
+    extractFunction('isStep5RegistrationReadyPage'),
     extractFunction('isStep5ProfileStillVisible'),
     extractFunction('isStep5CompletionChatgptUrl'),
     extractFunction('getStep5PostSubmitSuccessState'),
@@ -1154,6 +1164,8 @@ function isAddPhonePageReady() { return false; }
 function isStep5ProfileStillVisible() { return false; }
 
 ${extractFunction('isStep5CompletionChatgptUrl')}
+${extractConstDeclaration('STEP5_REGISTRATION_READY_PAGE_PATTERN')}
+${extractFunction('isStep5RegistrationReadyPage')}
 ${extractFunction('getStep5PostSubmitSuccessState')}
 
 return {
@@ -1166,6 +1178,52 @@ return {
   assert.equal(api.run(), null);
 });
 
+test('step 5 treats auth ready page as profile submission success', () => {
+  const api = new Function(`
+const location = {
+  href: 'https://auth.openai.com/u/signup/ready',
+};
+const document = {
+  body: { innerText: '你已准备就绪 ChatGPT 可能会出错。继续', textContent: '' },
+};
+const continueButton = { textContent: '继续' };
+
+function getStep5AuthRetryPageState() { return null; }
+function getPageTextSnapshot() { return document.body.innerText; }
+function getPrimaryContinueButton() { return continueButton; }
+function getActionText(el) { return el.textContent || ''; }
+function isStep5ProfilePageUrl() { return false; }
+function isStep5Ready() { return true; }
+
+${extractFunction('isStep5CompletionChatgptUrl')}
+${extractConstDeclaration('STEP5_REGISTRATION_READY_PAGE_PATTERN')}
+${extractFunction('isStep5RegistrationReadyPage')}
+${extractFunction('isStep5ProfileStillVisible')}
+${extractFunction('getStep5PostSubmitSuccessState')}
+${extractFunction('isStep5PasskeyEnrollPage')}
+${extractFunction('getStep5SubmitState')}
+
+return {
+  run() {
+    return getStep5PostSubmitSuccessState();
+  },
+  state() {
+    return getStep5SubmitState();
+  },
+  visible() {
+    return isStep5ProfileStillVisible();
+  },
+};
+`)();
+
+  assert.deepStrictEqual(api.run(), {
+    state: 'registration_ready_page',
+    url: 'https://auth.openai.com/u/signup/ready',
+  });
+  assert.equal(api.visible(), false);
+  assert.equal(api.state().successState, 'registration_ready_page');
+  assert.equal(api.state().unknownAuthPage, false);
+});
 test('step 5 completion requires https chatgpt.com and rejects auth-success-like pages', () => {
   const api = new Function(`
 const location = {
@@ -1176,6 +1234,8 @@ function getStep5AuthRetryPageState() { return null; }
 function isStep5ProfileStillVisible() { return false; }
 
 ${extractFunction('isStep5CompletionChatgptUrl')}
+${extractConstDeclaration('STEP5_REGISTRATION_READY_PAGE_PATTERN')}
+${extractFunction('isStep5RegistrationReadyPage')}
 ${extractFunction('getStep5PostSubmitSuccessState')}
 
 return {

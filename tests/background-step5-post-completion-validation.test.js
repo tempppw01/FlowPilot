@@ -219,6 +219,85 @@ return {
   );
 });
 
+test('step 5 post-completion validation accepts auth ready page success state', async () => {
+  const api = new Function(`
+const logs = [];
+const messages = [];
+
+const chrome = {
+  tabs: {
+    async get() {
+      return { url: 'https://auth.openai.com/u/signup/ready' };
+    },
+  },
+};
+
+async function sendToContentScriptResilient(source, message) {
+  messages.push({ source, type: message.type });
+  if (message.type === 'GET_STEP5_SUBMIT_STATE') {
+    return {
+      retryPage: false,
+      retryEnabled: false,
+      maxCheckAttemptsBlocked: false,
+      userAlreadyExistsBlocked: false,
+      successState: 'registration_ready_page',
+      profileVisible: false,
+      errorText: '',
+      unknownAuthPage: false,
+      url: 'https://auth.openai.com/u/signup/ready',
+    };
+  }
+  throw new Error('unexpected message type: ' + message.type);
+}
+
+async function addLog(message, level, meta) {
+  logs.push({ message, level, meta });
+}
+
+async function waitForTabStableComplete() {}
+
+${extractFunction('parseUrlSafely')}
+${extractFunction('isSignupEntryHost')}
+${extractFunction('isLikelyLoggedInChatgptHomeUrl')}
+${extractFunction('isStep5CompletionChatgptUrl')}
+${extractFunction('isStep5RegistrationReadyPageUrl')}
+${extractFunction('inspectStep5RegistrationReadyPageOnTab')}
+${extractFunction('getStep5SubmitStateFromContent')}
+${extractFunction('recoverStep5SubmitRetryPageOnTab')}
+${extractFunction('validateStep5PostCompletion')}
+
+return {
+  run() {
+    return validateStep5PostCompletion(99, {});
+  },
+  snapshot() {
+    return { logs, messages };
+  },
+};
+`)();
+
+  const result = await api.run();
+
+  assert.deepStrictEqual(result, {
+    retryPage: false,
+    retryEnabled: false,
+    maxCheckAttemptsBlocked: false,
+    userAlreadyExistsBlocked: false,
+    successState: 'registration_ready_page',
+    profileVisible: false,
+    errorText: '',
+    unknownAuthPage: false,
+    url: 'https://auth.openai.com/u/signup/ready',
+  });
+  assert.deepStrictEqual(
+    api.snapshot().messages.map(({ type }) => type),
+    ['GET_STEP5_SUBMIT_STATE']
+  );
+  assert.equal(
+    api.snapshot().logs.some(({ message }) => /registration_ready_page/.test(message)),
+    true
+  );
+});
 test('step 5 post-completion validation rejects non-chatgpt success candidates', async () => {
   const api = new Function(`
 const logs = [];
@@ -337,6 +416,90 @@ return {
   );
 });
 
+test('step 5 recovers from transport close when auth tab shows ready page', async () => {
+  const api = new Function(`
+const logs = [];
+let waitCalls = 0;
+let scriptCalls = 0;
+
+const chrome = {
+  scripting: {
+    async executeScript({ target, func }) {
+      scriptCalls += 1;
+      if (target.tabId !== 42) throw new Error('unexpected tab id');
+      const previousDocument = globalThis.document;
+      const previousLocation = globalThis.location;
+      try {
+        globalThis.location = { href: 'https://auth.openai.com/u/signup/ready' };
+        globalThis.document = {
+          body: { innerText: '你已准备就绪 ChatGPT 可能会出错。继续', textContent: '' },
+          querySelectorAll(selector) {
+            if (selector.includes('button')) return [{ textContent: '继续' }];
+            return [];
+          },
+        };
+        return [{ result: func() }];
+      } finally {
+        globalThis.document = previousDocument;
+        globalThis.location = previousLocation;
+      }
+    },
+  },
+};
+
+async function getTabId(source) {
+  return source === 'openai-auth' ? 42 : null;
+}
+
+async function waitForTabStableComplete(tabId) {
+  waitCalls += 1;
+  if (tabId !== 42) throw new Error('unexpected tab id');
+  return { url: 'https://auth.openai.com/u/signup/ready' };
+}
+
+async function addLog(message, level, meta) {
+  logs.push({ message, level, meta });
+}
+
+function getErrorMessage(error) {
+  return String(error?.message || error || '');
+}
+
+${extractFunction('parseUrlSafely')}
+${extractFunction('isSignupEntryHost')}
+${extractFunction('isLikelyLoggedInChatgptHomeUrl')}
+${extractFunction('isStep5CompletionChatgptUrl')}
+${extractFunction('isStep5RegistrationReadyPageUrl')}
+${extractFunction('inspectStep5RegistrationReadyPageOnTab')}
+${extractFunction('completeStep5FromTabUrlAfterTransportError')}
+
+return {
+  async run() {
+    return completeStep5FromTabUrlAfterTransportError(new Error('A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received'));
+  },
+  snapshot() {
+    return { logs, waitCalls, scriptCalls };
+  },
+};
+`)();
+
+  const result = await api.run();
+  const snapshot = api.snapshot();
+
+  assert.deepStrictEqual(result, {
+    profileSubmitted: true,
+    postSubmitChecked: true,
+    outcome: 'registration_ready_page',
+    url: 'https://auth.openai.com/u/signup/ready',
+    recoveredFromTransportError: true,
+  });
+  assert.equal(snapshot.waitCalls, 1);
+  assert.equal(snapshot.scriptCalls, 1);
+  assert.equal(
+    snapshot.logs.some(({ message }) => /你已准备就绪|完成页/.test(message)),
+    true
+  );
+});
 test('step 5 post-completion validation recovers when content script bfcache closes on ready page', async () => {
   const api = new Function(`
 const logs = [];
