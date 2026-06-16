@@ -56,7 +56,6 @@ const statusBar = document.getElementById('status-bar');
 const inputEmail = document.getElementById('input-email');
 const inputSignupPhone = document.getElementById('input-signup-phone');
 const inputPassword = document.getElementById('input-password');
-const btnToggleVpsUrl = document.getElementById('btn-toggle-vps-url');
 const btnToggleVpsPassword = document.getElementById('btn-toggle-vps-password');
 const btnFetchEmail = document.getElementById('btn-fetch-email');
 const btnTogglePassword = document.getElementById('btn-toggle-password');
@@ -16609,13 +16608,6 @@ function syncPasswordToggleLabel() {
   });
 }
 
-function syncVpsUrlToggleLabel() {
-  syncToggleButtonLabel(btnToggleVpsUrl, inputVpsUrl, {
-    show: '显示 CPA 地址',
-    hide: '隐藏 CPA 地址',
-  });
-}
-
 function syncVpsPasswordToggleLabel() {
   syncToggleButtonLabel(btnToggleVpsPassword, inputVpsPassword, {
     show: '显示管理密钥',
@@ -16807,11 +16799,6 @@ btnFetchEmail.addEventListener('click', async () => {
 btnTogglePassword.addEventListener('click', () => {
   inputPassword.type = inputPassword.type === 'password' ? 'text' : 'password';
   syncPasswordToggleLabel();
-});
-
-btnToggleVpsUrl.addEventListener('click', () => {
-  inputVpsUrl.type = inputVpsUrl.type === 'password' ? 'text' : 'password';
-  syncVpsUrlToggleLabel();
 });
 
 btnToggleVpsPassword.addEventListener('click', () => {
@@ -20867,7 +20854,6 @@ Promise.allSettled([
   }
   return restoreState().then(() => {
     syncPasswordToggleLabel();
-    syncVpsUrlToggleLabel();
     syncVpsPasswordToggleLabel();
     syncIpProxyApiUrlToggleLabel();
     syncIpProxyUsernameToggleLabel();

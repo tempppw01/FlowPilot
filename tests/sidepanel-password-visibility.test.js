@@ -9,7 +9,6 @@ test('sidepanel password inputs expose visibility toggles', () => {
     (match) => match[1]
   );
   const legacyToggleIds = new Map([
-    ['input-vps-url', 'btn-toggle-vps-url'],
     ['input-vps-password', 'btn-toggle-vps-password'],
     ['input-ip-proxy-username', 'btn-toggle-ip-proxy-username'],
     ['input-ip-proxy-password', 'btn-toggle-ip-proxy-password'],
@@ -30,6 +29,13 @@ test('sidepanel password inputs expose visibility toggles', () => {
   }
 });
 
+
+test('sidepanel keeps CPA address visible as a normal text field', () => {
+  const html = fs.readFileSync('sidepanel/sidepanel.html', 'utf8');
+
+  assert.match(html, /<input type="text" id="input-vps-url" class="data-input"/);
+  assert.doesNotMatch(html, /id="btn-toggle-vps-url"/);
+});
 test('shared form dialog adds visibility toggles for password fields', () => {
   const source = fs.readFileSync('sidepanel/form-dialog.js', 'utf8');
 
