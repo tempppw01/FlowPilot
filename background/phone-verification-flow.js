@@ -4820,19 +4820,18 @@
             throw new Error('手机号验证未完成。');
           }
 
-          if (
-            activation
-            && (
-              replaceReason === 'resend_throttled'
-              || replaceReason === 'route_405_retry_loop'
-              || /^sms_timeout_after_/i.test(String(replaceReason || ''))
-            )
-          ) {
-            await setCountryPriceFloorFromActivation(activation, replaceReason || 'sms_timeout');
-            await markSmsBowerProviderIdTimeout(activation, replaceReason || 'sms_timeout');
-            await recordSmsBowerActivationFailure(state, activation, replaceReason || 'sms_timeout');
-            await markCountrySmsFailure(activation.countryId, replaceReason || 'sms_timeout', activation.provider);
-          }
+      if (activation) {
+        if (
+          replaceReason === 'resend_throttled'
+          || replaceReason === 'route_405_retry_loop'
+          || /^sms_timeout_after_/i.test(String(replaceReason || ''))
+        ) {
+          await setCountryPriceFloorFromActivation(activation, replaceReason || 'sms_timeout');
+          await markSmsBowerProviderIdTimeout(activation, replaceReason || 'sms_timeout');
+          await markCountrySmsFailure(activation.countryId, replaceReason || 'sms_timeout', activation.provider);
+        }
+        await recordSmsBowerActivationFailure(state, activation, replaceReason || 'sms_not_received');
+      }
           await markPreferredActivationExhausted(replaceReason || 'replace_number');
 
           usedNumberReplacementAttempts += 1;
