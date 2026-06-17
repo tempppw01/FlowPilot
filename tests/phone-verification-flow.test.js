@@ -47,7 +47,9 @@ function buildHeroSmsStatusV2Payload({ smsCode = '', smsText = '', callCode = ''
 
 test('phone verification helper requests HeroSMS numbers with fixed OpenAI and Thailand parameters', async () => {
   const requests = [];
+  const usageCostCalls = [];
   const helpers = api.createPhoneVerificationHelpers({
+    addUsageCost: async (...args) => usageCostCalls.push(args),
     addLog: async () => {},
     ensureStep8SignupPageReady: async () => {},
     fetchImpl: async (url) => {
@@ -83,6 +85,7 @@ test('phone verification helper requests HeroSMS numbers with fixed OpenAI and T
     successfulUses: 0,
     maxUses: 3,
   });
+  assert.deepEqual(usageCostCalls[0].slice(0, 2), ['phone', 0.08]);
   assert.equal(requests.length, 2);
   assert.equal(requests[0].searchParams.get('action'), 'getPrices');
   assert.equal(requests[0].searchParams.get('service'), 'dr');

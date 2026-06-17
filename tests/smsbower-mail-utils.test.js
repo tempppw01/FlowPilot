@@ -24,7 +24,9 @@ test('normalizeSmsBowerMailActivation extracts mail id and address', () => {
     status: 1,
     mail: 'Fresh@Gmail.Com',
     mailId: 42,
+    price: '0.12345',
   });
   assert.equal(activation.id, '42');
   assert.equal(activation.address, 'fresh@gmail.com');
+  assert.equal(activation.price, 0.1235);
 });

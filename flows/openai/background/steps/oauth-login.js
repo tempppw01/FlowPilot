@@ -198,6 +198,15 @@
       );
     }
 
+    function buildStep7SmsBowerVerificationRestartError(result = {}, completionStep = 7) {
+      const stateLabel = getLoginAuthStateLabel(result?.state);
+      const url = String(result?.url || '').trim();
+      const urlPart = url ? `URL: ${url}` : '';
+      return new Error(
+        `${RESTART_CURRENT_ATTEMPT_ERROR_PREFIX}步骤 ${completionStep}：SMSBower TempMail 登录阶段未检测到可复用的已登录账号，认证页进入${stateLabel}；由于 SMSBower 只保留最近 20 分钟验证码，当前账号登录不可继续，已要求回到步骤 1 重新注册新号。${urlPart}`.trim()
+      );
+    }
+
     function isRestartCurrentAttemptError(error) {
       return String(error?.message || error || '').startsWith(RESTART_CURRENT_ATTEMPT_ERROR_PREFIX);
     }
@@ -280,7 +289,7 @@
         }
 
         await addLog(
-          `步骤 ${completionStep}：重新打开 OAuth 后仍未进入可跳过验证码的页面（当前：${getLoginAuthStateLabel(oauthState.state)}），将按 SMSBower 旧验证码处理。`,
+          `步骤 ${completionStep}：重新打开 OAuth 后仍未进入可跳过验证码的页面（当前：${getLoginAuthStateLabel(oauthState.state)}），将放弃当前账号并回到步骤 1 重新注册新号。`,
           'warn',
           { step: completionStep, stepKey: 'oauth-login' }
         );
@@ -527,6 +536,15 @@
               if (isSmsBowerMailProviderForStep7(currentState)) {
                 throw buildStep7AlreadyOnVerificationRestartError(result, completionStep);
               }
+            }
+
+            if (isSmsBowerMailProviderForStep7(currentState) && isStep7PlainVerificationResult(result)) {
+              await addLog(
+                `步骤 ${completionStep}：SMSBower TempMail 未检测到可复用的已登录账号，认证页进入登录验证码页；不会进入步骤 ${completionStep + 1} 获取旧验证码，准备回到步骤 1 注册新号。`,
+                'warn',
+                { step: completionStep, stepKey: 'oauth-login' }
+              );
+              throw buildStep7SmsBowerVerificationRestartError(result, completionStep);
             }
 
             const completionPayload = buildStep7CompletionPayload(

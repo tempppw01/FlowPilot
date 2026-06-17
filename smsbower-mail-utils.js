@@ -129,6 +129,14 @@
 
   function normalizeSmsBowerMailActivation(payload = {}) {
     const safePayload = payload && typeof payload === 'object' ? payload : {};
+    const normalizedPrice = normalizeSmsBowerMailMaxPrice(firstNonEmptyString([
+      safePayload.price,
+      safePayload.cost,
+      safePayload.selectedPrice,
+      safePayload.selected_price,
+      safePayload.maxPrice,
+      safePayload.max_price,
+    ]));
     return {
       id: firstNonEmptyString([safePayload.mailId, safePayload.mail_id, safePayload.id]),
       address: normalizeSmsBowerMailAddress(firstNonEmptyString([
@@ -140,6 +148,7 @@
       domain: normalizeSmsBowerMailDomain(safePayload.domain),
       status: firstNonEmptyString([safePayload.status]),
       createdAt: firstNonEmptyString([safePayload.createdAt, safePayload.created_at]) || new Date().toISOString(),
+      ...(normalizedPrice ? { price: Number(normalizedPrice) } : {}),
       raw: safePayload,
     };
   }

@@ -37,19 +37,9 @@ const btnOpenRelease = document.getElementById('btn-open-release');
 const settingsCard = document.getElementById('settings-card');
 const selectFlow = document.getElementById('select-flow');
 const flowExecutionStats = document.getElementById('flow-execution-stats');
-const accountContributionPanel = document.getElementById('contribution-mode-panel');
-const accountContributionBadge = document.getElementById('contribution-mode-badge');
-const accountContributionText = document.getElementById('contribution-mode-text');
-const inputContributionNickname = document.getElementById('input-contribution-nickname');
-const inputContributionQq = document.getElementById('input-contribution-qq');
-const contributionPrimaryStatusLabel = document.getElementById('contribution-primary-status-label');
-const contributionSecondaryStatusLabel = document.getElementById('contribution-secondary-status-label');
-const contributionOauthStatus = document.getElementById('contribution-oauth-status');
-const contributionCallbackStatus = document.getElementById('contribution-callback-status');
-const accountContributionSummary = document.getElementById('contribution-mode-summary');
-const btnStartContribution = document.getElementById('btn-start-contribution');
-const btnOpenContributionUpload = document.getElementById('btn-open-contribution-upload');
-const btnExitContributionMode = document.getElementById('btn-exit-contribution-mode');
+const usageCostEmail = document.getElementById('usage-cost-email');
+const usageCostPhone = document.getElementById('usage-cost-phone');
+const usageCostTotal = document.getElementById('usage-cost-total');
 const displayOauthUrl = document.getElementById('display-oauth-url');
 const displayLocalhostUrl = document.getElementById('display-localhost-url');
 const displayStatus = document.getElementById('display-status');
@@ -62,16 +52,6 @@ const btnFetchEmail = document.getElementById('btn-fetch-email');
 const btnTogglePassword = document.getElementById('btn-toggle-password');
 const btnStop = document.getElementById('btn-stop');
 const btnReset = document.getElementById('btn-reset');
-const btnContributionMode = document.getElementById('btn-contribution-mode');
-const contributionUpdateLayer = document.getElementById('contribution-update-layer');
-const contributionUpdateHint = document.getElementById('contribution-update-hint');
-const contributionUpdateHintText = document.getElementById('contribution-update-hint-text');
-const btnDismissContributionUpdateHint = document.getElementById('btn-dismiss-contribution-update-hint');
-const autoRunAdBar = document.getElementById('auto-run-ad-bar');
-const autoRunAdViewport = document.getElementById('auto-run-ad-viewport');
-const autoRunAdTrack = document.getElementById('auto-run-ad-track');
-const autoRunAdText = document.getElementById('auto-run-ad-text');
-const autoRunAdTextClone = document.getElementById('auto-run-ad-text-clone');
 const stepsProgress = document.getElementById('steps-progress');
 const btnAutoRun = document.getElementById('btn-auto-run');
 const btnAutoContinue = document.getElementById('btn-auto-continue');
@@ -303,7 +283,6 @@ const tempEmailDomainMenu = document.getElementById('temp-email-domain-menu');
 const inputTempEmailDomain = document.getElementById('input-temp-email-domain');
 const btnTempEmailDomainMode = document.getElementById('btn-temp-email-domain-mode');
 const cloudflareTempEmailSection = document.getElementById('cloudflare-temp-email-section');
-const btnCloudflareTempEmailUsageGuide = document.getElementById('btn-cloudflare-temp-email-usage-guide');
 const btnCloudflareTempEmailGithub = document.getElementById('btn-cloudflare-temp-email-github');
 const cloudMailSection = document.getElementById('cloud-mail-section');
 const rowCloudMailBaseUrl = document.getElementById('row-cloud-mail-base-url');
@@ -371,7 +350,6 @@ const selectHotmailFilter = document.getElementById('select-hotmail-filter');
 const btnAddHotmailAccount = document.getElementById('btn-add-hotmail-account');
 const btnImportHotmailAccounts = document.getElementById('btn-import-hotmail-accounts');
 const btnToggleHotmailForm = document.getElementById('btn-toggle-hotmail-form');
-const btnHotmailUsageGuide = document.getElementById('btn-hotmail-usage-guide');
 const btnClearUsedHotmailAccounts = document.getElementById('btn-clear-used-hotmail-accounts');
 const btnDeleteAllHotmailAccounts = document.getElementById('btn-delete-all-hotmail-accounts');
 const btnToggleHotmailList = document.getElementById('btn-toggle-hotmail-list');
@@ -1156,7 +1134,6 @@ const CLOUDFLARE_TEMP_EMAIL_SUBDOMAIN_MODE_NONE = 'none';
 const CLOUDFLARE_TEMP_EMAIL_SUBDOMAIN_MODE_RANDOM = 'random';
 const CLOUDFLARE_TEMP_EMAIL_SUBDOMAIN_MODE_FIXED = 'fixed';
 const DEFAULT_CLOUDFLARE_TEMP_EMAIL_SUBDOMAIN_MODE = CLOUDFLARE_TEMP_EMAIL_SUBDOMAIN_MODE_NONE;
-const NEW_USER_GUIDE_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-new-user-guide-prompt-dismissed';
 const AUTO_SKIP_FAILURES_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-auto-skip-failures-prompt-dismissed';
 const AUTO_RUN_FALLBACK_RISK_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-auto-run-fallback-risk-prompt-dismissed';
 const CPA_PHONE_SIGNUP_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-cpa-phone-signup-prompt-dismissed';
@@ -1515,7 +1492,6 @@ function rebuildStepDefinitionState(plusModeEnabled = false, options = {}) {
     SKIPPABLE_NODES = new Set(typeof NODE_IDS !== 'undefined' ? NODE_IDS : []);
   }
 }
-const CONTRIBUTION_CONTENT_PROMPT_DISMISSED_VERSION_STORAGE_KEY = 'multipage-contribution-content-prompt-dismissed-version';
 const AUTO_RUN_FALLBACK_RISK_WARNING_MIN_RUNS = 3;
 const HOTMAIL_SERVICE_MODE_REMOTE = 'remote';
 const HOTMAIL_SERVICE_MODE_LOCAL = 'local';
@@ -1852,9 +1828,6 @@ let autoRunCountdownTimer = null;
 let configMenuOpen = false;
 let configActionInFlight = false;
 let currentReleaseSnapshot = null;
-let currentContributionContentSnapshot = null;
-let contributionContentSnapshotRequestInFlight = null;
-let autoRunAdScrollSyncFrame = 0;
 
 function normalizeAutomationWindowId(value) {
   if (value === null || value === undefined || value === '') {
@@ -2048,7 +2021,6 @@ const TARGET_REPOSITORY_URLS = Object.freeze({
   }),
 });
 const PRIVACY_MASKED_INPUT_IDS = Object.freeze([
-  'input-contribution-qq',
   'input-sub2api-url',
   'input-sub2api-email',
   'input-sub2api-default-proxy',
@@ -2102,7 +2074,6 @@ const normalizeLuckmailTimestampValue = window.LuckMailUtils?.normalizeTimestamp
     return Number.isFinite(timestamp) ? timestamp : 0;
   });
 const sidepanelUpdateService = window.SidepanelUpdateService;
-const contributionContentService = window.SidepanelContributionContentService;
 const sharedFormDialog = window.SidepanelFormDialog?.createFormDialog?.({
   overlay: sharedFormModal,
   titleNode: sharedFormModalTitle,
@@ -2499,99 +2470,6 @@ function setPromptDismissed(storageKey, dismissed) {
   }
 }
 
-function isNewUserGuidePromptDismissed() {
-  return isPromptDismissed(NEW_USER_GUIDE_PROMPT_DISMISSED_STORAGE_KEY);
-}
-
-function setNewUserGuidePromptDismissed(dismissed) {
-  setPromptDismissed(NEW_USER_GUIDE_PROMPT_DISMISSED_STORAGE_KEY, dismissed);
-}
-
-function shouldPromptNewUserGuide() {
-  if (isNewUserGuidePromptDismissed()) {
-    return false;
-  }
-  if (!btnContributionMode || btnContributionMode.disabled) {
-    return false;
-  }
-  if (typeof isContributionModeActiveForFlow === 'function'
-    ? isContributionModeActiveForFlow(latestState)
-    : Boolean(latestState?.accountContributionEnabled)) {
-    return false;
-  }
-  return true;
-}
-
-function getContributionPortalUrl() {
-  return String(contributionContentService?.portalUrl || 'https://flowpilot.qlhazycoder.top').trim();
-}
-
-function getContributionContentFlowId(state = latestState) {
-  return String(state?.activeFlowId || state?.flowId || DEFAULT_ACTIVE_FLOW_ID).trim().toLowerCase() || DEFAULT_ACTIVE_FLOW_ID;
-}
-
-function getContributionContentTargetId(state = latestState) {
-  const flowId = getContributionContentFlowId(state);
-  if (typeof getSelectedTargetIdForState === 'function') {
-    return getSelectedTargetIdForState(state, flowId);
-  }
-  return normalizeTargetIdForFlow(flowId, state?.targetId || '', getDefaultTargetIdForFlow(flowId));
-}
-
-function openNewUserGuidePrompt() {
-  return openActionModal({
-    title: '新手引导',
-    message: '如果你是第一次使用，可以先查看贡献页里的公告和使用教程。点击“查看引导”会自动打开贡献页面。',
-    alert: {
-      text: '本提示仅出现一次。',
-    },
-    actions: [
-      { id: null, label: '取消', variant: 'btn-ghost' },
-      { id: 'confirm', label: '查看引导', variant: 'btn-primary' },
-    ],
-  });
-}
-
-async function maybeShowNewUserGuidePrompt() {
-  if (!shouldPromptNewUserGuide()) {
-    return false;
-  }
-
-  setNewUserGuidePromptDismissed(true);
-  const choice = await openNewUserGuidePrompt();
-  if (choice === 'confirm') {
-    openExternalUrl(getContributionPortalUrl());
-    return true;
-  }
-  return false;
-}
-
-function getContributionContentPromptScope(snapshot = currentContributionContentSnapshot) {
-  return {
-    flowId: String(snapshot?.flowId || getContributionContentFlowId()).trim().toLowerCase() || DEFAULT_ACTIVE_FLOW_ID,
-    targetId: String(snapshot?.targetId || getContributionContentTargetId()).trim().toLowerCase() || 'cpa',
-  };
-}
-
-function getContributionContentPromptDismissedStorageKey(snapshot = currentContributionContentSnapshot) {
-  const scope = getContributionContentPromptScope(snapshot);
-  return `${CONTRIBUTION_CONTENT_PROMPT_DISMISSED_VERSION_STORAGE_KEY}:${scope.flowId}:${scope.targetId}`;
-}
-
-function getDismissedContributionContentPromptVersion(snapshot = currentContributionContentSnapshot) {
-  return String(localStorage.getItem(getContributionContentPromptDismissedStorageKey(snapshot)) || '').trim();
-}
-
-function setDismissedContributionContentPromptVersion(version, snapshot = currentContributionContentSnapshot) {
-  const normalized = String(version || '').trim();
-  const storageKey = getContributionContentPromptDismissedStorageKey(snapshot);
-  if (normalized) {
-    localStorage.setItem(storageKey, normalized);
-  } else {
-    localStorage.removeItem(storageKey);
-  }
-}
-
 function isAutoSkipFailuresPromptDismissed() {
   return isPromptDismissed(AUTO_SKIP_FAILURES_PROMPT_DISMISSED_STORAGE_KEY);
 }
@@ -2783,7 +2661,7 @@ async function openAutoSkipFailuresConfirmModal() {
 async function openAutoRunFallbackRiskConfirmModal(totalRuns) {
   const result = await openConfirmModalWithOption({
     title: '自动运行风险提醒',
-    message: `当前轮数已经不适合单节点情况，请确保已经配置并打开节点轮询功能（若没有配置，请点击贡献/使用按钮，根据网页中使用教程进行配置），避免连续使用一个节点注册，导致出现手机号验证。`,
+    message: `当前轮数已经不适合单节点情况，请确保已经配置并打开节点轮询功能，避免连续使用一个节点注册，导致出现手机号验证。`,
     confirmLabel: '继续',
   });
 
@@ -3703,6 +3581,39 @@ function renderFlowExecutionStats(state = latestState) {
   }
 }
 
+function normalizeUsageCostAmount(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 0;
+  }
+  return Math.round(numeric * 10000) / 10000;
+}
+
+function getUsageCostTotals(state = latestState) {
+  const totals = state?.usageCostTotals || {};
+  const email = normalizeUsageCostAmount(totals.email ?? totals.mail);
+  const phone = normalizeUsageCostAmount(totals.phone ?? totals.sms);
+  return {
+    email,
+    phone,
+    total: normalizeUsageCostAmount(email + phone),
+  };
+}
+
+function formatUsageCostAmount(value) {
+  return `$${normalizeUsageCostAmount(value).toFixed(4)}`;
+}
+
+function renderUsageCostBar(state = latestState) {
+  if (!usageCostEmail && !usageCostPhone && !usageCostTotal) {
+    return;
+  }
+  const totals = getUsageCostTotals(state);
+  if (usageCostEmail) usageCostEmail.textContent = formatUsageCostAmount(totals.email);
+  if (usageCostPhone) usageCostPhone.textContent = formatUsageCostAmount(totals.phone);
+  if (usageCostTotal) usageCostTotal.textContent = formatUsageCostAmount(totals.total);
+}
+
 function syncLatestState(nextState) {
   const normalizedNextState = {
     ...(nextState || {}),
@@ -3748,6 +3659,9 @@ function syncLatestState(nextState) {
   renderAccountRecords(latestState);
   if (typeof renderFlowExecutionStats === 'function') {
     renderFlowExecutionStats(latestState);
+  }
+  if (typeof renderUsageCostBar === 'function') {
+    renderUsageCostBar(latestState);
   }
   if (typeof renderSmsBowerCountryOrderMenu === 'function') {
     renderSmsBowerCountryOrderMenu();
@@ -13470,12 +13384,6 @@ function applySettingsState(state) {
   if (inputAccountRunHistoryHelperBaseUrl) {
     inputAccountRunHistoryHelperBaseUrl.value = normalizeAccountRunHistoryHelperBaseUrlValue(state?.accountRunHistoryHelperBaseUrl);
   }
-  if (inputContributionNickname) {
-    inputContributionNickname.value = state?.contributionNickname || '';
-  }
-  if (inputContributionQq) {
-    inputContributionQq.value = state?.contributionQq || '';
-  }
   if (inputMail2925UseAccountPool) {
     inputMail2925UseAccountPool.checked = Boolean(state?.mail2925UseAccountPool);
   }
@@ -13923,14 +13831,6 @@ function ignoreCurrentReleaseUpdate() {
   showToast(`已忽略 ${ignoredVersion} 更新，有新版本时会再次提醒。`, 'info', 2200);
 }
 
-function openCloudflareTempEmailUsageGuidePage() {
-  const targetUrl = getContributionPortalUrl();
-  if (!targetUrl) {
-    return;
-  }
-  openExternalUrl(targetUrl);
-}
-
 function openCloudflareTempEmailRepositoryPage() {
   openExternalUrl(CLOUDFLARE_TEMP_EMAIL_REPOSITORY_URL);
 }
@@ -14140,398 +14040,6 @@ async function initializeReleaseInfo() {
 
   const snapshot = await sidepanelUpdateService.getReleaseSnapshot();
   renderReleaseSnapshot(snapshot);
-}
-
-function getContributionUpdateHintMessage(snapshot = currentContributionContentSnapshot) {
-  const lines = getContributionUpdatePromptLines(snapshot);
-  if (!lines.length) {
-    return '';
-  }
-  if (lines.length === 1) {
-    return lines[0];
-  }
-  return lines.map((line, index) => `${index + 1}. ${line}`).join('\n');
-}
-
-function getContributionUpdatePromptLines(snapshot = currentContributionContentSnapshot) {
-  if (!snapshot?.promptVersion) {
-    return [];
-  }
-
-  const items = Array.isArray(snapshot.items) ? snapshot.items : [];
-  const autoRunNoticeItem = items.find((item) =>
-    item
-    && String(item.slug || '').trim().toLowerCase() === 'auto_run_notice'
-  );
-  if (autoRunNoticeItem) {
-    const noticeText = String(autoRunNoticeItem.text || '').trim();
-    return autoRunNoticeItem.isVisible && noticeText ? [noticeText] : [];
-  }
-
-  const hasAnnouncementOrTutorial = items.some((item) =>
-    item
-    && item.isVisible
-    && ['announcement', 'tutorial'].includes(String(item.slug || '').trim().toLowerCase())
-  );
-  const hasQuestionnaire = items.some((item) =>
-    item
-    && item.isVisible
-    && String(item.slug || '').trim().toLowerCase() === 'questionnaire'
-  );
-
-  const lines = [];
-  if (hasAnnouncementOrTutorial) {
-    lines.push('公告 / 使用教程有更新了，可点上方“贡献/使用”查看。');
-  }
-  if (hasQuestionnaire) {
-    lines.push('有新的征求意见，请佬友共同参与选择。');
-  }
-  return lines;
-}
-
-function getAutoRunAdConfig(snapshot = currentContributionContentSnapshot) {
-  const items = Array.isArray(snapshot?.items) ? snapshot.items : [];
-  const adItem = items.find((item) =>
-    item
-    && String(item.slug || '').trim().toLowerCase() === 'extension_auto_run_ad'
-  );
-  if (!adItem || !adItem.isVisible) {
-    return null;
-  }
-
-  const text = String(adItem.text || '').replace(/\s+/g, ' ').trim();
-  if (!text) {
-    return null;
-  }
-
-  return {
-    text,
-    title: String(adItem.title || '').trim(),
-  };
-}
-
-function sanitizeAutoRunAdUrl(value = '') {
-  const raw = String(value || '').trim();
-  if (!raw) {
-    return '';
-  }
-
-  try {
-    const parsed = new URL(raw);
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return '';
-    }
-    return parsed.href;
-  } catch (_error) {
-    return '';
-  }
-}
-
-function parseAutoRunAdSegments(value = '') {
-  const rawText = String(value || '').trim();
-  if (!rawText) {
-    return [];
-  }
-
-  const segments = [];
-  let cursor = 0;
-
-  while (cursor < rawText.length) {
-    const labelStart = rawText.indexOf('[', cursor);
-    if (labelStart < 0) {
-      segments.push({
-        type: 'text',
-        text: rawText.slice(cursor),
-      });
-      break;
-    }
-
-    const labelEnd = rawText.indexOf(']', labelStart + 1);
-    if (labelEnd < 0 || rawText[labelEnd + 1] !== '(') {
-      segments.push({
-        type: 'text',
-        text: rawText.slice(cursor),
-      });
-      break;
-    }
-
-    if (labelStart > cursor) {
-      segments.push({
-        type: 'text',
-        text: rawText.slice(cursor, labelStart),
-      });
-    }
-
-    let urlEnd = labelEnd + 2;
-    let depth = 1;
-    while (urlEnd < rawText.length && depth > 0) {
-      const ch = rawText[urlEnd];
-      if (ch === '(') {
-        depth += 1;
-      } else if (ch === ')') {
-        depth -= 1;
-      }
-      urlEnd += 1;
-    }
-
-    if (depth > 0) {
-      segments.push({
-        type: 'text',
-        text: rawText.slice(labelStart),
-      });
-      break;
-    }
-
-    const label = rawText.slice(labelStart + 1, labelEnd).trim();
-    const rawSegment = rawText.slice(labelStart, urlEnd);
-    const url = sanitizeAutoRunAdUrl(rawText.slice(labelEnd + 2, urlEnd - 1));
-    if (label && url) {
-      segments.push({
-        type: 'link',
-        text: label,
-        url,
-      });
-    } else {
-      segments.push({
-        type: 'text',
-        text: rawSegment,
-      });
-    }
-    cursor = urlEnd;
-  }
-
-  return segments.filter((segment) => String(segment?.text || '').length > 0);
-}
-
-function getAutoRunAdPlainText(segments = []) {
-  return segments.map((segment) => String(segment?.text || '')).join('').replace(/\s+/g, ' ').trim();
-}
-
-function renderAutoRunAdSegments(container, segments = [], options = {}) {
-  if (!container) {
-    return;
-  }
-
-  const { tabIndex = undefined } = options;
-  container.textContent = '';
-  for (const segment of Array.isArray(segments) ? segments : []) {
-    const text = String(segment?.text || '');
-    if (!text) {
-      continue;
-    }
-
-    if (segment?.type === 'link' && segment?.url) {
-      const link = document.createElement('a');
-      link.className = 'auto-run-ad-link';
-      link.href = segment.url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.dataset.externalUrl = segment.url;
-      if (Number.isInteger(tabIndex)) {
-        link.tabIndex = tabIndex;
-      }
-      link.textContent = text;
-      container.appendChild(link);
-      continue;
-    }
-
-    container.appendChild(document.createTextNode(text));
-  }
-}
-
-function positionContributionUpdateHint() {
-  if (!contributionUpdateLayer || !contributionUpdateHint || !btnContributionMode) {
-    return;
-  }
-  if (contributionUpdateLayer.hidden || contributionUpdateHint.hidden) {
-    return;
-  }
-
-  const buttonRect = btnContributionMode.getBoundingClientRect();
-  const viewportWidth = Math.max(document.documentElement?.clientWidth || 0, window.innerWidth || 0);
-  const viewportHeight = Math.max(document.documentElement?.clientHeight || 0, window.innerHeight || 0);
-  const hintWidth = contributionUpdateHint.offsetWidth || 220;
-  const hintHeight = contributionUpdateHint.offsetHeight || 56;
-  const viewportPadding = 12;
-  const gap = 10;
-
-  const maxLeft = Math.max(viewportPadding, viewportWidth - hintWidth - viewportPadding);
-  const left = Math.min(Math.max(viewportPadding, Math.round(buttonRect.left)), maxLeft);
-  const shouldPlaceAbove = (buttonRect.bottom + gap + hintHeight) > (viewportHeight - viewportPadding)
-    && buttonRect.top > (hintHeight + gap + viewportPadding);
-  const top = shouldPlaceAbove
-    ? Math.max(viewportPadding, Math.round(buttonRect.top - hintHeight - gap))
-    : Math.max(viewportPadding, Math.round(buttonRect.bottom + gap));
-  const buttonCenter = Math.round(buttonRect.left + (buttonRect.width / 2));
-  const arrowOffset = Math.min(Math.max(16, buttonCenter - left), Math.max(16, hintWidth - 16));
-
-  contributionUpdateHint.style.left = `${left}px`;
-  contributionUpdateHint.style.top = `${top}px`;
-  contributionUpdateHint.style.setProperty('--contribution-update-arrow-left', `${arrowOffset}px`);
-}
-
-function shouldShowContributionUpdateHint(snapshot = currentContributionContentSnapshot) {
-  const promptVersion = String(snapshot?.promptVersion || '').trim();
-  if (!contributionUpdateLayer || !contributionUpdateHint || !contributionUpdateHintText || !btnContributionMode) {
-    return false;
-  }
-  if (!promptVersion) {
-    return false;
-  }
-  if (!getContributionUpdatePromptLines(snapshot).length) {
-    return false;
-  }
-  if (promptVersion === getDismissedContributionContentPromptVersion(snapshot)) {
-    return false;
-  }
-  if (typeof isContributionModeActiveForFlow === 'function'
-    ? isContributionModeActiveForFlow(latestState)
-    : Boolean(latestState?.accountContributionEnabled)) {
-    return false;
-  }
-  return !btnContributionMode.disabled;
-}
-
-function renderContributionUpdateHint(snapshot = currentContributionContentSnapshot) {
-  if (!contributionUpdateLayer || !contributionUpdateHint) {
-    return;
-  }
-
-  const visible = shouldShowContributionUpdateHint(snapshot);
-  contributionUpdateLayer.hidden = !visible;
-  contributionUpdateHint.hidden = !visible;
-  if (!visible || !contributionUpdateHintText) {
-    return;
-  }
-
-  contributionUpdateHintText.textContent = getContributionUpdateHintMessage(snapshot);
-  if (typeof window.requestAnimationFrame === 'function') {
-    window.requestAnimationFrame(() => positionContributionUpdateHint());
-    return;
-  }
-  positionContributionUpdateHint();
-}
-
-function resetAutoRunAdScrollState() {
-  if (!autoRunAdBar || !autoRunAdTrack || !autoRunAdTextClone) {
-    return;
-  }
-  autoRunAdBar.classList.remove('is-scrolling');
-  autoRunAdBar.style.removeProperty('--auto-run-ad-gap');
-  autoRunAdBar.style.removeProperty('--auto-run-ad-duration');
-  autoRunAdBar.style.removeProperty('--auto-run-ad-scroll-distance');
-  autoRunAdTextClone.textContent = '';
-}
-
-function syncAutoRunAdScrollState() {
-  if (!autoRunAdBar || !autoRunAdViewport || !autoRunAdTrack || !autoRunAdText || !autoRunAdTextClone || autoRunAdBar.hidden) {
-    resetAutoRunAdScrollState();
-    return;
-  }
-
-  const text = String(autoRunAdText.textContent || '').trim();
-  if (!text) {
-    resetAutoRunAdScrollState();
-    return;
-  }
-
-  const viewportWidth = autoRunAdViewport.clientWidth || 0;
-  const textWidth = Math.ceil(autoRunAdText.getBoundingClientRect().width || 0);
-  if (!viewportWidth || !textWidth || textWidth <= viewportWidth) {
-    resetAutoRunAdScrollState();
-    return;
-  }
-
-  const scrollGap = 32;
-  const scrollDistance = textWidth + scrollGap;
-  const durationSeconds = Math.max(18, scrollDistance / 24);
-  autoRunAdBar.classList.add('is-scrolling');
-  autoRunAdBar.style.setProperty('--auto-run-ad-gap', `${scrollGap}px`);
-  autoRunAdBar.style.setProperty('--auto-run-ad-duration', `${durationSeconds.toFixed(2)}s`);
-  autoRunAdBar.style.setProperty('--auto-run-ad-scroll-distance', `${scrollDistance}px`);
-}
-
-function scheduleAutoRunAdScrollSync() {
-  if (autoRunAdScrollSyncFrame && typeof window.cancelAnimationFrame === 'function') {
-    window.cancelAnimationFrame(autoRunAdScrollSyncFrame);
-    autoRunAdScrollSyncFrame = 0;
-  }
-
-  if (typeof window.requestAnimationFrame === 'function') {
-    autoRunAdScrollSyncFrame = window.requestAnimationFrame(() => {
-      autoRunAdScrollSyncFrame = 0;
-      syncAutoRunAdScrollState();
-    });
-    return;
-  }
-
-  syncAutoRunAdScrollState();
-}
-
-function renderAutoRunAd(snapshot = currentContributionContentSnapshot) {
-  if (!autoRunAdBar || !autoRunAdText || !autoRunAdTextClone) {
-    return;
-  }
-
-  const config = getAutoRunAdConfig(snapshot);
-  const visible = Boolean(config);
-  autoRunAdBar.hidden = !visible;
-  if (!visible) {
-    autoRunAdBar.title = '';
-    autoRunAdText.textContent = '';
-    autoRunAdTextClone.textContent = '';
-    resetAutoRunAdScrollState();
-    return;
-  }
-
-  const segments = parseAutoRunAdSegments(config.text);
-  const plainText = getAutoRunAdPlainText(segments);
-  autoRunAdBar.title = plainText || config.text;
-  renderAutoRunAdSegments(autoRunAdText, segments);
-  renderAutoRunAdSegments(autoRunAdTextClone, segments, { tabIndex: -1 });
-  scheduleAutoRunAdScrollSync();
-}
-
-function dismissContributionUpdateHint() {
-  const promptVersion = String(currentContributionContentSnapshot?.promptVersion || '').trim();
-  if (promptVersion) {
-    setDismissedContributionContentPromptVersion(promptVersion);
-  }
-  renderContributionUpdateHint();
-}
-
-async function refreshContributionContentHint() {
-  if (!contributionContentService?.getContentUpdateSnapshot) {
-    currentContributionContentSnapshot = null;
-    renderContributionUpdateHint();
-    renderAutoRunAd();
-    return null;
-  }
-  if (contributionContentSnapshotRequestInFlight) {
-    return contributionContentSnapshotRequestInFlight;
-  }
-
-  contributionContentSnapshotRequestInFlight = contributionContentService.getContentUpdateSnapshot({
-    flowId: getContributionContentFlowId(),
-    targetId: getContributionContentTargetId(),
-  })
-    .then((snapshot) => {
-      currentContributionContentSnapshot = snapshot;
-      renderContributionUpdateHint(snapshot);
-      renderAutoRunAd(snapshot);
-      return snapshot;
-    })
-    .catch((error) => {
-      currentContributionContentSnapshot = null;
-      renderContributionUpdateHint(null);
-      renderAutoRunAd(null);
-      throw error;
-    })
-    .finally(() => {
-      contributionContentSnapshotRequestInFlight = null;
-    });
-
-  return contributionContentSnapshotRequestInFlight;
 }
 
 function syncPasswordField(state) {
@@ -16006,7 +15514,6 @@ function updateButtonStates() {
     selectIcloudFetchMode.disabled = disableIcloudControls || !allowIcloudFetchMode;
   }
   if (checkboxAutoDeleteIcloud) checkboxAutoDeleteIcloud.disabled = disableIcloudControls;
-  if (btnContributionMode) btnContributionMode.disabled = isContributionButtonLocked();
   applyStepExecutionRangeState(latestState);
   updateStopButtonState(anyRunning || isAutoRunPausedPhase() || autoLocked);
   renderContributionMode();
@@ -16427,7 +15934,6 @@ const hotmailManager = window.SidepanelHotmailManager?.createHotmailManager({
     btnAddHotmailAccount,
     btnClearUsedHotmailAccounts,
     btnDeleteAllHotmailAccounts,
-    btnHotmailUsageGuide,
     btnImportHotmailAccounts,
     btnToggleHotmailForm,
     btnToggleHotmailList,
@@ -16765,86 +16271,9 @@ const bindAccountRecordEvents = accountRecordsManager?.bindEvents
 const closeAccountRecordsPanel = accountRecordsManager?.closePanel
   || (() => { });
 bindAccountRecordEvents();
-const accountContributionManager = window.SidepanelContributionMode?.createContributionModeManager({
-  state: {
-    getLatestState: () => latestState,
-  },
-  dom: {
-    btnConfigMenu,
-    btnContributionMode,
-    inputContributionNickname,
-    inputContributionQq,
-    contributionPrimaryStatusLabel,
-    contributionSecondaryStatusLabel,
-    contributionCallbackStatus,
-    btnExitContributionMode,
-    btnOpenAccountRecords,
-    btnOpenContributionUpload,
-    btnStartContribution,
-    accountContributionBadge,
-    accountContributionPanel,
-    accountContributionSummary,
-    accountContributionText,
-    contributionOauthStatus,
-    rowAccountRunHistoryHelperBaseUrl,
-    rowPhoneVerificationEnabled,
-    rowCustomPassword,
-    rowLocalCpaStep9Mode,
-    rowSub2ApiAccountPriority,
-    rowSub2ApiDefaultProxy,
-    rowSub2ApiEmail,
-    rowSub2ApiGroup,
-    rowSub2ApiPassword,
-    rowSub2ApiUrl,
-    rowVpsPassword,
-    rowVpsUrl,
-    selectPanelMode,
-  },
-  helpers: {
-    applySettingsState,
-    closeAccountRecordsPanel,
-    closeConfigMenu,
-    getContributionNickname: () => latestState?.email || '',
-    getContributionProfile: () => ({
-      nickname: String(inputContributionNickname?.value || '').trim(),
-      qq: String(inputContributionQq?.value || '').trim(),
-    }),
-    getSelectedFlowId: () => (typeof getSelectedFlowId === 'function'
-      ? getSelectedFlowId(latestState)
-      : String(latestState?.activeFlowId || latestState?.flowId || DEFAULT_ACTIVE_FLOW_ID).trim().toLowerCase() || DEFAULT_ACTIVE_FLOW_ID),
-    getSelectedTargetId: (flowId, state = latestState) => (typeof getSelectedTargetIdForState === 'function'
-      ? getSelectedTargetIdForState(state, flowId)
-      : normalizeTargetIdForFlow(flowId, state?.targetId || '', getDefaultTargetIdForFlow(flowId))),
-    isModeSwitchBlocked: isContributionModeSwitchBlocked,
-    openConfirmModal,
-    openExternalUrl,
-    persistCurrentSettingsForAction,
-    showToast,
-    startContributionAutoRun: () => startAutoRunFromCurrentSettings(),
-    updateAccountRunHistorySettingsUI,
-    updateConfigMenuControls,
-    updatePanelModeUI,
-    updateStatusDisplay,
-  },
-  runtime: {
-    sendMessage: (message) => chrome.runtime.sendMessage(message),
-  },
-  constants: {
-    contributionOauthUrl: `${String(contributionContentService?.portalUrl || 'https://flowpilot.qlhazycoder.top').replace(/\/+$/, '')}/oauth/`,
-    contributionPortalUrl: String(contributionContentService?.portalUrl || 'https://flowpilot.qlhazycoder.top').replace(/\/+$/, ''),
-    contributionUploadUrl: `${String(contributionContentService?.portalUrl || 'https://flowpilot.qlhazycoder.top').replace(/\/+$/, '')}/upload`,
-  },
-});
-const baseRenderAccountContribution = accountContributionManager?.render
-  || (() => { });
 const renderContributionMode = () => {
-  baseRenderAccountContribution();
-  renderContributionUpdateHint();
   updateSignupMethodUI({ notify: true });
 };
-const bindAccountContributionEvents = accountContributionManager?.bindEvents
-  || (() => { });
-bindAccountContributionEvents();
 renderStepsList();
 
 async function exportSettingsFile() {
@@ -17238,21 +16667,12 @@ linkRepoHome?.addEventListener('click', (event) => {
   openRepositoryHomePage();
 });
 
-btnCloudflareTempEmailUsageGuide?.addEventListener('click', () => {
-  openCloudflareTempEmailUsageGuidePage();
-});
-
 btnCloudflareTempEmailGithub?.addEventListener('click', () => {
   openCloudflareTempEmailRepositoryPage();
 });
 
 extensionUpdateStatus?.addEventListener('click', () => {
   openReleaseListPage();
-});
-
-btnDismissContributionUpdateHint?.addEventListener('click', (event) => {
-  event.stopPropagation();
-  dismissContributionUpdateHint();
 });
 
 configMenu?.addEventListener('click', (event) => {
@@ -17293,12 +16713,6 @@ autoStartMessage?.addEventListener('click', (event) => {
   event.preventDefault();
   openExternalUrl(link.dataset.externalUrl || link.href);
 });
-autoRunAdBar?.addEventListener('click', (event) => {
-  const link = event.target?.closest?.('a[data-external-url]');
-  if (!link) return;
-  event.preventDefault();
-  openExternalUrl(link.dataset.externalUrl || link.href);
-});
 btnAutoStartClose?.addEventListener('click', () => resolveModalChoice(null));
 
 async function startAutoRunFromCurrentSettings() {
@@ -17309,11 +16723,6 @@ async function startAutoRunFromCurrentSettings() {
     ? initialLockedRunCount
     : getRunCountValue();
   registerPendingAutoRunStartRunCount(requestedTotalRuns);
-
-  // 站点内容刷新只影响提示/广告展示，不应阻塞自动流程启动。
-  refreshContributionContentHint().catch((error) => {
-    console.warn('Failed to refresh contribution content hint before auto run:', error);
-  });
 
   if (typeof persistCurrentSettingsForAction === 'function') {
     await persistCurrentSettingsForAction();
@@ -17371,8 +16780,6 @@ async function startAutoRunFromCurrentSettings() {
   }
   let mode = 'restart';
   const autoRunSkipFailures = inputAutoSkipFailures.checked;
-  const contributionNickname = String(inputContributionNickname?.value || '').trim();
-  const contributionQq = String(inputContributionQq?.value || '').trim();
   const fallbackThreadIntervalMinutes = normalizeAutoRunThreadIntervalMinutes(
     inputAutoSkipFailuresThreadIntervalMinutes.value
   );
@@ -17428,9 +16835,6 @@ async function startAutoRunFromCurrentSettings() {
         : Boolean(latestState?.plusModeEnabled),
       autoRunSkipFailures,
       accountContributionEnabled: Boolean(latestState?.accountContributionEnabled),
-      contributionAdapterId: latestState?.contributionAdapterId || '',
-      contributionNickname,
-      contributionQq,
       mode,
     },
   });
@@ -21140,15 +20544,6 @@ document.addEventListener('keydown', (event) => {
   closeEditableListPickers();
 });
 
-window.addEventListener('resize', () => {
-  positionContributionUpdateHint();
-  scheduleAutoRunAdScrollSync();
-});
-
-document.addEventListener('scroll', () => {
-  positionContributionUpdateHint();
-}, true);
-
 // ============================================================
 // Init
 // ============================================================
@@ -21209,12 +20604,6 @@ Promise.allSettled([
     updatePanelModeUI();
     updateButtonStates();
     updateStatusDisplay(latestState);
-    return refreshContributionContentHint()
-      .catch((error) => {
-        console.warn('Failed to refresh contribution content hint during initialization:', error);
-        return null;
-      })
-      .then(() => maybeShowNewUserGuidePrompt());
   }).catch((err) => {
     console.error('Failed to initialize sidepanel state:', err);
   });

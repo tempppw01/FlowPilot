@@ -22,9 +22,11 @@ function createProviderApi(options = {}) {
   const logs = [];
   const persistCalls = [];
   const stateUpdates = [];
+  const usageCostCalls = [];
 
   const api = globalThis.MultiPageBackgroundSmsBowerMailProvider.createSmsBowerMailProvider({
     addLog: async (message, level) => logs.push({ message, level }),
+    addUsageCost: async (...args) => usageCostCalls.push(args),
     DEFAULT_SMSBOWER_MAIL_BASE_URL: utils.DEFAULT_SMSBOWER_MAIL_BASE_URL,
     DEFAULT_SMSBOWER_MAIL_DOMAIN: utils.DEFAULT_SMSBOWER_MAIL_DOMAIN,
     DEFAULT_SMSBOWER_MAIL_MAX_PRICE: utils.DEFAULT_SMSBOWER_MAIL_MAX_PRICE,
@@ -92,7 +94,7 @@ function createProviderApi(options = {}) {
   return {
     ...api,
     snapshot() {
-      return { calls, currentState, logs, persistCalls, stateUpdates };
+      return { calls, currentState, logs, persistCalls, stateUpdates, usageCostCalls };
     },
   };
 }
@@ -110,7 +112,9 @@ test('fetchSmsBowerMailAddress buys OpenAI Gmail temp mail and stores activation
   assert.match(snapshot.calls[0].url, /maxPrice=0\.134/);
   assert.equal(snapshot.currentState.currentSmsBowerMailActivation.id, '42');
   assert.equal(snapshot.currentState.currentSmsBowerMailActivation.address, 'fresh@gmail.com');
+  assert.equal(snapshot.currentState.currentSmsBowerMailActivation.price, 0.134);
   assert.equal(snapshot.persistCalls[0].email, 'fresh@gmail.com');
+  assert.deepEqual(snapshot.usageCostCalls[0].slice(0, 2), ['email', 0.134]);
 });
 
 test('pollSmsBowerMailVerificationCode reads code and closes activation', async () => {

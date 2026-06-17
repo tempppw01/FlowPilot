@@ -4,6 +4,7 @@
   function createSmsBowerMailProvider(deps = {}) {
     const {
       addLog = async () => {},
+      addUsageCost = async () => {},
       DEFAULT_SMSBOWER_MAIL_BASE_URL = 'https://smsbower.page/api/mail',
       DEFAULT_SMSBOWER_MAIL_DOMAIN = 'gmail.com',
       DEFAULT_SMSBOWER_MAIL_MAX_PRICE = '0.134',
@@ -126,6 +127,7 @@
         ...payload,
         service: config.service,
         domain: config.domain,
+        maxPrice: config.maxPrice,
       });
       if (!activation.id || !activation.address) {
         throw new Error('SMSBower TempMail 获取邮箱成功，但未返回可用 mail/mailId。');
@@ -134,6 +136,10 @@
       await persistResolvedEmailState(latestState, activation.address, {
         source: `generated:${SMSBOWER_MAIL_PROVIDER}`,
         preserveAccountIdentity: Boolean(options?.preserveAccountIdentity),
+      });
+      await addUsageCost('email', activation.price ?? activation.selectedPrice ?? config.maxPrice, {
+        provider: SMSBOWER_MAIL_PROVIDER,
+        activationId: activation.id,
       });
       await addLog(`SMSBower TempMail：已获取邮箱 ${activation.address}（mailId=${activation.id}）`, 'ok');
       return activation.address;

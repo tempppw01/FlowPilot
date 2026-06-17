@@ -86,7 +86,7 @@ function createClassList(initial = []) {
 test('sidepanel html places cloudflare temp email controls in a standalone section', () => {
   const html = fs.readFileSync('sidepanel/sidepanel.html', 'utf8');
   assert.match(html, /id="cloudflare-temp-email-section"/);
-  assert.match(html, /id="btn-cloudflare-temp-email-usage-guide"/);
+  assert.doesNotMatch(html, /id="btn-cloudflare-temp-email-usage-guide"/);
   assert.match(html, /id="btn-cloudflare-temp-email-github"/);
   assert.match(html, /btn-cloudflare-temp-email-github"[^>]*>部署</);
   assert.match(html, /id="row-temp-email-lookup-mode"/);
@@ -113,42 +113,6 @@ test('sidepanel modal message preserves line breaks and supports inline links', 
   const css = fs.readFileSync('sidepanel/sidepanel.css', 'utf8');
   assert.match(css, /\.modal-message\s*\{[\s\S]*white-space:\s*pre-line;/);
   assert.match(css, /\.modal-message a,\s*[\s\S]*\.modal-alert a/);
-});
-
-test('openCloudflareTempEmailUsageGuidePage opens the contribution portal home page', () => {
-  const bundle = extractFunction('openCloudflareTempEmailUsageGuidePage');
-
-  const api = new Function(`
-const openedUrls = [];
-function getContributionPortalUrl() { return 'https://flowpilot.qlhazycoder.top'; }
-function openExternalUrl(url) { openedUrls.push(url); }
-${bundle}
-return {
-  openedUrls,
-  openCloudflareTempEmailUsageGuidePage,
-};
-  `)();
-
-  api.openCloudflareTempEmailUsageGuidePage();
-  assert.deepEqual(api.openedUrls, ['https://flowpilot.qlhazycoder.top']);
-});
-
-test('openCloudflareTempEmailUsageGuidePage skips opening when the contribution portal URL is empty', () => {
-  const bundle = extractFunction('openCloudflareTempEmailUsageGuidePage');
-
-  const api = new Function(`
-const openedUrls = [];
-function getContributionPortalUrl() { return ''; }
-function openExternalUrl(url) { openedUrls.push(url); }
-${bundle}
-return {
-  openedUrls,
-  openCloudflareTempEmailUsageGuidePage,
-};
-  `)();
-
-  api.openCloudflareTempEmailUsageGuidePage();
-  assert.deepEqual(api.openedUrls, []);
 });
 
 test('openCloudflareTempEmailRepositoryPage opens the extension author repository', () => {

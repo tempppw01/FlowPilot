@@ -1631,6 +1631,10 @@ const DEFAULT_STATE = {
   ...CONTRIBUTION_RUNTIME_DEFAULTS,
   accounts: [], // 已生成账号记录：{ email, password, createdAt }。
   accountRunHistory: [], // 账号运行历史快照，实际持久化在 chrome.storage.local。
+  usageCostTotals: {
+    email: 0,
+    phone: 0,
+  },
   manualAliasUsage: {},
   preservedAliases: {},
   icloudAliasCache: [],
@@ -3369,6 +3373,7 @@ const {
   pollYydsMailVerificationCode,
 } = yydsMailProvider;
 const smsbowerMailProvider = self.MultiPageBackgroundSmsBowerMailProvider.createSmsBowerMailProvider({
+  addUsageCost,
   addLog,
   DEFAULT_SMSBOWER_MAIL_BASE_URL,
   DEFAULT_SMSBOWER_MAIL_DOMAIN,
@@ -4464,6 +4469,7 @@ function buildFreshAutoRunKeepState(prevState = {}) {
     keepState.settingsSchemaVersion = Number(sourceState.settingsSchemaVersion) || 0;
   }
   keepState.settingsState = settingsState;
+  keepState.usageCostTotals = normalizeUsageCostTotals(sourceState.usageCostTotals);
   return keepState;
 }
 
@@ -4975,6 +4981,42 @@ function broadcastDataUpdate(payload) {
     type: 'DATA_UPDATED',
     payload,
   }).catch(() => { });
+}
+
+function normalizeUsageCostAmount(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 0;
+  }
+  return Math.round(numeric * 10000) / 10000;
+}
+
+function normalizeUsageCostTotals(value = {}) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return {
+    email: normalizeUsageCostAmount(source.email ?? source.mail),
+    phone: normalizeUsageCostAmount(source.phone ?? source.sms),
+  };
+}
+
+async function addUsageCost(kind, amount) {
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  const field = normalizedKind === 'email' || normalizedKind === 'mail'
+    ? 'email'
+    : (normalizedKind === 'phone' || normalizedKind === 'sms' ? 'phone' : '');
+  const normalizedAmount = normalizeUsageCostAmount(amount);
+  if (!field || normalizedAmount <= 0) {
+    return null;
+  }
+  const state = await getState();
+  const previousTotals = normalizeUsageCostTotals(state?.usageCostTotals);
+  const nextTotals = {
+    ...previousTotals,
+    [field]: normalizeUsageCostAmount(previousTotals[field] + normalizedAmount),
+  };
+  await setState({ usageCostTotals: nextTotals });
+  broadcastDataUpdate({ usageCostTotals: nextTotals });
+  return nextTotals;
 }
 
 async function clearGrokSsoCookies() {
@@ -14772,6 +14814,7 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   VERIFICATION_POLL_MAX_ROUNDS,
 });
 const phoneVerificationHelpers = self.MultiPageBackgroundPhoneVerification?.createPhoneVerificationHelpers({
+  addUsageCost,
   addLog,
   broadcastDataUpdate,
   DEFAULT_FIVE_SIM_BASE_URL,

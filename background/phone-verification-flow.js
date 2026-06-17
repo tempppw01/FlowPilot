@@ -4,6 +4,7 @@
   function createPhoneVerificationHelpers(deps = {}) {
     const {
       addLog: rawAddLog = async () => {},
+      addUsageCost = async () => {},
       ensureStep8SignupPageReady,
       fetchImpl = (...args) => fetch(...args),
       generateRandomBirthday,
@@ -1887,11 +1888,13 @@
       }
       const activation = await provider.requestActivation(state, options);
       const normalizedActivation = normalizeActivation(activation) || activation;
-      rememberActivationAcquiredPrice(
-        normalizedActivation,
-        getProviderActivationPrice(state, activation)
-        ?? getProviderActivationPrice(state, normalizedActivation)
-      );
+      const activationPrice = getProviderActivationPrice(state, activation)
+        ?? getProviderActivationPrice(state, normalizedActivation);
+      rememberActivationAcquiredPrice(normalizedActivation, activationPrice);
+      await addUsageCost('phone', activationPrice, {
+        provider: normalizedActivation?.provider || state?.phoneSmsProvider,
+        activationId: normalizedActivation?.activationId || activation?.activationId || activation?.id,
+      });
       return normalizedActivation;
     }
 

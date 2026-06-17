@@ -544,15 +544,6 @@
         formController.setVisible(true, { focusField: true });
       });
 
-      dom.btnHotmailUsageGuide?.addEventListener('click', async () => {
-        await helpers.openConfirmModal({
-          title: '使用教程',
-          message: 'API对接模式会直接调用微软邮箱接口取件；本地助手模式仍走本地服务。两种模式继续共用同一套 Hotmail 账号池与导入格式。',
-          confirmLabel: '确定',
-          confirmVariant: 'btn-primary',
-        });
-      });
-
       dom.btnClearUsedHotmailAccounts?.addEventListener('click', async () => {
         if (actionInFlight) return;
         actionInFlight = true;
