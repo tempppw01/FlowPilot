@@ -1176,7 +1176,8 @@
               autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
             });
             await appendRoundRecord('failed', reason, err);
-            if (!autoRunSkipFailures) {
+            const shouldContinueAfterForcedFreshFailure = forceFreshAttempt && targetRun < totalRuns;
+            if (!autoRunSkipFailures && !shouldContinueAfterForcedFreshFailure) {
               cancelPendingCommands('当前轮执行失败。');
               await broadcastStopToContentScripts();
               await addLog('自动重试未开启，自动运行将在当前失败后停止。', 'warn');

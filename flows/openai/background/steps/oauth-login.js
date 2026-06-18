@@ -169,6 +169,11 @@
       return getStep7ResultState(result) === 'verification_page' && !isStep7PhoneVerificationResult(result);
     }
 
+    function isStep7EmailLoginEntryResult(result = {}) {
+      const state = getStep7ResultState(result);
+      return state === 'email_entry' || state === 'entry_home';
+    }
+
     function isStep7AlreadyOnVerificationResult(result = {}) {
       const via = String(result?.via || '').trim();
       return (
@@ -204,6 +209,15 @@
       const urlPart = url ? `URL: ${url}` : '';
       return new Error(
         `${RESTART_CURRENT_ATTEMPT_ERROR_PREFIX}步骤 ${completionStep}：SMSBower TempMail 登录阶段未检测到可复用的已登录账号，认证页进入${stateLabel}；由于 SMSBower 只保留最近 20 分钟验证码，当前账号登录不可继续，已要求回到步骤 1 重新注册新号。${urlPart}`.trim()
+      );
+    }
+
+    function buildStep7SmsBowerEmailLoginRestartError(result = {}, completionStep = 7) {
+      const stateLabel = getLoginAuthStateLabel(result?.state);
+      const url = String(result?.url || '').trim();
+      const urlPart = url ? `URL: ${url}` : '';
+      return new Error(
+        `${RESTART_CURRENT_ATTEMPT_ERROR_PREFIX}步骤 ${completionStep}：SMSBower TempMail 登录阶段未检测到可复用的已登录账号，认证页要求重新填写邮箱登录（当前页面：${stateLabel}）；由于后续登录验证码无法在短时间内再次获取，当前账号登录不可继续，已要求回到步骤 1 重新注册新号。${urlPart}`.trim()
       );
     }
 
@@ -519,6 +533,15 @@
 
           if (result?.error) {
             throw new Error(result.error);
+          }
+
+          if (isSmsBowerMailProviderForStep7(currentState) && isStep7EmailLoginEntryResult(result)) {
+            await addLog(
+              `步骤 ${completionStep}：SMSBower TempMail 未检测到可复用的已登录账号，认证页要求重新填写邮箱登录；不会继续填写邮箱或请求登录验证码，准备回到步骤 1 注册新号。`,
+              'warn',
+              { step: completionStep, stepKey: 'oauth-login' }
+            );
+            throw buildStep7SmsBowerEmailLoginRestartError(result, completionStep);
           }
 
           if (isStep6SuccessResult(result)) {

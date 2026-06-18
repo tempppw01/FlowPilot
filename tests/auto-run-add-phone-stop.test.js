@@ -910,6 +910,160 @@ test('auto-run controller force-restarts fresh attempt for stale SMSBower login 
   assert.equal(events.logs.some(({ message }) => /需要整轮重开/.test(message)), true);
 });
 
+test('auto-run controller continues next batch round after repeated SMSBower fresh-attempt restarts', async () => {
+  const events = {
+    logs: [],
+    broadcasts: [],
+    accountRecords: [],
+    runCalls: 0,
+  };
+
+  let currentState = {
+    stepStatuses: {},
+    vpsUrl: 'https://example.com/vps',
+    vpsPassword: 'secret',
+    customPassword: '',
+    autoRunSkipFailures: false,
+    autoRunFallbackThreadIntervalMinutes: 0,
+    autoStepDelaySeconds: null,
+    mailProvider: 'smsbower-mail',
+    emailGenerator: 'smsbower-mail',
+    gmailBaseEmail: '',
+    mail2925BaseEmail: '',
+    emailPrefix: 'demo',
+    inbucketHost: '',
+    inbucketMailbox: '',
+    cloudflareDomain: '',
+    cloudflareDomains: [],
+    tabRegistry: {},
+    sourceLastUrls: {},
+    autoRunRoundSummaries: [],
+  };
+
+  const runtime = {
+    state: {
+      autoRunActive: false,
+      autoRunCurrentRun: 0,
+      autoRunTotalRuns: 1,
+      autoRunAttemptRun: 0,
+      autoRunSessionId: 0,
+    },
+    get() {
+      return { ...this.state };
+    },
+    set(updates = {}) {
+      this.state = { ...this.state, ...updates };
+    },
+  };
+
+  const controller = api.createAutoRunController({
+    addLog: async (message, level) => {
+      events.logs.push({ message, level });
+    },
+    appendAccountRunRecord: async (status, state, reason) => {
+      events.accountRecords.push({ status, state, reason });
+    },
+    AUTO_RUN_MAX_RETRIES_PER_ROUND: 1,
+    AUTO_RUN_RETRY_DELAY_MS: 1,
+    AUTO_RUN_TIMER_KIND_BEFORE_RETRY: 'before_retry',
+    AUTO_RUN_TIMER_KIND_BETWEEN_ROUNDS: 'between_rounds',
+    broadcastAutoRunStatus: async (phase, payload = {}) => {
+      events.broadcasts.push({ phase, ...payload });
+    },
+    broadcastStopToContentScripts: async () => {},
+    cancelPendingCommands: () => {},
+    clearStopRequest: () => {},
+    createAutoRunSessionId: () => 1,
+    getAutoRunStatusPayload: (phase, payload = {}) => ({
+      autoRunning: ['running', 'waiting_step', 'waiting_email', 'retrying', 'waiting_interval'].includes(phase),
+      autoRunPhase: phase,
+      autoRunCurrentRun: payload.currentRun ?? 0,
+      autoRunTotalRuns: payload.totalRuns ?? 1,
+      autoRunAttemptRun: payload.attemptRun ?? 0,
+      autoRunSessionId: payload.sessionId ?? 0,
+    }),
+    getErrorMessage: (error) => String(error?.message || error || '').replace(/^RESTART_CURRENT_ATTEMPT::/i, ''),
+    getFirstUnfinishedStep: () => 1,
+    getPendingAutoRunTimerPlan: () => null,
+    getRunningSteps: () => [],
+    getState: async () => ({
+      ...currentState,
+      stepStatuses: { ...(currentState.stepStatuses || {}) },
+      tabRegistry: { ...(currentState.tabRegistry || {}) },
+      sourceLastUrls: { ...(currentState.sourceLastUrls || {}) },
+    }),
+    getStopRequested: () => false,
+    hasSavedProgress: () => false,
+    isAddPhoneAuthFailure: () => false,
+    isRestartCurrentAttemptError: (error) => /RESTART_CURRENT_ATTEMPT::/i.test(error?.message || String(error || '')),
+    isStopError: () => false,
+    launchAutoRunTimerPlan: async () => false,
+    normalizeAutoRunFallbackThreadIntervalMinutes: (value) => Math.max(0, Math.floor(Number(value) || 0)),
+    persistAutoRunTimerPlan: async () => ({}),
+    resetState: async () => {
+      currentState = {
+        ...currentState,
+        stepStatuses: {},
+        tabRegistry: {},
+        sourceLastUrls: {},
+      };
+    },
+    runAutoSequenceFromStep: async () => {
+      events.runCalls += 1;
+      if (events.runCalls <= 2) {
+        throw new Error('RESTART_CURRENT_ATTEMPT::步骤 7：SMSBower TempMail 未检测到可复用登录态，放弃当前账号。');
+      }
+      currentState = {
+        ...currentState,
+        stepStatuses: {
+          1: 'completed',
+          2: 'completed',
+          3: 'completed',
+          4: 'completed',
+          5: 'completed',
+          6: 'completed',
+          7: 'completed',
+          8: 'completed',
+          9: 'completed',
+          10: 'completed',
+        },
+      };
+    },
+    runtime,
+    setState: async (updates = {}) => {
+      currentState = {
+        ...currentState,
+        ...updates,
+        stepStatuses: updates.stepStatuses ? { ...updates.stepStatuses } : currentState.stepStatuses,
+        tabRegistry: updates.tabRegistry ? { ...updates.tabRegistry } : currentState.tabRegistry,
+        sourceLastUrls: updates.sourceLastUrls ? { ...updates.sourceLastUrls } : currentState.sourceLastUrls,
+      };
+    },
+    sleepWithStop: async () => {},
+    throwIfAutoRunSessionStopped: () => {},
+    waitForRunningStepsToFinish: async () => currentState,
+    chrome: {
+      runtime: {
+        sendMessage() {
+          return Promise.resolve();
+        },
+      },
+    },
+  });
+
+  await controller.autoRunLoop(2, {
+    autoRunSkipFailures: false,
+    mode: 'restart',
+  });
+
+  assert.equal(events.runCalls, 3);
+  assert.equal(events.accountRecords.length, 1);
+  assert.equal(events.accountRecords[0].status, 'failed');
+  assert.equal(events.broadcasts.some(({ phase }) => phase === 'stopped'), false);
+  assert.equal(currentState.autoRunPhase, 'complete');
+  assert.equal(events.logs.some(({ message }) => /继续下一轮/.test(message)), true);
+});
+
 test('auto-run controller skips user_already_exists failures to the next round instead of retrying the same round', async () => {
   const events = {
     logs: [],

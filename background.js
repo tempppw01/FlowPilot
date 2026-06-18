@@ -16105,6 +16105,16 @@ async function getPostStep6AutoRestartDecision(step, error) {
   const normalizedStep = Number(step);
   const rawErrorMessage = String(typeof error === 'string' ? error : error?.message || error || '');
   const errorMessage = getErrorMessage(error);
+  if (/^RESTART_CURRENT_ATTEMPT::/i.test(rawErrorMessage)) {
+    return {
+      shouldRestart: false,
+      blockedByAddPhone: false,
+      forcedByPhoneVerificationTimeout: false,
+      restartStep: FINAL_OAUTH_CHAIN_START_STEP,
+      errorMessage,
+      authState: null,
+    };
+  }
   const shouldForceRestartFromStep7 = /^PHONE_RESTART_STEP7::/i.test(rawErrorMessage)
     || /restart step 7 with a new number|从步骤\s*7\s*重新获取新号码/i.test(errorMessage);
   const latestState = await getState();
