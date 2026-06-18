@@ -285,6 +285,14 @@ async function submitClaudeEmail(payload = {}) {
 }
 
 async function createClaudeAccount() {
+  const currentState = getClaudePageState();
+  if (['plan_selection', 'onboarding', 'claude_page'].includes(currentState.state)) {
+    return {
+      submitted: false,
+      alreadyAdvanced: true,
+      ...currentState,
+    };
+  }
   const checkbox = await waitForClaude(findClaudeTermsCheckbox, { timeoutMs: 45000, intervalMs: 300 });
   if (!checkbox) {
     throw new Error('Claude account terms checkbox was not found.');
