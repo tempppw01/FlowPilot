@@ -190,13 +190,20 @@
       </div>
       <div class="data-row" id="row-claude2api-password" style="display:none;">
         <span class="data-label">管理员密码</span>
-        <div class="input-with-icon">
-          <input type="password" id="input-claude2api-password" class="data-input data-input-with-icon"
-            placeholder="请输入 Claude2API 管理员密码" />
-          <button id="btn-toggle-claude2api-password" class="input-icon-btn" type="button"
-            data-password-toggle="input-claude2api-password" data-show-label="显示 Claude2API 密码"
-            data-hide-label="隐藏 Claude2API 密码" aria-label="显示 Claude2API 密码" title="显示 Claude2API 密码"></button>
+        <div class="data-inline">
+          <div class="input-with-icon">
+            <input type="password" id="input-claude2api-password" class="data-input data-input-with-icon"
+              placeholder="请输入 Claude2API 管理员密码" />
+            <button id="btn-toggle-claude2api-password" class="input-icon-btn" type="button"
+              data-password-toggle="input-claude2api-password" data-show-label="显示 Claude2API 密码"
+              data-hide-label="隐藏 Claude2API 密码" aria-label="显示 Claude2API 密码" title="显示 Claude2API 密码"></button>
+          </div>
+          <button id="btn-test-claude2api" class="btn btn-ghost btn-xs data-inline-btn" type="button">测试</button>
         </div>
+      </div>
+      <div class="data-row" id="row-claude2api-test-status" style="display:none;">
+        <span class="data-label">连接测试</span>
+        <span id="display-claude2api-test-status" class="data-value mono">未测试</span>
       </div>
       <div class="data-row" id="row-openai-webchat-url" style="display:none;">
         <span class="data-label">webchat</span>

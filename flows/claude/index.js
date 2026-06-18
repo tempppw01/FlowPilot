@@ -144,6 +144,7 @@
         rowIds: [
           'row-claude2api-url',
           'row-claude2api-password',
+          'row-claude2api-test-status',
         ],
       },
     },

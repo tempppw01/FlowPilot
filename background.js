@@ -47,6 +47,7 @@ importScripts(
   'background/contribution/adapters/kiro-builder-id.js',
   'flows/kiro/background/register-runner.js',
   'flows/grok/background/register-runner.js',
+  'flows/claude/background/claude2api-client.js',
   'flows/claude/background/register-runner.js',
   'flows/kiro/background/desktop-client.js',
   'flows/kiro/background/desktop-authorize-runner.js',
@@ -15430,6 +15431,16 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
     return self.MultiPageBackgroundKiroPublisherKiroRs.checkKiroRsConnection(
       baseUrl,
       apiKey,
+      typeof fetch === 'function' ? fetch.bind(globalThis) : null
+    );
+  },
+  testClaude2ApiConnection: async (baseUrl, adminPassword) => {
+    if (typeof self.MultiPageBackgroundClaude2ApiClient?.testClaude2ApiConnection !== 'function') {
+      throw new Error('Claude2API 连接测试能力尚未接入。');
+    }
+    return self.MultiPageBackgroundClaude2ApiClient.testClaude2ApiConnection(
+      baseUrl,
+      adminPassword,
       typeof fetch === 'function' ? fetch.bind(globalThis) : null
     );
   },

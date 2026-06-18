@@ -68,7 +68,7 @@ test('flow registry exposes canonical flow and target metadata', () => {
   );
   assert.deepEqual(
     flowRegistry.getSettingsGroupDefinition('claude-target-claude2api')?.rowIds,
-    ['row-claude2api-url', 'row-claude2api-password']
+    ['row-claude2api-url', 'row-claude2api-password', 'row-claude2api-test-status']
   );
   assert.deepEqual(
     flowRegistry.getTargetOptions('openai').map((entry) => entry.id),

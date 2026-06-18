@@ -812,6 +812,61 @@ test('CHECK_KIRO_RS_CONNECTION prefers current sidepanel payload over stale save
   ]);
 });
 
+test('CHECK_CLAUDE2API_CONNECTION prefers current sidepanel payload over stale saved config', async () => {
+  const source = fs.readFileSync('background/message-router.js', 'utf8');
+  const globalScope = { console };
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundMessageRouter;`)(globalScope);
+  const calls = [];
+  const router = api.createMessageRouter({
+    getState: async () => ({
+      activeFlowId: 'claude',
+      flowId: 'claude',
+      targetId: 'claude',
+      claude2apiUrl: 'https://old-claude2api.example',
+      claude2apiPassword: 'old-pass',
+      settingsState: {
+        flows: {
+          claude: {
+            targetId: 'claude',
+            targets: {
+              claude: {
+                claude2apiUrl: 'https://old-claude2api.example',
+                claude2apiPassword: 'old-pass',
+              },
+            },
+          },
+        },
+      },
+    }),
+    testClaude2ApiConnection: async (baseUrl, adminPassword) => {
+      calls.push({ baseUrl, adminPassword });
+      return {
+        ok: true,
+        status: 200,
+        message: 'Claude2API 连接测试成功，管理员密钥有效。',
+      };
+    },
+  });
+
+  const response = await router.handleMessage({
+    type: 'CHECK_CLAUDE2API_CONNECTION',
+    payload: {
+      baseUrl: ' https://new-claude2api.example/ ',
+      adminPassword: ' new-pass ',
+    },
+  });
+
+  assert.equal(response.ok, true);
+  assert.equal(response.status, 200);
+  assert.equal(response.message, 'Claude2API 连接测试成功，管理员密钥有效。');
+  assert.deepStrictEqual(calls, [
+    {
+      baseUrl: 'https://new-claude2api.example/',
+      adminPassword: ' new-pass ',
+    },
+  ]);
+});
+
 test('AUTO_RUN applies current flow selection from payload before starting loop', async () => {
   const source = fs.readFileSync('background/message-router.js', 'utf8');
   const globalScope = { console };

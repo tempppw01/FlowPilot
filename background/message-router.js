@@ -42,6 +42,7 @@
       fetchGeneratedEmail,
       refreshGpcCardBalance,
       testKiroRsConnection,
+      testClaude2ApiConnection,
       finalizePhoneActivationAfterSuccessfulFlow,
       finalizeStep3Completion,
       finalizeStep5Completion = null,
@@ -1696,6 +1697,34 @@
           return {
             ok: Boolean(result?.ok),
             targetId,
+            status: Number(result?.status) || 0,
+            message: String(result?.message || '').trim(),
+          };
+        }
+
+        case 'CHECK_CLAUDE2API_CONNECTION': {
+          if (typeof testClaude2ApiConnection !== 'function') {
+            throw new Error('Claude2API 连接测试能力尚未接入。');
+          }
+          const currentState = await getState();
+          const nestedTargetConfig = currentState?.settingsState?.flows?.claude?.targets?.claude
+            || currentState?.flows?.claude?.targets?.claude
+            || {};
+          const baseUrl = String(
+            message.payload?.baseUrl
+            ?? nestedTargetConfig.claude2apiUrl
+            ?? currentState?.claude2apiUrl
+            ?? ''
+          ).trim();
+          const adminPassword = String(
+            message.payload?.adminPassword
+            ?? nestedTargetConfig.claude2apiPassword
+            ?? currentState?.claude2apiPassword
+            ?? ''
+          );
+          const result = await testClaude2ApiConnection(baseUrl, adminPassword);
+          return {
+            ok: Boolean(result?.ok),
             status: Number(result?.status) || 0,
             message: String(result?.message || '').trim(),
           };

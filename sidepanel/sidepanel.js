@@ -160,6 +160,8 @@ const inputCodex2ApiAdminKey = document.getElementById('input-codex2api-admin-ke
 const inputClaude2ApiUrl = document.getElementById('input-claude2api-url');
 const inputClaude2ApiPassword = document.getElementById('input-claude2api-password');
 const btnToggleClaude2ApiPassword = document.getElementById('btn-toggle-claude2api-password');
+const btnTestClaude2Api = document.getElementById('btn-test-claude2api');
+const displayClaude2ApiTestStatus = document.getElementById('display-claude2api-test-status');
 const rowKiroRsUrl = document.getElementById('row-kiro-rs-url');
 const inputKiroRsUrl = document.getElementById('input-kiro-rs-url');
 const rowKiroRsKey = document.getElementById('row-kiro-rs-key');
@@ -630,6 +632,7 @@ let currentStepDefinitionTargetId = '';
 let currentStepDefinitionOpenAiWebchatUploadEnabled = false;
 let phoneSignupReuseUiWasLocked = false;
 let kiroRsConnectionTestStatusText = '未测试';
+let claude2ApiConnectionTestStatusText = '未测试';
 let lastPhoneSmsProviderBeforeChange = null;
 let heroSmsCountrySelectionOrder = [];
 let heroSmsOperatorsByCountryId = new Map();
@@ -3103,6 +3106,14 @@ function setKiroRsConnectionTestStatus(message = '') {
   kiroRsConnectionTestStatusText = nextText;
   if (typeof displayKiroRsTestStatus !== 'undefined' && displayKiroRsTestStatus) {
     displayKiroRsTestStatus.textContent = nextText;
+  }
+}
+
+function setClaude2ApiConnectionTestStatus(message = '') {
+  const nextText = String(message || '').trim() || '未测试';
+  claude2ApiConnectionTestStatusText = nextText;
+  if (typeof displayClaude2ApiTestStatus !== 'undefined' && displayClaude2ApiTestStatus) {
+    displayClaude2ApiTestStatus.textContent = nextText;
   }
 }
 
@@ -13192,6 +13203,9 @@ function applySettingsState(state) {
   if (typeof displayKiroRsTestStatus !== 'undefined' && displayKiroRsTestStatus) {
     displayKiroRsTestStatus.textContent = kiroRsConnectionTestStatusText;
   }
+  if (typeof displayClaude2ApiTestStatus !== 'undefined' && displayClaude2ApiTestStatus) {
+    displayClaude2ApiTestStatus.textContent = claude2ApiConnectionTestStatusText;
+  }
   const resolveKiroRuntimeState = typeof getKiroRuntimeState === 'function'
     ? getKiroRuntimeState
     : ((value = {}) => {
@@ -16950,6 +16964,7 @@ btnReset.addEventListener('click', async () => {
   displayLocalhostUrl.textContent = '等待中...';
   displayLocalhostUrl.classList.remove('has-value');
   setKiroRsConnectionTestStatus('未测试');
+  setClaude2ApiConnectionTestStatus('未测试');
   inputEmail.value = '';
   if (typeof inputSignupPhone !== 'undefined' && inputSignupPhone) {
     inputSignupPhone.value = '';
@@ -17176,6 +17191,36 @@ btnTestKiroRs?.addEventListener('click', async () => {
   } finally {
     btnTestKiroRs.disabled = false;
     btnTestKiroRs.textContent = defaultLabel;
+  }
+});
+
+btnTestClaude2Api?.addEventListener('click', async () => {
+  const defaultLabel = btnTestClaude2Api.textContent || '测试';
+  btnTestClaude2Api.disabled = true;
+  btnTestClaude2Api.textContent = '测试中';
+  setClaude2ApiConnectionTestStatus('测试中...');
+  try {
+    await persistCurrentSettingsForAction();
+    const response = await sendSidepanelMessage({
+      type: 'CHECK_CLAUDE2API_CONNECTION',
+      payload: {
+        baseUrl: String(inputClaude2ApiUrl?.value || '').trim(),
+        adminPassword: String(inputClaude2ApiPassword?.value || ''),
+      },
+    });
+    if (response?.error) {
+      throw new Error(response.error);
+    }
+    const message = String(response?.message || '').trim() || 'Claude2API 测试完成。';
+    setClaude2ApiConnectionTestStatus(message);
+    showToast(message, response?.ok ? 'success' : 'error', response?.ok ? 2200 : 4200);
+  } catch (error) {
+    const message = error?.message || 'Claude2API 测试失败。';
+    setClaude2ApiConnectionTestStatus(message);
+    showToast(message, 'error', 4200);
+  } finally {
+    btnTestClaude2Api.disabled = false;
+    btnTestClaude2Api.textContent = defaultLabel;
   }
 });
 
@@ -17486,6 +17531,17 @@ selectPlusAccountAccessStrategy?.addEventListener('change', () => {
   input?.addEventListener('input', () => {
     markSettingsDirty(true);
     setKiroRsConnectionTestStatus('未测试');
+    scheduleSettingsAutoSave();
+  });
+  input?.addEventListener('blur', () => {
+    saveSettings({ silent: true }).catch(() => { });
+  });
+});
+
+[inputClaude2ApiUrl, inputClaude2ApiPassword].forEach((input) => {
+  input?.addEventListener('input', () => {
+    markSettingsDirty(true);
+    setClaude2ApiConnectionTestStatus('未测试');
     scheduleSettingsAutoSave();
   });
   input?.addEventListener('blur', () => {
