@@ -138,6 +138,14 @@
         label: 'Claude \u8fd0\u884c\u6001',
         rowIds: [],
       },
+      'claude-target-claude2api': {
+        id: 'claude-target-claude2api',
+        label: 'Claude2API \u63a5\u5165',
+        rowIds: [
+          'row-claude2api-url',
+          'row-claude2api-password',
+        ],
+      },
     },
     sourceAliases: {},
     workflowStepCount: 11,

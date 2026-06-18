@@ -67,6 +67,10 @@ test('flow registry exposes canonical flow and target metadata', () => {
     ['claude-runtime-status', 'shared-auto-run', 'claude-target-claude2api', 'service-account', 'service-email', 'service-proxy']
   );
   assert.deepEqual(
+    flowRegistry.getSettingsGroupDefinition('claude-target-claude2api')?.rowIds,
+    ['row-claude2api-url', 'row-claude2api-password']
+  );
+  assert.deepEqual(
     flowRegistry.getTargetOptions('openai').map((entry) => entry.id),
     ['cpa', 'sub2api', 'codex2api', 'webchat']
   );
