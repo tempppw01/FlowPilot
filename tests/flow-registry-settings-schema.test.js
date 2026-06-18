@@ -64,7 +64,7 @@ test('flow registry exposes canonical flow and target metadata', () => {
   );
   assert.deepEqual(
     flowRegistry.getVisibleGroupIds('claude', 'claude'),
-    ['claude-runtime-status', 'shared-auto-run', 'service-account', 'service-email', 'service-proxy']
+    ['claude-runtime-status', 'shared-auto-run', 'claude-target-claude2api', 'service-account', 'service-email', 'service-proxy']
   );
   assert.deepEqual(
     flowRegistry.getTargetOptions('openai').map((entry) => entry.id),

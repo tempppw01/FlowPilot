@@ -263,7 +263,6 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
     claudeSteps.map((step) => step.key),
     [
       'claude-open-official-page',
-      'claude-wait-official-page',
       'claude-fill-email',
       'claude-submit-email-and-fetch-link',
       'claude-open-login-link',
@@ -282,8 +281,7 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
   assert.deepStrictEqual(
     claudeSteps.map((step) => step.title),
     [
-      '清理 Cookie 并打开 Claude',
-      '等待 Claude 加载完成',
+      '清理 Cookie、打开 Claude 并等待加载',
       '获取 acz 邮箱并填写',
       '提交邮箱并轮询登录链接',
       '打开邮箱魔法链接',
@@ -293,15 +291,14 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
       '继续引导',
       '生成随机英文名并继续',
       '选择 Set up later',
-      '获取 sessionKey',
+      '获取 sessionKey 并提交到 Claude2API',
     ]
   );
-  assert.deepStrictEqual(api.getStepIds({ activeFlowId: 'claude' }), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-  assert.equal(api.getLastStepId({ activeFlowId: 'claude' }), 12);
+  assert.deepStrictEqual(api.getStepIds({ activeFlowId: 'claude' }), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  assert.equal(api.getLastStepId({ activeFlowId: 'claude' }), 11);
   assert.deepStrictEqual(
     api.getNodes({ activeFlowId: 'claude' }).map((node) => node.next),
     [
-      ['claude-wait-official-page'],
       ['claude-fill-email'],
       ['claude-submit-email-and-fetch-link'],
       ['claude-open-login-link'],

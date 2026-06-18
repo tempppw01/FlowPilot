@@ -348,21 +348,32 @@
         if (chrome?.tabs?.update) {
           await chrome.tabs.update(tabId, { url: CLAUDE_OFFICIAL_URL, active: true });
         }
-        await log('步骤 1：已清理 Claude Cookie 并打开 Claude 官网。', 'ok', nodeId);
+        await ensureContentReady(tabId, {
+          timeoutMs: DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
+          stableMs: 1800,
+          initialDelayMs: 800,
+          logMessage: '步骤 1：正在等待 Claude 页面加载完成...',
+        });
+        const result = await sendClaudeCommand('claude-wait-official-page', {}, {
+          step: 1,
+          timeoutMs: DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
+          logMessage: '步骤 1：正在确认 Claude 注册页可用...',
+        });
+        await log('步骤 1：已清理 Claude Cookie、打开 Claude 并等待页面加载完成。', 'ok', nodeId);
         await completeNode(nodeId, {
           claudeRegisterTabId: tabId,
-          claudePageState: 'opening',
-          claudePageUrl: CLAUDE_OFFICIAL_URL,
+          claudePageState: result.state || 'email_entry',
+          claudePageUrl: result.url || CLAUDE_OFFICIAL_URL,
           ...buildClaudeRuntimePatch({
             session: {
               registerTabId: tabId,
               startedAt: Date.now(),
-              pageState: 'opening',
-              pageUrl: CLAUDE_OFFICIAL_URL,
+              pageState: result.state || 'email_entry',
+              pageUrl: result.url || CLAUDE_OFFICIAL_URL,
               lastError: '',
             },
             register: {
-              status: 'official_page_opening',
+              status: 'official_page_ready',
             },
           }),
         });
@@ -462,11 +473,11 @@
           }),
         });
         const result = await sendClaudeCommand(nodeId, { email }, {
-          step: 3,
+          step: 2,
           timeoutMs: DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
-          logMessage: '步骤 3：正在填写 Claude 注册邮箱...',
+          logMessage: '步骤 2：正在填写 Claude 注册邮箱...',
         });
-        await log(`步骤 3：已获取 acz 服务 Claude 邮箱并填写 ${email}。`, 'ok', nodeId);
+        await log(`步骤 2：已获取 acz 服务 Claude 邮箱并填写 ${email}。`, 'ok', nodeId);
         await completeNode(nodeId, {
           claudeEmail: email,
           claudeLoginLinkRequestedAt: requestedAt,
@@ -496,7 +507,7 @@
           session: { lastError: message },
           register: { status: 'error' },
         }));
-        await log(`步骤 3：${message}`, 'error', nodeId);
+        await log(`步骤 2：${message}`, 'error', nodeId);
         throw error;
       }
     }
@@ -511,23 +522,23 @@
         const runtimeState = readClaudeRuntime(currentState);
         const email = cleanString(currentState.claudeEmail || runtimeState.register?.email || currentState.email).toLowerCase();
         if (!email) {
-          throw new Error('缺少 Claude 注册邮箱，请先执行步骤 3。');
+          throw new Error('缺少 Claude 注册邮箱，请先执行步骤 2。');
         }
         const tabId = await ensureClaudeRegisterTab(currentState, { openIfMissing: false });
         await activateTab(tabId);
         await ensureContentReady(tabId);
         await sendClaudeCommand('claude-submit-email', { email }, {
-          step: 4,
+          step: 3,
           timeoutMs: DEFAULT_CLAUDE_PAGE_TIMEOUT_MS,
-          logMessage: '步骤 4：正在提交 Claude 邮箱...',
+          logMessage: '步骤 3：正在提交 Claude 邮箱...',
         });
-        const pollResult = await pollSmsBowerMailLink(4, {
+        const pollResult = await pollSmsBowerMailLink(3, {
           ...currentState,
           mailProvider: SMSBOWER_MAIL_PROVIDER,
           smsbowerMailServiceCode: CLAUDE_SMSBOWER_MAIL_SERVICE_CODE,
           activeFlowId: 'claude',
           flowId: 'claude',
-          visibleStep: 4,
+          visibleStep: 3,
           claudeEmail: email,
           email,
         }, {
@@ -541,7 +552,7 @@
         if (!loginLink) {
           throw new Error('未能获取到 Claude 邮箱登录链接。');
         }
-        await log('步骤 4：已提交邮箱并获取 Claude 邮箱登录链接。', 'ok', nodeId);
+        await log('步骤 3：已提交邮箱并获取 Claude 邮箱登录链接。', 'ok', nodeId);
         await completeNode(nodeId, {
           claudeEmail: email,
           claudeLoginLink: loginLink,
@@ -564,7 +575,7 @@
           session: { lastError: message },
           register: { status: 'error' },
         }));
-        await log(`步骤 4：${message}`, 'error', nodeId);
+        await log(`步骤 3：${message}`, 'error', nodeId);
         throw error;
       }
     }
@@ -576,7 +587,7 @@
         const runtimeState = readClaudeRuntime(currentState);
         const loginLink = cleanString(currentState.claudeLoginLink || runtimeState.register?.loginLink);
         if (!loginLink) {
-          throw new Error('缺少 Claude 邮箱登录链接，请先执行步骤 4。');
+          throw new Error('缺少 Claude 邮箱登录链接，请先执行步骤 3。');
         }
         let parsed = null;
         try {
@@ -612,7 +623,7 @@
         } else {
           await sleepWithStop(1500);
         }
-        await log('步骤 5：已打开 Claude 邮箱魔法链接。', 'ok', nodeId);
+        await log('步骤 4：已打开 Claude 邮箱魔法链接。', 'ok', nodeId);
         await completeNode(nodeId, {
           claudeRegisterTabId: tabId,
           claudeLoginLink: loginLink,
@@ -636,7 +647,7 @@
           session: { lastError: message },
           register: { status: 'error' },
         }));
-        await log(`步骤 5：${message}`, 'error', nodeId);
+        await log(`步骤 4：${message}`, 'error', nodeId);
         throw error;
       }
     }
@@ -644,36 +655,36 @@
     async function executeClaudeCreateAccount(state = {}) {
       return executeClaudeContentStep(state, {
         nodeId: 'claude-create-account',
-        step: 6,
+        step: 5,
         status: 'account_created',
-        successMessage: '步骤 6：已勾选同意并确认新建 Claude 账号。',
+        successMessage: '步骤 5：已勾选同意并确认新建 Claude 账号。',
       });
     }
 
     async function executeClaudeSelectFreePlan(state = {}) {
       return executeClaudeContentStep(state, {
         nodeId: 'claude-select-free-plan',
-        step: 7,
+        step: 6,
         status: 'free_plan_selected',
-        successMessage: '步骤 7：已选择 Claude 免费账号。',
+        successMessage: '步骤 6：已选择 Claude 免费账号。',
       });
     }
 
     async function executeClaudeSkipOnboarding(state = {}) {
       return executeClaudeContentStep(state, {
         nodeId: 'claude-skip-onboarding',
-        step: 8,
+        step: 7,
         status: 'onboarding_skipped',
-        successMessage: '步骤 8：已点击 Skip 跳过。',
+        successMessage: '步骤 7：已点击 Skip 跳过。',
       });
     }
 
     async function executeClaudeContinueOnboarding(state = {}) {
       return executeClaudeContentStep(state, {
         nodeId: 'claude-continue-onboarding',
-        step: 9,
+        step: 8,
         status: 'onboarding_continued',
-        successMessage: '步骤 9：已继续 Claude 引导流程。',
+        successMessage: '步骤 8：已继续 Claude 引导流程。',
       });
     }
 
@@ -683,29 +694,30 @@
       const fullName = resolveClaudeFullName(currentState);
       return executeClaudeContentStep(state, {
         nodeId,
-        step: 10,
+        step: 9,
         payload: { fullName },
         patch: {
           claudeFullName: fullName,
         },
         registerPatch: { fullName },
         status: 'name_submitted',
-        successMessage: `步骤 10：已填写随机英文名 ${fullName} 并继续。`,
+        successMessage: `步骤 9：已填写随机英文名 ${fullName} 并继续。`,
       });
     }
 
     async function executeClaudeSetUpLater(state = {}) {
       return executeClaudeContentStep(state, {
         nodeId: 'claude-set-up-later',
-        step: 11,
+        step: 10,
         status: 'setup_later_selected',
-        successMessage: '步骤 11：已选择 Set up later。',
+        successMessage: '步骤 10：已选择 Set up later。',
       });
     }
 
     async function executeClaudeExtractSessionKey(state = {}) {
       const nodeId = cleanString(state?.nodeId) || 'claude-extract-session-key';
       const currentState = await getExecutionState(state);
+
       try {
         const tabId = await ensureClaudeRegisterTab(currentState, { openIfMissing: false });
         await activateTab(tabId);
@@ -747,7 +759,43 @@
             level: 'ok',
           });
         }
-        await log('步骤 12：已获取 Claude sessionKey。', 'ok', nodeId);
+        await log('步骤 11：已获取 Claude sessionKey。', 'ok', nodeId);
+
+        // Submit session key to Claude2API if configured
+        const claude2apiUrl = String(currentState?.claude2apiUrl || '').trim();
+        const claude2apiPassword = String(currentState?.claude2apiPassword || '').trim();
+        if (claude2apiUrl && claude2apiPassword) {
+          try {
+            const normalizedUrl = claude2apiUrl.replace(/\/+$/, '');
+            const loginRes = await fetch(normalizedUrl + '/admin-api/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password: claude2apiPassword }),
+              credentials: 'include',
+            });
+            if (!loginRes.ok) {
+              await log('提示：Claude2API 登录失败，HTTP ' + loginRes.status + '，但不影响注册成功。', 'warn', nodeId);
+            } else {
+              const sessionRes = await fetch(normalizedUrl + '/admin-api/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_key: sessionKey }),
+                credentials: 'include',
+              });
+              const sessionResult = await sessionRes.json().catch(() => ({}));
+              if (sessionRes.ok) {
+                await log('已提交 sessionKey 到 Claude2API，当前总 session 数：' + (sessionResult.session_count ?? '?'), 'ok', nodeId);
+              } else {
+                await log('提示：Claude2API 提交 sessionKey 失败：' + (sessionResult.error || sessionRes.status) + '，但不影响注册成功。', 'warn', nodeId);
+              }
+            }
+          } catch (apiError) {
+            await log('提示：Claude2API 调用异常：' + getErrorMessage(apiError) + '，但不影响注册成功。', 'warn', nodeId);
+          }
+        } else {
+          await log('提示：未配置 Claude2API，跳过提交 sessionKey。', 'info', nodeId);
+        }
+
         await completeNode(nodeId, completionPatch);
       } catch (error) {
         const message = getErrorMessage(error);
@@ -755,7 +803,7 @@
           session: { lastError: message },
           register: { status: 'error' },
         }));
-        await log(`步骤 12：${message}`, 'error', nodeId);
+        await log(`步骤 11：${message}`, 'error', nodeId);
         throw error;
       }
     }

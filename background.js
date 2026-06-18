@@ -11448,7 +11448,6 @@ async function skipNode(nodeId) {
     'open-chatgpt': ['submit-signup-email', 'fill-password', 'fetch-signup-code', 'fill-profile', 'wait-registration-success'],
     'kiro-open-register-page': ['kiro-submit-email', 'kiro-submit-name', 'kiro-submit-verification-code', 'kiro-submit-password', 'kiro-complete-register-consent'],
     'claude-open-official-page': [
-      'claude-wait-official-page',
       'claude-fill-email',
       'claude-submit-email-and-fetch-link',
       'claude-open-login-link',
@@ -11846,7 +11845,6 @@ const AUTO_RUN_BACKGROUND_COMPLETED_STEP_KEYS = new Set([
   'grok-extract-sso-cookie',
   'grok-upload-sso-to-webchat2api',
   'claude-open-official-page',
-  'claude-wait-official-page',
   'claude-fill-email',
   'claude-submit-email-and-fetch-link',
   'claude-open-login-link',

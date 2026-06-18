@@ -73,7 +73,7 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   );
   assert.match(
     source,
-    /'claude-open-official-page',[\s\S]*'claude-wait-official-page',[\s\S]*'claude-fill-email',[\s\S]*'claude-submit-email-and-fetch-link',[\s\S]*'claude-open-login-link',[\s\S]*'claude-create-account',[\s\S]*'claude-select-free-plan',[\s\S]*'claude-skip-onboarding',[\s\S]*'claude-continue-onboarding',[\s\S]*'claude-submit-random-name',[\s\S]*'claude-set-up-later',[\s\S]*'claude-extract-session-key'/
+    /'claude-open-official-page',[\s\S]*'claude-fill-email',[\s\S]*'claude-submit-email-and-fetch-link',[\s\S]*'claude-open-login-link',[\s\S]*'claude-create-account',[\s\S]*'claude-select-free-plan',[\s\S]*'claude-skip-onboarding',[\s\S]*'claude-continue-onboarding',[\s\S]*'claude-submit-random-name',[\s\S]*'claude-set-up-later',[\s\S]*'claude-extract-session-key'/
   );
   assert.match(source, /'openai-upload-session-to-webchat'/);
 });

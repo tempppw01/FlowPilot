@@ -134,7 +134,7 @@ test('claude submit email step clicks submit, polls SMSBower link, and stores it
   assert.equal(sendCall.message.nodeId, 'claude-submit-email');
   assert.deepEqual(sendCall.message.payload, { email: 'fresh@gmail.com' });
   const pollCall = calls.find((entry) => entry.type === 'poll');
-  assert.equal(pollCall.step, 4);
+  assert.equal(pollCall.step, 3);
   assert.equal(pollCall.state.mailProvider, 'smsbower-mail');
   assert.equal(pollCall.state.smsbowerMailServiceCode, 'acz');
   assert.equal(pollCall.state.flowId, 'claude');
@@ -228,4 +228,64 @@ test('claude extract session key reads sessionKey cookie and marks completion', 
   assert.deepEqual(completedPayload.claudeSessionKeys, ['sk-ant-sid02-test--rQciwAA']);
   assert.equal(getClaudeRuntime(completedPayload).register.status, 'completed');
   assert.equal(markedAccount.claudeSessionKey, 'sk-ant-sid02-test--rQciwAA');
+});
+
+test('claude extract session key submits to Claude2API when configured', async () => {
+  const api = loadClaudeRunnerApi();
+  const fetchCalls = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    fetchCalls.push({ url, options });
+    if (String(url).endsWith('/admin-api/login')) {
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    }
+    if (String(url).endsWith('/admin-api/session')) {
+      return { ok: true, status: 200, json: async () => ({ status: 'added', session_count: 3 }) };
+    }
+    return { ok: false, status: 404, json: async () => ({ error: 'not found' }) };
+  };
+
+  let completedPayload = null;
+  const currentState = {
+    activeFlowId: 'claude',
+    claudeRegisterTabId: 602,
+    claude2apiUrl: 'https://claude2api.example/',
+    claude2apiPassword: 'admin-pass',
+  };
+  const runner = api.createClaudeRegisterRunner({
+    addLog: async () => {},
+    chrome: {
+      cookies: {
+        get: async ({ name }) => (name === 'sessionKey' ? { value: 'sk-ant-sid02-submit-test' } : null),
+      },
+      tabs: {
+        get: async (tabId) => ({ id: tabId }),
+        update: async () => {},
+      },
+    },
+    completeNodeFromBackground: async (_nodeId, payload) => {
+      completedPayload = payload;
+    },
+    getState: async () => currentState,
+    getTabId: async () => 602,
+    isTabAlive: async () => true,
+    registerTab: async () => {},
+    setState: async () => {},
+    sleepWithStop: async () => {},
+  });
+
+  try {
+    await runner.executeClaudeExtractSessionKey({ nodeId: 'claude-extract-session-key', ...currentState });
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(fetchCalls.length, 2);
+  assert.equal(fetchCalls[0].url, 'https://claude2api.example/admin-api/login');
+  assert.equal(fetchCalls[0].options.credentials, 'include');
+  assert.deepEqual(JSON.parse(fetchCalls[0].options.body), { password: 'admin-pass' });
+  assert.equal(fetchCalls[1].url, 'https://claude2api.example/admin-api/session');
+  assert.equal(fetchCalls[1].options.credentials, 'include');
+  assert.deepEqual(JSON.parse(fetchCalls[1].options.body), { session_key: 'sk-ant-sid02-submit-test' });
+  assert.equal(completedPayload.claudeSessionKey, 'sk-ant-sid02-submit-test');
 });

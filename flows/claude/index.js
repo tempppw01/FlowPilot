@@ -34,7 +34,7 @@
       stepDefinitionMode: 'claude',
       targetSelectorLabel: '\u6765\u6e90',
     },
-    baseGroups: ['claude-runtime-status', 'shared-auto-run'],
+    baseGroups: ['claude-runtime-status', 'shared-auto-run', 'claude-target-claude2api'],
     targets: {
       claude: {
         id: 'claude',
@@ -106,7 +106,6 @@
         sourceId: 'claude-register-page',
         commands: [
           'claude-open-official-page',
-          'claude-wait-official-page',
           'claude-fill-email',
           'claude-submit-email-and-fetch-link',
           'claude-open-login-link',
@@ -129,7 +128,7 @@
         stepExecutionRange: {
           enabled: false,
           fromStep: 1,
-          toStep: 12,
+          toStep: 11,
         },
       },
     },
@@ -141,7 +140,7 @@
       },
     },
     sourceAliases: {},
-    workflowStepCount: 12,
+    workflowStepCount: 11,
   });
 
   return VALUE;

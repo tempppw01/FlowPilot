@@ -157,6 +157,9 @@ const rowCodex2ApiUrl = document.getElementById('row-codex2api-url');
 const inputCodex2ApiUrl = document.getElementById('input-codex2api-url');
 const rowCodex2ApiAdminKey = document.getElementById('row-codex2api-admin-key');
 const inputCodex2ApiAdminKey = document.getElementById('input-codex2api-admin-key');
+const inputClaude2ApiUrl = document.getElementById('input-claude2api-url');
+const inputClaude2ApiPassword = document.getElementById('input-claude2api-password');
+const btnToggleClaude2ApiPassword = document.getElementById('btn-toggle-claude2api-password');
 const rowKiroRsUrl = document.getElementById('row-kiro-rs-url');
 const inputKiroRsUrl = document.getElementById('input-kiro-rs-url');
 const rowKiroRsKey = document.getElementById('row-kiro-rs-key');
@@ -5664,6 +5667,8 @@ function collectSettingsPayload() {
     ipProxyRegion: currentIpProxyServiceProfile.region,
     codex2apiUrl: inputCodex2ApiUrl.value.trim(),
     codex2apiAdminKey: inputCodex2ApiAdminKey.value.trim(),
+    claude2apiUrl: typeof inputClaude2ApiUrl !== 'undefined' ? inputClaude2ApiUrl.value.trim() : '',
+    claude2apiPassword: typeof inputClaude2ApiPassword !== 'undefined' ? inputClaude2ApiPassword.value : '',
     plusModeEnabled: effectivePlusModeEnabled,
     plusPaymentMethod,
     plusAccountAccessStrategy: activeFlowId === defaultFlowId
@@ -13317,6 +13322,8 @@ function applySettingsState(state) {
   }
   inputCodex2ApiUrl.value = state?.codex2apiUrl || '';
   inputCodex2ApiAdminKey.value = state?.codex2apiAdminKey || '';
+  if (inputClaude2ApiUrl) inputClaude2ApiUrl.value = state?.claude2apiUrl || '';
+  if (inputClaude2ApiPassword) inputClaude2ApiPassword.value = state?.claude2apiPassword || '';
   const yydsMailProvider = typeof YYDS_MAIL_PROVIDER === 'string'
     ? YYDS_MAIL_PROVIDER
     : 'yyds-mail';
@@ -14046,7 +14053,19 @@ function syncPasswordField(state) {
   const accountContributionEnabled = typeof isContributionModeActiveForFlow === 'function'
     ? isContributionModeActiveForFlow(state)
     : Boolean(state?.accountContributionEnabled);
-  inputPassword.value = accountContributionEnabled ? '' : (state.customPassword || state.password || '');
+  const activeFlowId = typeof normalizeFlowId === 'function'
+    ? normalizeFlowId(state?.activeFlowId || state?.flowId || selectFlow?.value || DEFAULT_ACTIVE_FLOW_ID)
+    : String(state?.activeFlowId || state?.flowId || selectFlow?.value || DEFAULT_ACTIVE_FLOW_ID || '').trim().toLowerCase();
+  const passwordDisabled = activeFlowId === 'claude';
+  inputPassword.disabled = passwordDisabled;
+  inputPassword.placeholder = passwordDisabled
+    ? 'Claude 使用邮箱魔法登录，无需账户密码'
+    : '账户密码，留空则自动生成';
+  inputPassword.value = (accountContributionEnabled || passwordDisabled) ? '' : (state.customPassword || state.password || '');
+  if (btnTogglePassword) {
+    btnTogglePassword.disabled = passwordDisabled;
+    btnTogglePassword.setAttribute('aria-disabled', String(passwordDisabled));
+  }
 }
 
 function isCustomMailProvider(provider = selectMailProvider.value) {
@@ -15324,6 +15343,13 @@ function updatePanelModeUI() {
   }
   if (typeof updatePhoneVerificationSettingsUI === 'function') {
     updatePhoneVerificationSettingsUI();
+  }
+  if (typeof syncPasswordField === 'function') {
+    syncPasswordField({
+      ...(latestState || {}),
+      activeFlowId,
+      flowId: activeFlowId,
+    });
   }
   if (typeof renderOpenAiWebchatState === 'function') {
     renderOpenAiWebchatState(latestState);
@@ -17840,6 +17866,22 @@ inputSub2ApiPassword.addEventListener('input', () => {
   scheduleSettingsAutoSave();
 });
 inputSub2ApiPassword.addEventListener('blur', () => {
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputClaude2ApiUrl?.addEventListener('input', () => {
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputClaude2ApiUrl?.addEventListener('blur', () => {
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputClaude2ApiPassword?.addEventListener('input', () => {
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputClaude2ApiPassword?.addEventListener('blur', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
