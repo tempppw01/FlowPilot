@@ -302,7 +302,28 @@ async function createClaudeAccount() {
     simulateClaudeClick(checkbox);
     await sleep(300);
   }
-  return clickClaudeByText(CLAUDE_CREATE_ACCOUNT_TEXT_PATTERN, 'Claude create account', { afterClickMs: 2000 });
+  const button = await waitForClaude(() => findClaudeClickableByText(CLAUDE_CREATE_ACCOUNT_TEXT_PATTERN), {
+    timeoutMs: 45000,
+    intervalMs: 300,
+  });
+  if (!button) {
+    throw new Error('Claude create account button was not found.');
+  }
+
+  setTimeout(() => {
+    try {
+      simulateClaudeClick(button);
+    } catch (error) {
+      console.warn('[MultiPage:claude-register-page] delayed create account click failed', error);
+    }
+  }, 50);
+
+  return {
+    submitted: true,
+    navigationScheduled: true,
+    state: 'create_account_submitted',
+    url: location.href,
+  };
 }
 
 async function selectClaudeFreePlan() {
