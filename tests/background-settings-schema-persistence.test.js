@@ -75,6 +75,8 @@ const SETTINGS_SCHEMA_VIEW_KEYS = Object.freeze([
   'sub2apiDefaultProxyName',
   'codex2apiUrl',
   'codex2apiAdminKey',
+  'claude2apiUrl',
+  'claude2apiPassword',
   'customPassword',
   'signupMethod',
   'phoneVerificationEnabled',
@@ -121,6 +123,8 @@ const PERSISTED_SETTING_DEFAULTS = {
   openaiWebchatUploadedAt: 0,
   openaiWebchatUploadMessage: '',
   openaiWebchatTargetUrl: '',
+  claude2apiUrl: '',
+  claude2apiPassword: '',
   phoneSmsProvider: 'hero-sms',
   madaoBaseUrl: DEFAULT_MADAO_BASE_URL,
   madaoHttpSecret: '',
@@ -312,6 +316,8 @@ test('buildPersistentSettingsPayload writes canonical settings schema into persi
     openaiWebchatUrl: ' https://webchat.example.com/admin ',
     openaiWebchatAdminKey: ' webchat-key ',
     openaiWebchatUploadEnabled: true,
+    claude2apiUrl: ' https://claude2api.example.com ',
+    claude2apiPassword: ' admin-pass ',
   }, { fillDefaults: true });
 
   assert.equal(payload.activeFlowId, 'kiro');
@@ -321,6 +327,8 @@ test('buildPersistentSettingsPayload writes canonical settings schema into persi
   assert.equal(payload.openaiWebchatUrl, 'https://webchat.example.com/admin');
   assert.equal(payload.openaiWebchatAdminKey, 'webchat-key');
   assert.equal(payload.openaiWebchatUploadEnabled, false);
+  assert.equal(payload.claude2apiUrl, 'https://claude2api.example.com');
+  assert.equal(payload.claude2apiPassword, ' admin-pass ');
   assert.equal(payload.phoneSmsProvider, 'hero-sms');
   assert.equal(payload.madaoBaseUrl, DEFAULT_MADAO_BASE_URL_FOR_TEST);
   assert.equal(payload.madaoMode, DEFAULT_MADAO_MODE_FOR_TEST);
@@ -334,6 +342,8 @@ test('buildPersistentSettingsPayload writes canonical settings schema into persi
   assert.equal(payload.settingsState.flows.openai.targets.webchat.baseUrl, 'https://webchat.example.com/admin');
   assert.equal(payload.settingsState.flows.openai.targets.webchat.apiKey, 'webchat-key');
   assert.equal(payload.settingsState.flows.openai.webchatUpload.enabled, false);
+  assert.equal(payload.settingsState.flows.claude.targets.claude.claude2apiUrl, 'https://claude2api.example.com');
+  assert.equal(payload.settingsState.flows.claude.targets.claude.claude2apiPassword, ' admin-pass ');
   assert.equal(
     payload.settingsState.flows.kiro.targets['kiro-rs'].baseUrl,
     'https://kiro.example.com/admin'

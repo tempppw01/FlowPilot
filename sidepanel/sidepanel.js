@@ -17925,22 +17925,6 @@ inputSub2ApiPassword.addEventListener('blur', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
-inputClaude2ApiUrl?.addEventListener('input', () => {
-  markSettingsDirty(true);
-  scheduleSettingsAutoSave();
-});
-inputClaude2ApiUrl?.addEventListener('blur', () => {
-  saveSettings({ silent: true }).catch(() => { });
-});
-
-inputClaude2ApiPassword?.addEventListener('input', () => {
-  markSettingsDirty(true);
-  scheduleSettingsAutoSave();
-});
-inputClaude2ApiPassword?.addEventListener('blur', () => {
-  saveSettings({ silent: true }).catch(() => { });
-});
-
 inputSub2ApiGroup.addEventListener('change', () => {
   syncLatestState({
     sub2apiGroupName: getSelectedSub2ApiGroupName(),

@@ -1416,6 +1416,8 @@ const PERSISTED_SETTING_DEFAULTS = {
   ipProxyRegion: '',
   codex2apiUrl: DEFAULT_CODEX2API_URL,
   codex2apiAdminKey: '',
+  claude2apiUrl: '',
+  claude2apiPassword: '',
   customPassword: '',
   plusModeEnabled: false,
   plusPaymentMethod: DEFAULT_PLUS_PAYMENT_METHOD,
@@ -1588,6 +1590,8 @@ const SETTINGS_SCHEMA_VIEW_KEYS = Object.freeze([
   'sub2apiDefaultProxyName',
   'codex2apiUrl',
   'codex2apiAdminKey',
+  'claude2apiUrl',
+  'claude2apiPassword',
   'customPassword',
   'signupMethod',
   'phoneVerificationEnabled',
@@ -3630,6 +3634,10 @@ function normalizePersistentSettingValue(key, value) {
       return normalizeCodex2ApiUrl(value);
     case 'codex2apiAdminKey':
       return String(value || '').trim();
+    case 'claude2apiUrl':
+      return String(value || '').trim();
+    case 'claude2apiPassword':
+      return String(value || '');
     case 'customPassword':
       return String(value || '');
     case 'signupMethod':
@@ -4223,6 +4231,8 @@ function buildSettingsStatePatchFromFlatUpdates(updates = {}) {
   assignIfUpdated('sub2apiDefaultProxyName', ['flows', 'openai', 'targets', 'sub2api', 'sub2apiDefaultProxyName']);
   assignIfUpdated('codex2apiUrl', ['flows', 'openai', 'targets', 'codex2api', 'codex2apiUrl']);
   assignIfUpdated('codex2apiAdminKey', ['flows', 'openai', 'targets', 'codex2api', 'codex2apiAdminKey']);
+  assignIfUpdated('claude2apiUrl', ['flows', 'claude', 'targets', 'claude', 'claude2apiUrl']);
+  assignIfUpdated('claude2apiPassword', ['flows', 'claude', 'targets', 'claude', 'claude2apiPassword']);
   assignIfUpdated('customPassword', ['services', 'account', 'customPassword']);
   assignIfUpdated('signupMethod', ['flows', 'openai', 'signup', 'signupMethod']);
   assignIfUpdated('phoneVerificationEnabled', ['flows', 'openai', 'signup', 'phoneVerificationEnabled']);

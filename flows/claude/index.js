@@ -40,7 +40,10 @@
         id: 'claude',
         label: 'Claude',
         groups: [],
-        defaultState: {},
+        defaultState: {
+          claude2apiUrl: '',
+          claude2apiPassword: '',
+        },
       },
     },
     publicationTargets: {},
@@ -122,7 +125,10 @@
     defaultTargetId: 'claude',
     settingsDefaults: {
       targets: {
-        claude: {},
+        claude: {
+          claude2apiUrl: '',
+          claude2apiPassword: '',
+        },
       },
       autoRun: {
         stepExecutionRange: {

@@ -339,6 +339,13 @@
           apiKey: String(targetState.apiKey ?? ''),
         };
       }
+      if (flowId === 'claude' && targetId === 'claude') {
+        return {
+          ...targetState,
+          claude2apiUrl: String(targetState.claude2apiUrl ?? '').trim(),
+          claude2apiPassword: String(targetState.claude2apiPassword ?? ''),
+        };
+      }
       return targetState;
     }
 
@@ -590,6 +597,33 @@
       };
     }
 
+    function normalizeClaudeSettings(input = {}, nested = {}, defaults = {}, currentFlow = {}) {
+      const defaultClaudeFlow = isPlainObject(defaults?.flows?.claude)
+        ? defaults.flows.claude
+        : {};
+      const defaultClaudeTargets = isPlainObject(defaultClaudeFlow.targets)
+        ? defaultClaudeFlow.targets
+        : {};
+      const targetSource = {
+        ...currentFlow.targets.claude,
+        ...getTargetValue(
+          nested,
+          (state) => state.flows?.claude?.integrationTargets?.claude,
+          null,
+          {}
+        ),
+        claude2apiUrl: input?.claude2apiUrl ?? currentFlow.targets.claude?.claude2apiUrl,
+        claude2apiPassword: input?.claude2apiPassword ?? currentFlow.targets.claude?.claude2apiPassword,
+      };
+      return {
+        ...currentFlow,
+        targets: {
+          ...currentFlow.targets,
+          claude: normalizeFlowTargetState('claude', 'claude', targetSource, defaultClaudeTargets.claude || {}),
+        },
+      };
+    }
+
     function normalizeSettingsState(input = {}, options = {}) {
       const defaults = buildDefaultSettingsState();
       const nested = isPlainObject(input?.settingsState)
@@ -666,6 +700,9 @@
       if (normalized.flows.grok) {
         normalized.flows.grok = normalizeGrokSettings(input, nested, defaults, normalized.flows.grok, normalized.flows.openai);
       }
+      if (normalized.flows.claude) {
+        normalized.flows.claude = normalizeClaudeSettings(input, nested, defaults, normalized.flows.claude);
+      }
       return normalized;
     }
 
@@ -731,6 +768,7 @@
       const openaiState = normalizedState.flows.openai || buildDefaultFlowSettings('openai');
       const kiroState = normalizedState.flows.kiro || buildDefaultFlowSettings('kiro');
       const grokState = normalizedState.flows.grok || buildDefaultFlowSettings('grok');
+      const claudeState = normalizedState.flows.claude || buildDefaultFlowSettings('claude');
       next.activeFlowId = normalizedState.activeFlowId;
       next.targetId = getSelectedTargetId(normalizedState, normalizedState.activeFlowId);
       next.vpsUrl = openaiState.targets.cpa?.vpsUrl || '';
@@ -745,6 +783,8 @@
       next.sub2apiDefaultProxyName = openaiState.targets.sub2api?.sub2apiDefaultProxyName || '';
       next.codex2apiUrl = openaiState.targets.codex2api?.codex2apiUrl || '';
       next.codex2apiAdminKey = openaiState.targets.codex2api?.codex2apiAdminKey || '';
+      next.claude2apiUrl = claudeState.targets.claude?.claude2apiUrl || '';
+      next.claude2apiPassword = claudeState.targets.claude?.claude2apiPassword || '';
       next.openaiWebchatUrl = openaiState.targets.webchat?.baseUrl || '';
       next.openaiWebchatAdminKey = openaiState.targets.webchat?.apiKey || '';
       next.openaiWebchatUploadEnabled = Boolean(openaiState.webchatUpload?.enabled);
