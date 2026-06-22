@@ -741,11 +741,21 @@ const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
   { id: 85, label: '摩尔多瓦', englishLabel: 'Moldova', price: '0.054', providerIds: '2266' },
   { id: 19, label: '尼日利亚', englishLabel: 'Nigeria', price: '0.054', providerIds: '2266,3193' },
   { id: 10, label: '越南', englishLabel: 'Vietnam', price: '0.054', providerIds: '2266,2217,3160' },
+  { id: 269, label: '冰岛', englishLabel: 'Iceland', price: '0.054', providerIds: '2268' },
+  { id: 160, label: '伯利兹', englishLabel: 'Belize', price: '0.054', providerIds: '2266' },
+  { id: 5560, label: '坦桑尼亚', englishLabel: 'Tanzania', price: '0.054', providerIds: '2268' },
+  { id: 1099, label: '塔吉克斯坦', englishLabel: 'Tajikistan', price: '0.054', providerIds: '2266' },
+  { id: 708, label: '布隆迪', englishLabel: 'Burundi', price: '0.054', providerIds: '2266' },
+  { id: 976, label: '亚美尼亚', englishLabel: 'Armenia', price: '0.054', providerIds: '2266' },
+  { id: 2058, label: '立陶宛', englishLabel: 'Lithuania', price: '0.054', providerIds: '2266' },
+  { id: 3118, label: '香港', englishLabel: 'Hong Kong', price: '0.054', providerIds: '2266' },
+  { id: 18397, label: '希腊', englishLabel: 'Greece', price: '0.054', providerIds: '2266' },
   { id: 43, label: '德国', englishLabel: 'Germany', price: '0.056', providerIds: '3237' },
   { id: 53, label: '沙特阿拉伯', englishLabel: 'Saudi Arabia', price: '0.064', providerIds: '2377' },
   { id: 54, label: '墨西哥', englishLabel: 'Mexico', price: '0.067', providerIds: '3193' },
   { id: 39, label: '阿根廷', englishLabel: 'Argentina', price: '0.067', providerIds: '2738,3237' },
   { id: 46, label: '瑞典', englishLabel: 'Sweden', price: '0.075', providerIds: '2738' },
+  { id: 215, label: '科索沃', englishLabel: 'Kosovo', price: '0.084', providerIds: '3370' },
   { id: 187, label: '美国', englishLabel: 'USA', price: '', providerIds: '3170' },
 ]);
 const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
@@ -773,6 +783,7 @@ const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
   3193: 52,
   3237: 52,
   2377: 53,
+  3370: 215,
   3170: 187,
 });
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze(SMSBOWER_LOW_PRICE_COUNTRY_ITEMS.map((item) => item.id));

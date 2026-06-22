@@ -57,11 +57,21 @@
       { id: '2266', rank: 'silver', price: 0.054 },
       { id: '2217', rank: 'silver', price: 0.089 },
     ] },
+    { id: 269, label: 'Iceland', providerIds: '2268', providerLines: [{ id: '2268', rank: 'bronze', price: 0.054 }] },
+    { id: 160, label: 'Belize', providerIds: '2266', providerLines: [{ id: '2266', rank: 'bronze', price: 0.054 }] },
+    { id: 5560, label: 'Tanzania', providerIds: '2268', providerLines: [{ id: '2268', rank: 'bronze', price: 0.054 }] },
+    { id: 1099, label: 'Tajikistan', providerIds: '2266', providerLines: [{ id: '2266', rank: 'bronze', price: 0.054 }] },
+    { id: 708, label: 'Burundi', providerIds: '2266', providerLines: [{ id: '2266', rank: 'bronze', price: 0.054 }] },
+    { id: 976, label: 'Armenia', providerIds: '2266', providerLines: [{ id: '2266', rank: 'bronze', price: 0.054 }] },
+    { id: 2058, label: 'Lithuania', providerIds: '2266', providerLines: [{ id: '2266', rank: 'bronze', price: 0.054 }] },
+    { id: 3118, label: 'Hong Kong', providerIds: '2266', providerLines: [{ id: '2266', rank: 'bronze', price: 0.054 }] },
+    { id: 18397, label: 'Greece', providerIds: '2266', providerLines: [{ id: '2266', rank: 'silver', price: 0.054 }] },
     { id: 43, label: 'Germany', providerIds: '3237' },
     { id: 53, label: 'Saudi Arabia', providerIds: '2377' },
     { id: 54, label: 'Mexico', providerIds: '3193', providerLines: [{ id: '3193', rank: 'gold', price: 0.067 }] },
     { id: 39, label: 'Argentina', providerIds: '2738,3237', providerLines: [{ id: '2738', rank: 'silver', price: 0.067 }] },
     { id: 46, label: 'Sweden', providerIds: '2738' },
+    { id: 215, label: 'Kosovo', providerIds: '3370', providerLines: [{ id: '3370', rank: 'bronze', price: 0.084 }] },
     { id: 187, label: 'USA', providerIds: '3170' },
   ]);
   const DEFAULT_COUNTRY_LABELS_BY_ID = new Map(DEFAULT_COUNTRY_CANDIDATES.map((entry) => [entry.id, entry.label]));
@@ -82,6 +92,7 @@
   });
   LEGACY_COUNTRY_ID_BY_PROVIDER_ID.set('3237', 52);
   LEGACY_COUNTRY_ID_BY_PROVIDER_ID.set('2266', 52);
+  LEGACY_COUNTRY_ID_BY_PROVIDER_ID.delete('2268');
   const PROVIDER_RANK_WEIGHT = Object.freeze({
     gold: 0,
     silver: 1,

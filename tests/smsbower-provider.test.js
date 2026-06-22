@@ -29,7 +29,7 @@ test('SMSBower provider requests the lowest-price country order by default', asy
   });
 
   const parsedUrl = new URL(requests[0].url);
-  const defaultCountryOrder = [48, 78, 6, 33, 16, 151, 31, 73, 52, 95, 85, 19, 10, 43, 53, 54, 39, 46, 187];
+  const defaultCountryOrder = [48, 78, 6, 33, 16, 151, 31, 73, 52, 95, 85, 19, 10, 269, 160, 5560, 1099, 708, 976, 2058, 3118, 18397, 43, 53, 54, 39, 46, 215, 187];
   assert.deepStrictEqual(provider.resolveCountryCandidates({}).map((entry) => entry.id), defaultCountryOrder);
   assert.equal(parsedUrl.hostname, 'smsbower.page');
   assert.equal(parsedUrl.searchParams.get('action'), 'getNumber');
@@ -346,7 +346,7 @@ test('SMSBower random mode uses the full non-USA default pool instead of the sav
 
 test('SMSBower random mode keeps Gold provider IDs before Silver and unknown lines', async () => {
   const requests = [];
-  const randomValues = [0.2, ...Array(17).fill(0), 0];
+  const randomValues = [0.11, ...Array(27).fill(0), 0];
   const module = loadModule();
   const provider = module.createProvider({
     randomFn: () => randomValues.shift() ?? 0.999999,
@@ -379,7 +379,7 @@ test('SMSBower random mode keeps Gold provider IDs before Silver and unknown lin
 
 test('SMSBower random mode weights countries and provider IDs with recent successful code records', async () => {
   const requests = [];
-  const randomValues = [0.3, ...Array(17).fill(0), 0.3];
+  const randomValues = [0.3, ...Array(27).fill(0), 0.3];
   const module = loadModule();
   const provider = module.createProvider({
     randomFn: () => randomValues.shift() ?? 0,
