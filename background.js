@@ -773,12 +773,12 @@ const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([
 const SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID = Object.freeze({
   48: '2442',
   78: '3237',
-  6: '3267',
-  33: '3243,2236,3253,3160,2266,3288,3406,3335',
+  6: '3237,3408,2266',
+  33: '3243,3253,3288,3160',
   16: '3237',
   151: '3234,3109,3235',
   31: '2812,2266,2217,2649',
-  73: '3252,2404,3406,3365,3398,3229,3237',
+  73: '3416,3415,3413,3365,3252,3215,2404',
   52: '2266,3193,3237',
   95: '2266',
   85: '2266',
@@ -799,18 +799,23 @@ const SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID = Object.freeze({
   39: '2738,3237',
   46: '2738',
   215: '3370',
-  187: '3170',
+  187: '3170,2495',
 });
 const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
   2738: 46,
   2442: 48,
   3267: 6,
+  3408: 6,
   3243: 33,
   3253: 33,
   3335: 33,
   2236: 33,
   3288: 33,
   3406: 73,
+  3416: 73,
+  3415: 73,
+  3413: 73,
+  3215: 73,
   2812: 31,
   2649: 31,
   3234: 151,
@@ -827,10 +832,12 @@ const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
   3237: 52,
   2377: 53,
   3370: 215,
+  2495: 187,
   3170: 187,
 });
-const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
-const DEFAULT_SMSBOWER_MAX_PRICE = '0.1';
+const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170,2495';
+const LEGACY_DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
+const DEFAULT_SMSBOWER_MAX_PRICE = '0.12';
 const DEFAULT_HERO_SMS_REUSE_ENABLED = true;
 const HERO_SMS_ACQUIRE_PRIORITY_COUNTRY = 'country';
 const HERO_SMS_ACQUIRE_PRIORITY_PRICE = 'price';
@@ -2467,7 +2474,7 @@ function getSmsBowerProviderIdsForCountryOrder(countryOrder = []) {
   const seen = new Set();
   normalizedCountryOrder.forEach((countryId) => {
     const providerId = normalizeSmsBowerProviderIds(
-      SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID[countryId] || (countryId === 187 ? '3170' : ''),
+      SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID[countryId] || (countryId === 187 ? DEFAULT_SMSBOWER_PROVIDER_IDS : ''),
       ''
     );
     if (!providerId || seen.has(providerId)) {
@@ -4087,6 +4094,7 @@ function buildPersistentSettingsPayload(input = {}, options = {}) {
       && (
         !normalizedProviderIds
         || normalizedProviderIds === DEFAULT_SMSBOWER_PROVIDER_IDS
+        || normalizedProviderIds === LEGACY_DEFAULT_SMSBOWER_PROVIDER_IDS
         || normalizedProviderIds === autoProviderIds
       )
     ) {

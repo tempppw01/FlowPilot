@@ -730,12 +730,12 @@ const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
   { id: 48, label: '荷兰', englishLabel: 'Netherlands', price: '0.006', providerIds: '2442' },
   { id: 78, label: '法国', englishLabel: 'France', price: '0.014', providerIds: '3237' },
-  { id: 6, label: '印度尼西亚', englishLabel: 'Indonesia', price: '0.014', providerIds: '3267' },
-  { id: 33, label: '哥伦比亚', englishLabel: 'Colombia', price: '0.017', providerIds: '3243,2236,3253,3160,2266,3288,3406,3335' },
+  { id: 6, label: '印度尼西亚', englishLabel: 'Indonesia', price: '0.008', providerIds: '3237,3408,2266' },
+  { id: 33, label: '哥伦比亚', englishLabel: 'Colombia', price: '0.034', providerIds: '3243,3253,3288,3160' },
   { id: 16, label: '英国', englishLabel: 'United Kingdom', price: '0.027', providerIds: '3237' },
   { id: 151, label: '智利', englishLabel: 'Chile', price: '0.027', providerIds: '3234,3109,3235' },
   { id: 31, label: '南非', englishLabel: 'South Africa', price: '0.043', providerIds: '2812,2266,2217,2649' },
-  { id: 73, label: '巴西', englishLabel: 'Brazil', price: '0.052', providerIds: '3252,2404,3406,3365,3398,3229,3237' },
+  { id: 73, label: '巴西', englishLabel: 'Brazil', price: '0.032', providerIds: '3416,3415,3413,3365,3252,3215,2404' },
   { id: 52, label: '泰国', englishLabel: 'Thailand', price: '0.054', providerIds: '2266,3193,3237' },
   { id: 95, label: '阿联酋', englishLabel: 'UAE', price: '0.054', providerIds: '2266' },
   { id: 85, label: '摩尔多瓦', englishLabel: 'Moldova', price: '0.054', providerIds: '2266' },
@@ -756,18 +756,23 @@ const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
   { id: 39, label: '阿根廷', englishLabel: 'Argentina', price: '0.067', providerIds: '2738,3237' },
   { id: 46, label: '瑞典', englishLabel: 'Sweden', price: '0.075', providerIds: '2738' },
   { id: 215, label: '科索沃', englishLabel: 'Kosovo', price: '0.084', providerIds: '3370' },
-  { id: 187, label: '美国', englishLabel: 'USA', price: '', providerIds: '3170' },
+  { id: 187, label: '美国', englishLabel: 'USA', price: '0.118', providerIds: '3170,2495' },
 ]);
 const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
   2738: 46,
   2442: 48,
   3267: 6,
+  3408: 6,
   3243: 33,
   3253: 33,
   3335: 33,
   2236: 33,
   3288: 33,
   3406: 73,
+  3416: 73,
+  3415: 73,
+  3413: 73,
+  3215: 73,
   2812: 31,
   2649: 31,
   3234: 151,
@@ -784,11 +789,13 @@ const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
   3237: 52,
   2377: 53,
   3370: 215,
+  2495: 187,
   3170: 187,
 });
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze(SMSBOWER_LOW_PRICE_COUNTRY_ITEMS.map((item) => item.id));
-const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
-const DEFAULT_SMSBOWER_MAX_PRICE = '0.1';
+const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170,2495';
+const LEGACY_DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
+const DEFAULT_SMSBOWER_MAX_PRICE = '0.12';
 let maDaoRoutingPlanOptions = [];
 let maDaoProviderOptions = [];
 let maDaoCountryOptions = [];
@@ -7389,7 +7396,8 @@ function syncSmsBowerProviderIdsFromCountrySelection(countryOrder = [], options 
   const shouldUpdate = Boolean(options.force)
     || !currentValue
     || currentValue === smsbowerProviderIdsAutoValue
-    || currentValue === defaultProviderIds;
+    || currentValue === defaultProviderIds
+    || currentValue === LEGACY_DEFAULT_SMSBOWER_PROVIDER_IDS;
   if (shouldUpdate && inputSmsBowerProviderIds) {
     inputSmsBowerProviderIds.value = nextAutoValue;
   }
@@ -10741,6 +10749,143 @@ async function buildFiveSimPricePreviewLines(options = {}) {
   return [`${providerLabel}:`, ...previews];
 }
 
+function collectSmsBowerPriceEntriesForPreview(payload, context = {}, entries = []) {
+  if (Array.isArray(payload)) {
+    payload.forEach((item) => collectSmsBowerPriceEntriesForPreview(item, context, entries));
+    return entries;
+  }
+  if (!payload || typeof payload !== 'object') {
+    return entries;
+  }
+  const directPrice = Number(payload.price ?? payload.cost ?? payload.rate);
+  if (Number.isFinite(directPrice) && directPrice > 0) {
+    const providerId = normalizeSmsBowerProviderIdsValue(
+      payload.provider_id ?? payload.providerId ?? payload.provider ?? payload.id ?? context.providerId ?? ''
+    );
+    const countRaw = Number(payload.count ?? payload.quantity ?? payload.qty ?? payload.available);
+    entries.push({
+      price: Math.round(directPrice * 10000) / 10000,
+      count: Number.isFinite(countRaw) ? Math.max(0, Math.floor(countRaw)) : null,
+      providerId,
+    });
+  }
+  Object.entries(payload).forEach(([key, value]) => {
+    const nextContext = { ...context };
+    if (/^\d+$/.test(String(key))) {
+      if (value && typeof value === 'object' && !Array.isArray(value)
+        && (Object.prototype.hasOwnProperty.call(value, 'price') || Object.prototype.hasOwnProperty.call(value, 'cost'))) {
+        nextContext.providerId = key;
+      } else if (!nextContext.countryId) {
+        nextContext.countryId = Number(key);
+      } else {
+        nextContext.providerId = key;
+      }
+    }
+    collectSmsBowerPriceEntriesForPreview(value, nextContext, entries);
+  });
+  return entries;
+}
+
+async function buildSmsBowerPricePreviewLines(options = {}) {
+  const providerLabel = String(options?.providerLabel || 'SMSBower').trim();
+  const apiKey = String(inputSmsBowerApiKey?.value || latestState?.smsbowerApiKey || '').trim();
+  const serviceCode = normalizeSmsBowerServiceCodeValue(
+    inputSmsBowerServiceCode?.value || latestState?.smsbowerServiceCode || DEFAULT_SMSBOWER_SERVICE_CODE
+  );
+  const priceRange = resolvePhoneSmsPricePreviewRange(
+    typeof PHONE_SMS_PROVIDER_SMSBOWER !== 'undefined' ? PHONE_SMS_PROVIDER_SMSBOWER : 'smsbower'
+  );
+  const maxPrice = priceRange.maxPrice;
+  const countryOrder = normalizeSmsBowerCountryOrderValue(
+    smsbowerCountryOrderSelection.length
+      ? smsbowerCountryOrderSelection
+      : ((Array.isArray(latestState?.smsbowerCountryOrder) && latestState.smsbowerCountryOrder.length)
+        ? latestState.smsbowerCountryOrder
+        : DEFAULT_SMSBOWER_COUNTRY_ORDER)
+  );
+
+  if (!apiKey) {
+    return [`${providerLabel}: 请先填写接码 API Key`];
+  }
+  if (priceRange.invalid) {
+    return [`${providerLabel}: ${buildPhoneSmsPriceRangePreviewMessage(priceRange)}`];
+  }
+  if (!countryOrder.length) {
+    return [`${providerLabel}: 请先选择至少 1 个国家`];
+  }
+
+  const previews = [];
+  for (const countryId of countryOrder) {
+    const normalizedCountryId = normalizeSmsBowerCountryIdValue(countryId, 0);
+    if (!normalizedCountryId) {
+      continue;
+    }
+    const countryLabel = getSmsBowerCountryLabelById(normalizedCountryId) || `Country #${normalizedCountryId}`;
+    try {
+      const url = new URL('https://smsbower.page/stubs/handler_api.php');
+      url.searchParams.set('api_key', apiKey);
+      url.searchParams.set('action', 'getPricesV3');
+      url.searchParams.set('service', serviceCode);
+      url.searchParams.set('country', String(normalizedCountryId));
+      const response = await fetch(url.toString(), { cache: 'no-store' });
+      const rawText = await response.text();
+      let payload = rawText;
+      try {
+        payload = rawText ? JSON.parse(rawText) : '';
+      } catch {
+        payload = rawText;
+      }
+      if (!response.ok) {
+        previews.push(`${countryLabel}: ${summarizeHeroSmsPreviewError(payload, response.status)}`);
+        continue;
+      }
+      const tierEntries = collectSmsBowerPriceEntriesForPreview(payload, {
+        countryId: normalizedCountryId,
+        serviceCode,
+      });
+      const uniqueEntries = Array.from(new Map(tierEntries
+        .filter((entry) => Number.isFinite(Number(entry.price)) && Number(entry.price) > 0)
+        .map((entry) => {
+          const key = `${entry.providerId || ''}:${Math.round(Number(entry.price) * 10000) / 10000}`;
+          return [key, {
+            price: Math.round(Number(entry.price) * 10000) / 10000,
+            count: entry.count,
+            providerId: entry.providerId,
+          }];
+        })).values())
+        .sort((left, right) => left.price - right.price);
+      const prices = uniqueEntries
+        .filter((entry) => entry.count === null || entry.count > 0)
+        .map((entry) => entry.price);
+      const rangePrices = filterPhoneSmsPriceValuesForPreviewRange(prices, priceRange);
+      const filteredTierEntries = filterPhoneSmsPriceEntriesForPreviewRange(uniqueEntries, priceRange);
+      if (!rangePrices.length) {
+        previews.push(`${countryLabel}: ${buildPhoneSmsPriceRangePreviewMessage(priceRange)}`);
+        continue;
+      }
+      const providerTierText = filteredTierEntries
+        .slice(0, 16)
+        .map((entry) => {
+          const priceText = formatHeroSmsPriceForPreview(entry.price) || String(entry.price);
+          const countText = entry.count === null ? '' : `x${entry.count}`;
+          const providerText = entry.providerId ? `#${entry.providerId} ` : '';
+          return `${providerText}${priceText}${countText ? `(${countText})` : ''}`;
+        })
+        .join(', ');
+      const lowest = rangePrices[0];
+      const lowestLabel = priceRange.hasMinPrice || priceRange.hasMaxPrice ? '区间内最低' : '最低';
+      previews.push(`${countryLabel}: ${lowestLabel} ${formatHeroSmsPriceForPreview(lowest) || lowest}${providerTierText ? `；线路：${providerTierText}` : ''}${Number.isFinite(maxPrice) ? '' : ''}`);
+    } catch (error) {
+      previews.push(`${countryLabel}: 查询失败（${normalizeHeroSmsFetchErrorMessage(error)}）`);
+    }
+  }
+
+  if (!previews.length) {
+    previews.push('未获取');
+  }
+  return [`${providerLabel}:`, ...previews];
+}
+
 async function previewHeroSmsPriceTiers() {
   const normalizeProvider = typeof normalizePhoneSmsProviderValue === 'function'
     ? normalizePhoneSmsProviderValue
@@ -10752,6 +10897,7 @@ async function previewHeroSmsPriceTiers() {
     });
   const fiveSimProviderValue = typeof PHONE_SMS_PROVIDER_FIVE_SIM !== 'undefined' ? PHONE_SMS_PROVIDER_FIVE_SIM : '5sim';
   const nexSmsProviderValue = typeof PHONE_SMS_PROVIDER_NEXSMS !== 'undefined' ? PHONE_SMS_PROVIDER_NEXSMS : 'nexsms';
+  const smsBowerProviderValue = typeof PHONE_SMS_PROVIDER_SMSBOWER !== 'undefined' ? PHONE_SMS_PROVIDER_SMSBOWER : 'smsbower';
   const heroProviderValue = typeof PHONE_SMS_PROVIDER_HERO !== 'undefined' ? PHONE_SMS_PROVIDER_HERO : 'hero-sms';
   const defaultProviderValue = typeof DEFAULT_PHONE_SMS_PROVIDER !== 'undefined' ? DEFAULT_PHONE_SMS_PROVIDER : 'hero-sms';
   const activeProvider = typeof getSelectedPhoneSmsProvider === 'function'
@@ -10783,6 +10929,11 @@ async function previewHeroSmsPriceTiers() {
     }
     if (provider === nexSmsProviderValue) {
       const lines = await buildNexSmsPricePreviewLines({ providerLabel: 'NexSMS' });
+      previews.push(...lines, '');
+      continue;
+    }
+    if (provider === smsBowerProviderValue) {
+      const lines = await buildSmsBowerPricePreviewLines({ providerLabel: 'SMSBower' });
       previews.push(...lines, '');
       continue;
     }

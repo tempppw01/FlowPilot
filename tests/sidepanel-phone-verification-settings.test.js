@@ -215,10 +215,13 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /id:\s*187/);
   assert.match(sidepanelSource, /label:\s*'美国'/);
   assert.match(sidepanelSource, /englishLabel:\s*'USA'/);
-  assert.match(sidepanelSource, /price:\s*''/);
+  assert.match(sidepanelSource, /price:\s*'0\.118'/);
   assert.doesNotMatch(sidepanelSource, /label:\s*'菲律宾'/);
   assert.match(sidepanelSource, /id:\s*48[\s\S]*providerIds:\s*'2442'/);
   assert.match(sidepanelSource, /id:\s*78[\s\S]*providerIds:\s*'3237'/);
+  assert.match(sidepanelSource, /id:\s*6[\s\S]*providerIds:\s*'3237,3408,2266'/);
+  assert.match(sidepanelSource, /id:\s*33[\s\S]*providerIds:\s*'3243,3253,3288,3160'/);
+  assert.match(sidepanelSource, /id:\s*73[\s\S]*providerIds:\s*'3416,3415,3413,3365,3252,3215,2404'/);
   assert.match(sidepanelSource, /id:\s*95[\s\S]*providerIds:\s*'2266'/);
   assert.match(sidepanelSource, /id:\s*85[\s\S]*providerIds:\s*'2266'/);
   assert.match(sidepanelSource, /id:\s*269[\s\S]*englishLabel:\s*'Iceland'[\s\S]*providerIds:\s*'2268'/);
@@ -234,7 +237,8 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /id:\s*54[\s\S]*providerIds:\s*'3193'/);
   assert.match(sidepanelSource, /providerIds:\s*'2738'/);
   assert.match(sidepanelSource, /id:\s*52[\s\S]*providerIds:\s*'2266,3193,3237'/);
-  assert.match(sidepanelSource, /DEFAULT_SMSBOWER_MAX_PRICE = '0\.1'/);
+  assert.match(sidepanelSource, /id:\s*187[\s\S]*providerIds:\s*'3170,2495'/);
+  assert.match(sidepanelSource, /DEFAULT_SMSBOWER_MAX_PRICE = '0\.12'/);
   assert.match(sidepanelSource, /loadSmsBowerCountries\(\{ silent: true \}\)/);
   assert.match(sidepanelSource, /btn-smsbower-country-order-menu/);
   assert.match(sidepanelSource, /btn-smsbower-country-order-random/);
@@ -242,10 +246,12 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /smsbowerCountryOrderSelection\.length/);
   assert.match(sidepanelSource, /getSmsBowerCountryLabelById\(countryId\)/);
   assert.match(sidepanelSource, /getSmsBowerCountrySearchTextById\(countryId\)/);
-  assert.match(sidepanelSource, /providerIds: '3170'/);
+  assert.match(sidepanelSource, /providerIds: '3170,2495'/);
   assert.match(sidepanelSource, /getSmsBowerProviderIdsForCountryOrder\(smsBowerCountryOrderForProviderIds\)/);
   assert.match(sidepanelSource, /syncSmsBowerProviderIdsFromCountrySelection\(smsbowerCountryOrderSelection,/);
   assert.match(sidepanelSource, /function buildRandomSmsBowerCountryOrder\(randomFn = Math\.random\)/);
+  assert.match(sidepanelSource, /async function buildSmsBowerPricePreviewLines/);
+  assert.match(sidepanelSource, /action', 'getPricesV3'/);
   assert.match(sidepanelSource, /id !== 187/);
   assert.match(sidepanelSource, /randomCandidateCount/);
   assert.match(sidepanelSource, /applySmsBowerCountrySelection\(randomOrder,/);
@@ -297,17 +303,19 @@ return { buildRandomSmsBowerCountryOrder };
 
 test('SMSBower country selection auto-syncs the provider IDs field unless it has been manually overridden', () => {
   const api = new Function(`
-let smsbowerProviderIdsAutoValue = '3170';
+let smsbowerProviderIdsAutoValue = '3170,2495';
 const inputSmsBowerProviderIds = { value: '3170' };
+const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170,2495';
+const LEGACY_DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
 function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value : []; }
 function normalizeSmsBowerCountryIdValue(value) { return Number(value); }
 function normalizeSmsBowerProviderIdsValue(value = '') { return String(value || '').trim().replace(/[^0-9,]+/g, ''); }
 function getSmsBowerCountryItemById(id) {
   return ({
-    187: { providerIds: '3170' },
+    187: { providerIds: '3170,2495' },
     48: { providerIds: '2442' },
-    6: { providerIds: '3267' },
-    33: { providerIds: '3243,2236,3253,3160,2266,3288,3406,3335' },
+    6: { providerIds: '3237,3408,2266' },
+    33: { providerIds: '3243,3253,3288,3160' },
     52: { providerIds: '2266,3193,3237' },
   }[id] || null);
 }
@@ -318,7 +326,7 @@ return { inputSmsBowerProviderIds, syncSmsBowerProviderIdsFromCountrySelection }
 `)();
 
   api.syncSmsBowerProviderIdsFromCountrySelection([6]);
-  assert.equal(api.inputSmsBowerProviderIds.value, '3267');
+  assert.equal(api.inputSmsBowerProviderIds.value, '3237,3408,2266');
 
   api.syncSmsBowerProviderIdsFromCountrySelection([48]);
   assert.equal(api.inputSmsBowerProviderIds.value, '2442');
@@ -327,7 +335,7 @@ return { inputSmsBowerProviderIds, syncSmsBowerProviderIdsFromCountrySelection }
   assert.equal(api.inputSmsBowerProviderIds.value, '2266,3193,3237');
 
   api.syncSmsBowerProviderIdsFromCountrySelection([33]);
-  assert.equal(api.inputSmsBowerProviderIds.value, '3243,2236,3253,3160,2266,3288,3406,3335');
+  assert.equal(api.inputSmsBowerProviderIds.value, '3243,3253,3288,3160');
 
   api.inputSmsBowerProviderIds.value = '8888';
   api.syncSmsBowerProviderIdsFromCountrySelection([33]);
@@ -1753,7 +1761,7 @@ const DEFAULT_MADAO_BASE_URL = 'http://127.0.0.1:7822';
 const MADAO_MODE_ROUTING_PLAN = 'routing_plan';
 const MADAO_MODE_DIRECT = 'direct';
 const DEFAULT_MADAO_MODE = MADAO_MODE_ROUTING_PLAN;
-const DEFAULT_SMSBOWER_MAX_PRICE = '0.1';
+const DEFAULT_SMSBOWER_MAX_PRICE = '0.12';
 const SIGNUP_METHOD_EMAIL = 'email';
 const SIGNUP_METHOD_PHONE = 'phone';
 const DEFAULT_SIGNUP_METHOD = SIGNUP_METHOD_EMAIL;
