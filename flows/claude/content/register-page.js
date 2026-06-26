@@ -9,6 +9,8 @@ const CLAUDE_CREATE_ACCOUNT_TEXT_PATTERN = /create\s+account/i;
 const CLAUDE_FREE_PLAN_TEXT_PATTERN = /use\s+claude\s+for\s+free|free\s+plan|get\s+started\s+for\s+free/i;
 const CLAUDE_SKIP_TEXT_PATTERN = /\bskip\b|skip\s+for\s+now|not\s+now|do\s+this\s+later/i;
 const CLAUDE_SETUP_LATER_TEXT_PATTERN = /set\s+up\s+later|setup\s+later|do\s+this\s+later|not\s+now/i;
+const CLAUDE_FIRST_CHAT_TEXT_PATTERN = /before\s+your\s+first\s+chat|help\s+improve\s+our\s+ai\s+models|ad-free\s+chats|built\s+to\s+help/i;
+const CLAUDE_NAME_ENTRY_TEXT_PATTERN = /what\s+should\s+we\s+call\s+you|your\s+name|enter\s+your\s+name/i;
 
 function isVisibleClaudeElement(element) {
   if (!element || !(element instanceof Element)) return false;
@@ -57,6 +59,33 @@ function findClaudeVisibleTextInput() {
     if (!isVisibleClaudeElement(element)) return false;
     const type = String(element.getAttribute('type') || '').trim().toLowerCase();
     return !['hidden', 'email', 'password', 'checkbox', 'radio', 'submit', 'button'].includes(type);
+  }) || null;
+}
+
+function findClaudeNameInput() {
+  return Array.from(document.querySelectorAll([
+    'input:not([type])',
+    'input[type="text"]',
+    'input[name*="name" i]',
+    'input[autocomplete*="name" i]',
+    'input[placeholder*="name" i]',
+    'input[aria-label*="name" i]',
+    'textarea[name*="name" i]',
+    'textarea[placeholder*="name" i]',
+    'textarea[aria-label*="name" i]',
+  ].join(', '))).find((element) => {
+    if (!isVisibleClaudeElement(element)) return false;
+    const type = String(element.getAttribute('type') || '').trim().toLowerCase();
+    if (['hidden', 'email', 'password', 'checkbox', 'radio', 'submit', 'button'].includes(type)) {
+      return false;
+    }
+    const hints = [
+      element.getAttribute?.('name'),
+      element.getAttribute?.('autocomplete'),
+      element.getAttribute?.('placeholder'),
+      element.getAttribute?.('aria-label'),
+    ].join(' ');
+    return /name/i.test(hints);
   }) || null;
 }
 
@@ -145,6 +174,36 @@ function findClaudeTermsCheckbox() {
   return labels.find((element) => /agree|terms|acceptable\s+use|at\s+least\s+18/i.test(getClaudeElementText(element))) || null;
 }
 
+function buildClaudeAlreadyAdvancedResult(state = null) {
+  const snapshot = state || getClaudePageState();
+  return {
+    submitted: false,
+    alreadyAdvanced: true,
+    ...snapshot,
+  };
+}
+
+function isClaudePastCreateAccountState(state = '') {
+  return [
+    'plan_selection',
+    'first_chat_intro',
+    'onboarding',
+    'name_entry',
+    'setup_later',
+    'claude_page',
+  ].includes(String(state || '').trim());
+}
+
+function isClaudePastPlanSelectionState(state = '') {
+  return [
+    'first_chat_intro',
+    'onboarding',
+    'name_entry',
+    'setup_later',
+    'claude_page',
+  ].includes(String(state || '').trim());
+}
+
 async function clickClaudeByText(pattern, description, options = {}) {
   const element = await waitForClaude(() => findClaudeClickableByText(pattern), {
     timeoutMs: options.timeoutMs || 45000,
@@ -184,6 +243,30 @@ function getClaudePageState() {
       url: location.href,
     };
   }
+  if (isClaudeHost() && /chat|new|recents|projects|claude/i.test(location.pathname)) {
+    return {
+      state: 'claude_page',
+      url: location.href,
+    };
+  }
+  if (CLAUDE_NAME_ENTRY_TEXT_PATTERN.test(pageText) || findClaudeNameInput()) {
+    return {
+      state: 'name_entry',
+      url: location.href,
+    };
+  }
+  if (CLAUDE_SETUP_LATER_TEXT_PATTERN.test(pageText)) {
+    return {
+      state: 'setup_later',
+      url: location.href,
+    };
+  }
+  if (CLAUDE_FIRST_CHAT_TEXT_PATTERN.test(pageText)) {
+    return {
+      state: 'first_chat_intro',
+      url: location.href,
+    };
+  }
   if (/set\s+up\s+later|skip|continue|what\s+should\s+we\s+call\s+you|your\s+name/i.test(pageText)) {
     return {
       state: 'onboarding',
@@ -193,12 +276,6 @@ function getClaudePageState() {
   if (CLAUDE_SENT_LINK_TEXT_PATTERN.test(pageText)) {
     return {
       state: 'login_link_sent',
-      url: location.href,
-    };
-  }
-  if (isClaudeHost() && /chat|new|recents|projects|claude/i.test(location.pathname)) {
-    return {
-      state: 'claude_page',
       url: location.href,
     };
   }
@@ -286,12 +363,8 @@ async function submitClaudeEmail(payload = {}) {
 
 async function createClaudeAccount() {
   const currentState = getClaudePageState();
-  if (['plan_selection', 'onboarding', 'claude_page'].includes(currentState.state)) {
-    return {
-      submitted: false,
-      alreadyAdvanced: true,
-      ...currentState,
-    };
+  if (isClaudePastCreateAccountState(currentState.state)) {
+    return buildClaudeAlreadyAdvancedResult(currentState);
   }
   const checkbox = await waitForClaude(findClaudeTermsCheckbox, { timeoutMs: 45000, intervalMs: 300 });
   if (!checkbox) {
@@ -327,15 +400,94 @@ async function createClaudeAccount() {
 }
 
 async function selectClaudeFreePlan() {
-  return clickClaudeByText(CLAUDE_FREE_PLAN_TEXT_PATTERN, 'Claude free plan', { afterClickMs: 2000 });
+  const decision = await waitForClaude(() => {
+    const state = getClaudePageState();
+    if (isClaudePastPlanSelectionState(state.state)) {
+      return { action: 'already_advanced', state };
+    }
+    const button = findClaudeClickableByText(CLAUDE_FREE_PLAN_TEXT_PATTERN);
+    if (button) {
+      return { action: 'click', button };
+    }
+    return null;
+  }, { timeoutMs: 45000, intervalMs: 300 });
+
+  if (!decision) {
+    throw new Error('Claude free plan button was not found.');
+  }
+  if (decision.action === 'already_advanced') {
+    return buildClaudeAlreadyAdvancedResult(decision.state);
+  }
+  simulateClaudeClick(decision.button);
+  await sleep(2000);
+  return {
+    submitted: true,
+    ...getClaudePageState(),
+  };
 }
 
 async function skipClaudeOnboarding() {
-  return clickClaudeByText(CLAUDE_SKIP_TEXT_PATTERN, 'Claude skip', { afterClickMs: 1200 });
+  const decision = await waitForClaude(() => {
+    const skipButton = findClaudeClickableByText(CLAUDE_SKIP_TEXT_PATTERN);
+    if (skipButton) {
+      return { action: 'click', button: skipButton };
+    }
+    const state = getClaudePageState();
+    if ([
+      'first_chat_intro',
+      'name_entry',
+      'setup_later',
+      'claude_page',
+    ].includes(state.state)) {
+      return { action: 'already_advanced', state };
+    }
+    if (state.state === 'onboarding' && findClaudeClickableByText(CLAUDE_CONTINUE_TEXT_PATTERN)) {
+      return { action: 'already_advanced', state };
+    }
+    return null;
+  }, { timeoutMs: 45000, intervalMs: 300 });
+
+  if (!decision) {
+    throw new Error('Claude skip button was not found.');
+  }
+  if (decision.action === 'already_advanced') {
+    return buildClaudeAlreadyAdvancedResult(decision.state);
+  }
+  simulateClaudeClick(decision.button);
+  await sleep(1200);
+  return {
+    submitted: true,
+    ...getClaudePageState(),
+  };
 }
 
 async function continueClaudeOnboarding() {
-  return clickClaudeByText(CLAUDE_CONTINUE_TEXT_PATTERN, 'Claude continue', { afterClickMs: 1200 });
+  const decision = await waitForClaude(() => {
+    const state = getClaudePageState();
+    if (['name_entry', 'setup_later', 'claude_page'].includes(state.state)) {
+      return { action: 'already_advanced', state };
+    }
+    if (['first_chat_intro', 'onboarding'].includes(state.state)) {
+      const button = findClaudeClickableByText(CLAUDE_CONTINUE_TEXT_PATTERN);
+      if (button) {
+        return { action: 'click', button };
+      }
+    }
+    return null;
+  }, { timeoutMs: 45000, intervalMs: 300 });
+
+  if (!decision) {
+    throw new Error('Claude continue button was not found.');
+  }
+  if (decision.action === 'already_advanced') {
+    return buildClaudeAlreadyAdvancedResult(decision.state);
+  }
+  simulateClaudeClick(decision.button);
+  await sleep(1200);
+  return {
+    submitted: true,
+    ...getClaudePageState(),
+  };
 }
 
 async function submitClaudeRandomName(payload = {}) {
@@ -343,11 +495,27 @@ async function submitClaudeRandomName(payload = {}) {
   if (!fullName) {
     throw new Error('Claude random name is empty.');
   }
-  const input = await waitForClaude(findClaudeVisibleTextInput, { timeoutMs: 45000, intervalMs: 300 });
-  if (!input) {
+  const decision = await waitForClaude(() => {
+    const state = getClaudePageState();
+    if (['setup_later', 'claude_page'].includes(state.state)) {
+      return { action: 'already_advanced', state };
+    }
+    const input = findClaudeVisibleTextInput();
+    if (input) {
+      return { action: 'fill', input };
+    }
+    return null;
+  }, { timeoutMs: 45000, intervalMs: 300 });
+  if (!decision) {
     throw new Error('Claude name input was not found.');
   }
-  fillInput(input, fullName);
+  if (decision.action === 'already_advanced') {
+    return {
+      ...buildClaudeAlreadyAdvancedResult(decision.state),
+      fullName,
+    };
+  }
+  fillInput(decision.input, fullName);
   await sleep(200);
   const button = findClaudeClickableByText(CLAUDE_CONTINUE_TEXT_PATTERN);
   if (!button) {
@@ -363,7 +531,30 @@ async function submitClaudeRandomName(payload = {}) {
 }
 
 async function setUpClaudeLater() {
-  return clickClaudeByText(CLAUDE_SETUP_LATER_TEXT_PATTERN, 'Claude set up later', { afterClickMs: 2000 });
+  const decision = await waitForClaude(() => {
+    const state = getClaudePageState();
+    if (state.state === 'claude_page') {
+      return { action: 'already_advanced', state };
+    }
+    const button = findClaudeClickableByText(CLAUDE_SETUP_LATER_TEXT_PATTERN);
+    if (button) {
+      return { action: 'click', button };
+    }
+    return null;
+  }, { timeoutMs: 45000, intervalMs: 300 });
+
+  if (!decision) {
+    throw new Error('Claude set up later button was not found.');
+  }
+  if (decision.action === 'already_advanced') {
+    return buildClaudeAlreadyAdvancedResult(decision.state);
+  }
+  simulateClaudeClick(decision.button);
+  await sleep(2000);
+  return {
+    submitted: true,
+    ...getClaudePageState(),
+  };
 }
 
 async function executeClaudeCommand(command, payload = {}) {
