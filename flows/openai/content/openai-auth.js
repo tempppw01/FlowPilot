@@ -778,6 +778,7 @@ function inspectSignupEntryState() {
     return {
       state: 'logged_in_home',
       skipProfileStep: true,
+      skipRegistrationWaitStep: true,
       url: postVerificationState.url || location.href,
     };
   }
@@ -2707,6 +2708,7 @@ async function step3_fillEmailPassword(payload) {
       skippedPasswordPage: true,
       deferredSubmit: false,
       ...(snapshot.skipProfileStep ? { skipProfileStep: true } : {}),
+      ...(snapshot.skipRegistrationWaitStep ? { skipRegistrationWaitStep: true } : {}),
     };
     log('步骤 3：当前页面已进入验证码或后续阶段，密码页按已跳过处理。', 'warn');
     reportComplete(3, completionPayload);
@@ -3065,6 +3067,7 @@ function getStep4PostVerificationState(options = {}) {
     return {
       state: 'logged_in_home',
       skipProfileStep: true,
+      skipRegistrationWaitStep: true,
       url: location.href,
     };
   }
@@ -5049,6 +5052,7 @@ function inspectSignupVerificationState() {
     return {
       state: 'logged_in_home',
       skipProfileStep: true,
+      skipRegistrationWaitStep: true,
       url: postVerificationState.url || location.href,
     };
   }
@@ -5209,11 +5213,12 @@ async function prepareSignupVerificationFlow(payload = {}, timeout = 60000) {
     }
 
     if (snapshot.state === 'logged_in_home') {
-      log(`${prepareLogLabel}：页面已直接进入 ChatGPT 已登录态，本步骤按已完成处理，并将跳过步骤 5。`, 'ok');
+      log(`${prepareLogLabel}：页面已直接进入 ChatGPT 已登录态，本步骤按已完成处理，并将跳过步骤 5/6。`, 'ok');
       return {
         ready: true,
         alreadyVerified: true,
         skipProfileStep: true,
+        skipRegistrationWaitStep: true,
         retried: recoveryRound,
         prepareSource,
       };
@@ -5228,6 +5233,7 @@ async function prepareSignupVerificationFlow(payload = {}, timeout = 60000) {
         skipLoginVerificationStep: true,
         directOAuthConsentPage: true,
         skipProfileStep: true,
+        skipRegistrationWaitStep: true,
         retried: recoveryRound,
         prepareSource,
       };
@@ -5350,6 +5356,7 @@ async function waitForVerificationSubmitOutcome(step, timeout, options = {}) {
         return {
           success: true,
           skipProfileStep: true,
+          skipRegistrationWaitStep: true,
           url: postVerificationState.url || location.href,
         };
       }
@@ -5393,6 +5400,7 @@ async function waitForVerificationSubmitOutcome(step, timeout, options = {}) {
       return {
         success: true,
         skipProfileStep: true,
+        skipRegistrationWaitStep: true,
         url: postVerificationState.url || location.href,
       };
     }
@@ -5530,6 +5538,7 @@ async function fillVerificationCode(step, payload) {
         assumed: true,
         alreadyAdvanced: true,
         skipProfileStep: true,
+        skipRegistrationWaitStep: true,
         url: postVerificationState.url || location.href,
       };
     }

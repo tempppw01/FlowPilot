@@ -64,6 +64,7 @@ const btnClearLog = document.getElementById('btn-clear-log');
 const configMenuShell = document.getElementById('config-menu-shell');
 const btnConfigMenu = document.getElementById('btn-config-menu');
 const configMenu = document.getElementById('config-menu');
+const selectUiLanguage = document.getElementById('select-ui-language');
 const btnExportSettings = document.getElementById('btn-export-settings');
 const btnImportSettings = document.getElementById('btn-import-settings');
 const inputImportSettingsFile = document.getElementById('input-import-settings-file');
@@ -621,6 +622,8 @@ const DEFAULT_ACTIVE_FLOW_ID = 'openai';
 const DEFAULT_PHONE_SIGNUP_RELOGIN_AFTER_BIND_EMAIL_ENABLED = false;
 const PHONE_SIGNUP_REUSE_LOCK_TITLE = '手机号注册流程不使用号码复用，切回邮箱注册后会恢复原设置';
 let latestState = null;
+let currentUiLanguage = 'auto';
+let currentUiLocale = 'zh-CN';
 let currentPlusModeEnabled = false;
 let currentPlusPaymentMethod = DEFAULT_PLUS_PAYMENT_METHOD;
 let currentPlusAccountAccessStrategy = DEFAULT_PLUS_ACCOUNT_ACCESS_STRATEGY;
@@ -2266,6 +2269,7 @@ function showToast(message, type = 'error', duration = 4000) {
 
   toast.querySelector('.toast-close').addEventListener('click', () => dismissToast(toast));
   toastContainer.appendChild(toast);
+  applySidepanelI18nToNode(toast);
 
   if (duration > 0) {
     setTimeout(() => dismissToast(toast), duration);
@@ -3646,10 +3650,51 @@ function renderUsageCostBar(state = latestState) {
   if (usageCostTotal) usageCostTotal.textContent = formatUsageCostAmount(totals.total);
 }
 
+function normalizeUiLanguage(value = 'auto') {
+  return window.FlowPilotI18n?.normalizeLanguageSetting
+    ? window.FlowPilotI18n.normalizeLanguageSetting(value)
+    : (['auto', 'zh-CN', 'en-US'].includes(String(value || '').trim()) ? String(value || '').trim() : 'auto');
+}
+
+function resolveUiLocale(language = currentUiLanguage) {
+  return window.FlowPilotI18n?.resolveLocale
+    ? window.FlowPilotI18n.resolveLocale(language, window)
+    : (normalizeUiLanguage(language) === 'en-US' ? 'en-US' : 'zh-CN');
+}
+
+function applySidepanelI18nToNode(node) {
+  if (window.FlowPilotSidepanelI18n?.apply) {
+    window.FlowPilotSidepanelI18n.apply(node, { locale: currentUiLocale });
+  }
+  if (window.FlowPilotI18n?.applyDomI18n) {
+    window.FlowPilotI18n.applyDomI18n(node, { locale: currentUiLocale, root: window });
+  }
+}
+
+function applySidepanelI18n() {
+  currentUiLocale = resolveUiLocale(currentUiLanguage);
+  if (selectUiLanguage) {
+    selectUiLanguage.value = currentUiLanguage;
+  }
+  if (window.FlowPilotSidepanelI18n?.setLocale) {
+    window.FlowPilotSidepanelI18n.setLocale(currentUiLocale, document);
+  }
+  if (window.FlowPilotI18n?.applyDomI18n) {
+    window.FlowPilotI18n.applyDomI18n(document, { locale: currentUiLocale, root: window });
+  }
+  document.documentElement.lang = currentUiLocale;
+  window.FlowPilotSidepanelI18n?.start?.(document);
+}
+
 function syncLatestState(nextState) {
   const normalizedNextState = {
     ...(nextState || {}),
   };
+  if (Object.prototype.hasOwnProperty.call(normalizedNextState, 'uiLanguage')) {
+    normalizedNextState.uiLanguage = normalizeUiLanguage(normalizedNextState.uiLanguage);
+    currentUiLanguage = normalizedNextState.uiLanguage;
+    currentUiLocale = resolveUiLocale(currentUiLanguage);
+  }
   if (
     Object.prototype.hasOwnProperty.call(normalizedNextState, 'activeFlowId')
     || Object.prototype.hasOwnProperty.call(normalizedNextState, 'flowId')
@@ -4721,6 +4766,7 @@ function applySmsBowerMailSettingsState(state = {}) {
 }
 
 function collectSettingsPayload() {
+  const safeUiLanguage = typeof currentUiLanguage !== 'undefined' ? currentUiLanguage : 'auto';
   const defaultGpcBaseUrl = typeof DEFAULT_GPC_BASE_URL !== 'undefined'
     ? DEFAULT_GPC_BASE_URL
     : 'https://gpc.qlhazycoder.top';
@@ -5650,6 +5696,7 @@ function collectSettingsPayload() {
       return Math.min(120, Math.max(0, Math.floor(numeric)));
     });
   return {
+    uiLanguage: safeUiLanguage,
     activeFlowId,
     targetId: effectiveTargetId,
     kiroRsUrl: currentKiroRsUrlValue !== null
@@ -13900,6 +13947,9 @@ function applySettingsState(state) {
     }
   }
   updateButtonStates();
+  if (typeof applySidepanelI18n === 'function') {
+    applySidepanelI18n();
+  }
   if (typeof syncPlusManualConfirmationDialog === 'function') {
     void syncPlusManualConfirmationDialog();
   }
@@ -15817,14 +15867,15 @@ function appendLog(entry) {
   const stepNum = normalizedStep > 0 ? String(normalizedStep) : null;
 
   let html = `<span class="log-time">${time}</span> `;
-  html += `<span class="log-level log-level-${entry.level}">${levelLabel}</span> `;
+  html += `<span class="log-level log-level-${entry.level}">${escapeHtml(levelLabel)}</span> `;
   if (stepNum) {
-    html += `<span class="log-step-tag step-${stepNum}">步${stepNum}</span>`;
+    html += `<span class="log-step-tag step-${stepNum}">${escapeHtml(`步${stepNum}`)}</span>`;
   }
   html += `<span class="log-msg">${escapeHtml(entry.message)}</span>`;
 
   line.innerHTML = html;
   logArea.appendChild(line);
+  applySidepanelI18nToNode(line);
   logArea.scrollTop = logArea.scrollHeight;
 }
 
@@ -16879,6 +16930,14 @@ extensionUpdateStatus?.addEventListener('click', () => {
 
 configMenu?.addEventListener('click', (event) => {
   event.stopPropagation();
+});
+
+selectUiLanguage?.addEventListener('change', () => {
+  currentUiLanguage = normalizeUiLanguage(selectUiLanguage.value);
+  currentUiLocale = resolveUiLocale(currentUiLanguage);
+  applySidepanelI18n();
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
 });
 
 btnExportSettings?.addEventListener('click', async () => {

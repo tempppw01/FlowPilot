@@ -197,6 +197,9 @@
       return {
         schemaVersion: 5,
         activeFlowId: defaultFlowId,
+        ui: {
+          language: 'auto',
+        },
         services: {
           account: {
             customPassword: '',
@@ -639,6 +642,13 @@
       const normalized = {
         schemaVersion: Number(input?.settingsSchemaVersion || nested?.schemaVersion || defaults.schemaVersion) || defaults.schemaVersion,
         activeFlowId,
+        ui: {
+          language: rootScope.FlowPilotI18n?.normalizeLanguageSetting
+            ? rootScope.FlowPilotI18n.normalizeLanguageSetting(input?.uiLanguage ?? nested?.ui?.language ?? defaults.ui.language)
+            : (['auto', 'zh-CN', 'en-US'].includes(String(input?.uiLanguage ?? nested?.ui?.language ?? '').trim())
+              ? String(input?.uiLanguage ?? nested?.ui?.language).trim()
+              : defaults.ui.language),
+        },
         services: {
           email: {
             provider: String(
@@ -708,10 +718,9 @@
 
     function mergeSettingsState(baseValue = {}, patchValue = {}) {
       const baseSettingsState = normalizeSettingsState(baseValue);
-      const patchSettingsState = normalizeSettingsState({
-        settingsState: patchValue,
-        activeFlowId: patchValue?.activeFlowId ?? baseSettingsState.activeFlowId,
-      });
+      const patchSettingsState = isPlainObject(patchValue)
+        ? patchValue
+        : {};
 
       return normalizeSettingsState({
         settingsState: mergePlainObjects(baseSettingsState, patchSettingsState),
@@ -770,6 +779,7 @@
       const grokState = normalizedState.flows.grok || buildDefaultFlowSettings('grok');
       const claudeState = normalizedState.flows.claude || buildDefaultFlowSettings('claude');
       next.activeFlowId = normalizedState.activeFlowId;
+      next.uiLanguage = normalizedState.ui?.language || 'auto';
       next.targetId = getSelectedTargetId(normalizedState, normalizedState.activeFlowId);
       next.vpsUrl = openaiState.targets.cpa?.vpsUrl || '';
       next.vpsPassword = openaiState.targets.cpa?.vpsPassword || '';

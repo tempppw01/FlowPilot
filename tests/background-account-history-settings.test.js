@@ -233,6 +233,15 @@ const FIVE_SIM_OPERATOR = 'any';
 const FIVE_SIM_SUPPORTED_COUNTRY_ID_SET = new Set(['indonesia', 'thailand', 'vietnam']);
 const HERO_SMS_SUPPORTED_COUNTRY_ID_SET = new Set(['6', '52', '10']);
 const self = {
+  FlowPilotI18n: {
+    normalizeLanguageSetting(value = 'auto') {
+      const normalized = String(value || '').trim().replace(/_/g, '-').toLowerCase();
+      if (normalized === 'auto') return 'auto';
+      if (normalized === 'en' || normalized.startsWith('en-')) return 'en-US';
+      if (normalized === 'zh' || normalized.startsWith('zh-')) return 'zh-CN';
+      return 'auto';
+    },
+  },
   MultiPageFlowRegistry: {
     DEFAULT_KIRO_RS_URL: '',
     normalizeFlowId(value, fallback = 'openai') {
@@ -270,6 +279,7 @@ const self = {
   },
 };
 const PERSISTED_SETTING_DEFAULTS = {
+  uiLanguage: 'auto',
   autoStepDelaySeconds: null,
   gpcBaseUrl: 'https://gpc.qlhazycoder.top',
   mailProvider: '163',
@@ -354,6 +364,8 @@ return {
   assert.equal(api.normalizePersistentSettingValue('signupMethod', 'phone'), 'phone');
   assert.equal(api.normalizePersistentSettingValue('signupMethod', 'unknown'), 'email');
   assert.equal(api.normalizePersistentSettingValue('activeFlowId', 'codex'), 'openai');
+  assert.equal(api.normalizePersistentSettingValue('uiLanguage', 'en_GB'), 'en-US');
+  assert.equal(api.normalizePersistentSettingValue('uiLanguage', 'bad'), 'auto');
   assert.equal(api.normalizePersistentSettingValue('activeFlowId', 'kiro'), 'kiro');
   assert.equal(api.normalizePersistentSettingValue('targetId', 'sub2api'), 'sub2api');
   assert.equal(api.normalizePersistentSettingValue('kiroRsUrl', ''), '');
