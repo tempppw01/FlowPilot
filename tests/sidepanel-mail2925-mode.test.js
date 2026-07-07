@@ -106,4 +106,5 @@ return {
   assert.equal(api.usesGeneratedAliasMailProvider('2925', 'provide'), true);
   assert.equal(api.usesGeneratedAliasMailProvider('2925', 'receive'), false);
   assert.equal(api.usesGeneratedAliasMailProvider('gmail', 'receive'), true);
+  assert.equal(api.usesGeneratedAliasMailProvider('gmail', 'provide', 'icloud'), false);
 });

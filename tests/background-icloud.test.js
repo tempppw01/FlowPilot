@@ -177,6 +177,30 @@ test('normalizeEmailGenerator and label support icloud', () => {
   assert.equal(api.getEmailGeneratorLabel('icloud'), 'iCloud 隐私邮箱');
 });
 
+test('isGeneratedAliasProvider ignores icloud generator state', () => {
+  const bundle = extractFunction('isGeneratedAliasProvider');
+
+  const api = new Function(`
+function normalizeEmailGenerator(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+function getMail2925Mode() {
+  return 'provide';
+}
+function getManagedAliasUtils() {
+  return null;
+}
+const GMAIL_PROVIDER = 'gmail';
+const CUSTOM_EMAIL_POOL_GENERATOR = 'custom-pool';
+const MAIL_2925_MODE_PROVIDE = 'provide';
+${bundle}
+return { isGeneratedAliasProvider };
+`)();
+
+  assert.equal(api.isGeneratedAliasProvider({ mailProvider: 'gmail', emailGenerator: 'icloud' }), false);
+  assert.equal(api.isGeneratedAliasProvider({ mailProvider: 'gmail', emailGenerator: 'gmail-alias' }), true);
+});
+
 test('normalizePersistentSettingValue handles icloud settings', () => {
   const api = createApi({
     normalizeIcloudTargetMailboxType,

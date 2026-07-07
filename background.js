@@ -6871,6 +6871,15 @@ function isGeneratedAliasProvider(stateOrProvider, mail2925Mode = undefined) {
   ) {
     return false;
   }
+  if (
+    stateOrProvider
+    && typeof stateOrProvider === "object"
+    && !Array.isArray(stateOrProvider)
+    && normalizeEmailGenerator(stateOrProvider.emailGenerator) === "icloud"
+  ) {
+    return false;
+  }
+
   const provider = typeof stateOrProvider === 'string'
     ? stateOrProvider
     : stateOrProvider?.mailProvider;
@@ -7037,6 +7046,14 @@ function isGeneratedAliasProvider(stateOrProvider, mail2925Mode = undefined) {
         ? CUSTOM_EMAIL_POOL_GENERATOR
         : 'custom-pool'
     )
+  ) {
+    return false;
+  }
+  if (
+    stateOrProvider
+    && typeof stateOrProvider === 'object'
+    && !Array.isArray(stateOrProvider)
+    && normalizeEmailGenerator(stateOrProvider.emailGenerator) === 'icloud'
   ) {
     return false;
   }

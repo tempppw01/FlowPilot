@@ -2238,6 +2238,7 @@ function usesGeneratedAliasMailProvider(
     ? generator
     : (typeof getSelectedEmailGenerator === 'function' ? getSelectedEmailGenerator() : '');
   return resolvedGenerator !== customEmailPoolGenerator
+    && resolvedGenerator !== 'icloud'
     && isManagedAliasProvider(provider, mail2925Mode);
 }
 
@@ -13577,7 +13578,7 @@ function applySettingsState(state) {
     if (restoredMailProvider === GMAIL_PROVIDER) {
       selectEmailGenerator.value = restoredEmailGenerator === CUSTOM_EMAIL_POOL_GENERATOR
         ? CUSTOM_EMAIL_POOL_GENERATOR
-        : GMAIL_ALIAS_GENERATOR;
+        : (restoredEmailGenerator === 'icloud' ? 'icloud' : GMAIL_ALIAS_GENERATOR);
     } else if (restoredEmailGenerator === CUSTOM_EMAIL_POOL_GENERATOR) {
       selectEmailGenerator.value = CUSTOM_EMAIL_POOL_GENERATOR;
     } else if (restoredEmailGenerator === 'icloud') {
@@ -14850,7 +14851,7 @@ function updateMailProviderUI() {
   const customEmailPoolGenerator = typeof CUSTOM_EMAIL_POOL_GENERATOR === 'string'
     ? CUSTOM_EMAIL_POOL_GENERATOR
     : 'custom-pool';
-  const gmailOnlyGenerators = new Set([gmailAliasGenerator, customEmailPoolGenerator]);
+  const gmailOnlyGenerators = new Set([gmailAliasGenerator, customEmailPoolGenerator, 'icloud']);
   Array.from(selectEmailGenerator?.options || []).forEach((option) => {
     if (!option) return;
     if (useGmail) {
