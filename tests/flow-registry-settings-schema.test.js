@@ -55,6 +55,10 @@ test('flow registry exposes canonical flow and target metadata', () => {
     ['openai-plus', 'shared-auto-run', 'openai-oauth', 'openai-step6', 'openai-target-webchat', 'service-account', 'service-email', 'service-proxy']
   );
   assert.deepEqual(
+    flowRegistry.getVisibleGroupIds('openai', 'chatgpt2api'),
+    ['openai-plus', 'shared-auto-run', 'openai-oauth', 'openai-step6', 'openai-target-chatgpt2api', 'service-account', 'service-email', 'service-proxy']
+  );
+  assert.deepEqual(
     flowRegistry.getVisibleGroupIds('kiro', 'kiro-rs'),
     ['kiro-runtime-status', 'shared-auto-run', 'kiro-target-kiro-rs', 'service-account', 'service-email', 'service-proxy']
   );
@@ -76,7 +80,7 @@ test('flow registry exposes canonical flow and target metadata', () => {
   );
   assert.deepEqual(
     flowRegistry.getTargetOptions('openai').map((entry) => entry.id),
-    ['cpa', 'sub2api', 'codex2api', 'webchat']
+    ['cpa', 'sub2api', 'codex2api', 'webchat', 'chatgpt2api']
   );
   assert.deepEqual(
     flowRegistry.getTargetOptions('grok').map((entry) => entry.id),
@@ -92,6 +96,14 @@ test('flow registry exposes canonical flow and target metadata', () => {
   );
   assert.equal(
     flowRegistry.getTargetCapabilities('openai', 'webchat')?.supportsPhoneVerificationSettings,
+    false
+  );
+  assert.equal(
+    flowRegistry.getTargetCapabilities('openai', 'chatgpt2api')?.supportsPhoneSignup,
+    false
+  );
+  assert.equal(
+    flowRegistry.getTargetCapabilities('openai', 'chatgpt2api')?.supportsPhoneVerificationSettings,
     false
   );
   assert.deepEqual(
@@ -143,7 +155,8 @@ test('settings schema normalizes view input into canonical nested namespaces', (
     grok2ApiUrl: ' https://grok2api.example.com/ ',
     grok2ApiAdminUsername: ' admin ',
     grok2ApiAdminPassword: ' grok2api-secret ',
-    stepExecutionRangeByFlow: {
+    openaiChatgpt2ApiUrl: ' https://chatgpt2api.example.com/admin ',
+    openaiChatgpt2ApiAdminKey: ' chatgpt2api-key ',    stepExecutionRangeByFlow: {
       openai: { enabled: true, fromStep: 2, toStep: 9 },
       kiro: { enabled: true, fromStep: 1, toStep: 9 },
       grok: { enabled: true, fromStep: 2, toStep: 4 },
@@ -158,6 +171,8 @@ test('settings schema normalizes view input into canonical nested namespaces', (
   assert.equal(normalized.flows.openai.plus.plusAccountAccessStrategy, 'sub2api_codex_session');
   assert.equal(normalized.flows.openai.targets.webchat.baseUrl, 'https://webchat.example.com/admin');
   assert.equal(normalized.flows.openai.targets.webchat.apiKey, 'webchat-key');
+  assert.equal(normalized.flows.openai.targets.chatgpt2api.baseUrl, 'https://chatgpt2api.example.com/admin');
+  assert.equal(normalized.flows.openai.targets.chatgpt2api.apiKey, 'chatgpt2api-key');
   assert.equal(normalized.flows.grok.targets.webchat2api.baseUrl, 'https://webchat.example.com/admin');
   assert.equal(normalized.flows.grok.targets.webchat2api.apiKey, 'webchat-key');
   assert.equal(normalized.flows.grok.targets.grok2api.baseUrl, 'https://grok2api.example.com/');
@@ -217,6 +232,26 @@ test('settings schema shares webchat connection config between OpenAI and Grok t
   assert.equal(fromOpenAiNested.flows.grok.targets.webchat2api.apiKey, 'nested-openai-key');
 });
 
+test('settings schema keeps ChatGPT2API config independent from shared webchat config', () => {
+  const { settingsSchema } = loadApis();
+  const schema = settingsSchema.createSettingsSchema();
+
+  const normalized = schema.normalizeSettingsState({
+    openaiWebchatUrl: 'https://shared-webchat.example.com/admin',
+    openaiWebchatAdminKey: 'shared-webchat-key',
+    openaiChatgpt2ApiUrl: ' https://chatgpt2api.example.com/admin ',
+    openaiChatgpt2ApiAdminKey: ' chatgpt2api-key ',
+  });
+  const view = schema.buildSettingsView(normalized);
+
+  assert.equal(normalized.flows.openai.targets.webchat.baseUrl, 'https://shared-webchat.example.com/admin');
+  assert.equal(normalized.flows.grok.targets.webchat2api.baseUrl, 'https://shared-webchat.example.com/admin');
+  assert.equal(normalized.flows.openai.targets.chatgpt2api.baseUrl, 'https://chatgpt2api.example.com/admin');
+  assert.equal(normalized.flows.openai.targets.chatgpt2api.apiKey, 'chatgpt2api-key');
+  assert.equal(view.openaiChatgpt2ApiUrl, 'https://chatgpt2api.example.com/admin');
+  assert.equal(view.openaiChatgpt2ApiAdminKey, 'chatgpt2api-key');
+});
+
 test('settings schema lets explicit flat step range override stale canonical range', () => {
   const { settingsSchema } = loadApis();
   const schema = settingsSchema.createSettingsSchema();
@@ -252,6 +287,8 @@ test('settings schema can project canonical state into a read view without legac
     openaiWebchatUrl: 'https://webchat.example.com/admin',
     openaiWebchatAdminKey: 'key-webchat',
     openaiWebchatUploadEnabled: true,
+    openaiChatgpt2ApiUrl: 'https://chatgpt2api.example.com/admin',
+    openaiChatgpt2ApiAdminKey: 'key-chatgpt2api',
     plusAccountAccessStrategy: 'sub2api_codex_session',
   });
   const view = schema.buildSettingsView(normalized);
@@ -263,6 +300,8 @@ test('settings schema can project canonical state into a read view without legac
   assert.equal(view.openaiWebchatUrl, 'https://webchat.example.com/admin');
   assert.equal(view.openaiWebchatAdminKey, 'key-webchat');
   assert.equal(view.openaiWebchatUploadEnabled, false);
+  assert.equal(view.openaiChatgpt2ApiUrl, 'https://chatgpt2api.example.com/admin');
+  assert.equal(view.openaiChatgpt2ApiAdminKey, 'key-chatgpt2api');
   assert.equal(view.plusAccountAccessStrategy, 'sub2api_codex_session');
   assert.equal(view.settingsSchemaVersion, 5);
   assert.equal(view.settingsState.activeFlowId, 'kiro');
