@@ -40,7 +40,6 @@
       executeNodeViaCompletionSignal,
       exportSettingsBundle,
       fetchGeneratedEmail,
-      refreshGpcCardBalance,
       testKiroRsConnection,
       testClaude2ApiConnection,
       testGrok2ApiConnection,
@@ -251,7 +250,7 @@
         updates.phoneVerificationEnabled = Boolean(payload.phoneVerificationEnabled);
       }
       if (hasPlusModeEnabled) {
-        updates.plusModeEnabled = Boolean(payload.plusModeEnabled);
+        updates.plusModeEnabled = false;
       }
       if (hasSignupMethod || hasPhoneVerificationEnabled || hasPlusModeEnabled || hasTargetId || hasActiveFlowId) {
         updates.resolvedSignupMethod = null;
@@ -703,17 +702,11 @@
 
     function normalizePlusPaymentMethodForDisplay(value = '') {
       const normalized = String(value || '').trim().toLowerCase();
-      if (normalized === 'none' || normalized === 'no-payment' || normalized === 'skip-payment') {
+      if (normalized === 'none') {
         return 'none';
       }
-      if (normalized === 'paypal-hosted' || normalized === 'paypal_direct' || normalized === 'paypal-direct') {
+      if (normalized === 'paypal-hosted') {
         return 'paypal-hosted';
-      }
-      if (normalized === 'gpc-helper') {
-        return 'gpc-helper';
-      }
-      if (normalized === 'plus-auto' || normalized === 'pix' || normalized === 'pix_plus' || normalized === 'pixplus') {
-        return 'plus-auto';
       }
       return 'paypal';
     }
@@ -725,12 +718,6 @@
       }
       if (method === 'paypal-hosted') {
         return 'PayPal 无卡直绑';
-      }
-      if (method === 'gpc-helper') {
-        return 'GPC';
-      }
-      if (method === 'plus-auto') {
-        return 'Plus 自动充值';
       }
       return 'PayPal';
     }
@@ -1676,20 +1663,6 @@
             proxyRouting,
             state: await getState(),
           };
-        }
-
-        case 'REFRESH_GPC_CARD_BALANCE': {
-          if (typeof refreshGpcCardBalance !== 'function') {
-            throw new Error('GPC 卡密查询能力尚未接入。');
-          }
-          const state = await getState();
-          const result = await refreshGpcCardBalance({
-            ...(state || {}),
-            ...(message.payload || {}),
-          }, {
-            reason: message.payload?.reason,
-          });
-          return { ok: true, ...result };
         }
 
         case 'CHECK_KIRO_RS_CONNECTION': {
