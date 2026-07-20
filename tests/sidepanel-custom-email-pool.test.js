@@ -68,7 +68,7 @@ test('sidepanel html exposes custom email pool generator option and input row', 
   assert.match(html, /id="input-custom-mail-provider-pool"/);
 });
 
-test('sidepanel locks run count to custom email pool size', () => {
+test('sidepanel keeps the custom email pool run count editable', () => {
   const bundle = [
     extractFunction('isCustomMailProvider'),
     extractFunction('normalizeCustomEmailPoolEntries'),
@@ -123,10 +123,10 @@ return {
   assert.equal(api.usesGeneratedAliasMailProvider('gmail', 'provide', 'custom-pool'), false);
   assert.equal(api.usesCustomEmailPoolGenerator(), true);
   assert.equal(api.getCustomEmailPoolSize(), 2);
-  assert.equal(api.getRunCountValue(), 2);
+  assert.equal(api.getRunCountValue(), 99);
 });
 
-test('sidepanel locks run count to custom mail provider pool size', () => {
+test('sidepanel keeps the custom mail provider pool run count editable', () => {
   const bundle = [
     extractFunction('isCustomMailProvider'),
     extractFunction('normalizeCustomEmailPoolEntries'),
@@ -179,7 +179,7 @@ return {
   assert.equal(api.usesCustomMailProviderPool(), true);
   assert.equal(api.getCustomMailProviderPoolSize(), 3);
   assert.equal(api.getLockedRunCountFromEmailPool(), 3);
-  assert.equal(api.getRunCountValue(), 3);
+  assert.equal(api.getRunCountValue(), 99);
 });
 
 test('sidepanel queues custom email pool refresh when the pool row is visible', () => {
@@ -187,7 +187,7 @@ test('sidepanel queues custom email pool refresh when the pool row is visible', 
 
   assert.match(
     source,
-    /if \(useCustomEmailPool\) \{\s*syncRunCountFromCustomEmailPool\(\);\s*if \(typeof queueCustomEmailPoolRefresh === 'function'\) \{\s*queueCustomEmailPoolRefresh\(\);\s*\}\s*\}/
+    /if \(useCustomEmailPool\) \{\s*if \(typeof queueCustomEmailPoolRefresh === 'function'\) \{\s*queueCustomEmailPoolRefresh\(\);\s*\}\s*\}/
   );
 });
 

@@ -174,6 +174,12 @@ const rowGrokWebchat2ApiUrl = document.getElementById('row-grok-webchat2api-url'
 const inputGrokWebchat2ApiUrl = document.getElementById('input-grok-webchat2api-url');
 const rowGrokWebchat2ApiKey = document.getElementById('row-grok-webchat2api-key');
 const inputGrokWebchat2ApiKey = document.getElementById('input-grok-webchat2api-key');
+const inputGrok2ApiUrl = document.getElementById('input-grok2api-url');
+const inputGrok2ApiAdminUsername = document.getElementById('input-grok2api-admin-username');
+const inputGrok2ApiAdminPassword = document.getElementById('input-grok2api-admin-password');
+const selectGrok2ApiUploadMethod = document.getElementById('select-grok2api-upload-method');
+const btnTestGrok2Api = document.getElementById('btn-test-grok2api');
+const displayGrok2ApiTestStatus = document.getElementById('display-grok2api-test-status');
 const rowOpenAiWebchatUrl = document.getElementById('row-openai-webchat-url');
 const inputOpenAiWebchatUrl = document.getElementById('input-openai-webchat-url');
 const rowOpenAiWebchatKey = document.getElementById('row-openai-webchat-key');
@@ -195,6 +201,9 @@ const rowGrokSsoStatus = document.getElementById('row-grok-sso-status');
 const displayGrokSsoStatus = document.getElementById('display-grok-sso-status');
 const rowGrokWebchat2ApiUploadStatus = document.getElementById('row-grok-webchat2api-upload-status');
 const displayGrokWebchat2ApiUploadStatus = document.getElementById('display-grok-webchat2api-upload-status');
+const displayGrok2ApiDeviceStatus = document.getElementById('display-grok2api-device-status');
+const displayGrok2ApiDeviceCode = document.getElementById('display-grok2api-device-code');
+const displayGrok2ApiUploadStatus = document.getElementById('display-grok2api-upload-status');
 const rowGrokSsoSettings = document.getElementById('row-grok-sso-settings');
 const displayGrokSsoCookie = document.getElementById('display-grok-sso-cookie');
 const btnCopyGrokSso = document.getElementById('btn-copy-grok-sso');
@@ -636,6 +645,7 @@ let currentStepDefinitionOpenAiWebchatUploadEnabled = false;
 let phoneSignupReuseUiWasLocked = false;
 let kiroRsConnectionTestStatusText = '未测试';
 let claude2ApiConnectionTestStatusText = '未测试';
+let grok2ApiConnectionTestStatusText = '未测试';
 let lastPhoneSmsProviderBeforeChange = null;
 let heroSmsCountrySelectionOrder = [];
 let heroSmsOperatorsByCountryId = new Map();
@@ -2942,6 +2952,28 @@ function getGrokWebchat2ApiUploadStatusLabel(value = '') {
   }
 }
 
+function getGrok2ApiDeviceStatusLabel(value = '') {
+  switch (String(value || '').trim().toLowerCase()) {
+    case 'logging_in': return '正在连接 grok2api';
+    case 'starting': return '正在获取设备代码';
+    case 'awaiting_authorization': return '等待 xAI 授权';
+    case 'authorized': return '已接入 grok2api';
+    case 'expired': return '授权已过期';
+    case 'error': return '接入失败';
+    default: return String(value || '').trim() || '未开始';
+  }
+}
+
+function getGrok2ApiUploadStatusLabel(value = '') {
+  switch (String(value || '').trim().toLowerCase()) {
+    case 'logging_in': return '正在连接 grok2api';
+    case 'uploading': return '正在上传 Web SSO';
+    case 'uploaded': return '已导入 grok2api Web';
+    case 'error': return '导入失败';
+    default: return String(value || '').trim() || '未开始';
+  }
+}
+
 function getOpenAiWebchatUploadStatusLabel(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
   switch (normalized) {
@@ -3096,6 +3128,8 @@ function renderGrokRuntimeState(state = latestState) {
     || state?.grokWebchat2ApiTargetUrl
     || ''
   ).trim();
+  const deviceAuth = runtimeState?.deviceAuth || {};
+  const grok2ApiUpload = runtimeState?.grok2ApiUpload || {};
 
   if (displayGrokRegisterStatus) {
     displayGrokRegisterStatus.textContent = getGrokRegisterStatusLabel(registerStatus);
@@ -3117,6 +3151,19 @@ function renderGrokRuntimeState(state = latestState) {
     displayGrokWebchat2ApiUploadStatus.textContent = `${label}${uploadMessage ? `：${uploadMessage}` : ''}${suffix}`;
     displayGrokWebchat2ApiUploadStatus.title = uploadTargetUrl || '';
   }
+  if (typeof displayGrok2ApiDeviceStatus !== 'undefined' && displayGrok2ApiDeviceStatus) {
+    const suffix = deviceAuth.completedAt ? `，${new Date(deviceAuth.completedAt).toLocaleString()}` : '';
+    displayGrok2ApiDeviceStatus.textContent = `${getGrok2ApiDeviceStatusLabel(deviceAuth.status)}${deviceAuth.message ? `：${deviceAuth.message}` : ''}${suffix}`;
+  }
+  if (typeof displayGrok2ApiDeviceCode !== 'undefined' && displayGrok2ApiDeviceCode) {
+    displayGrok2ApiDeviceCode.textContent = deviceAuth.userCode || '未获取';
+    displayGrok2ApiDeviceCode.title = deviceAuth.verificationUri || '';
+  }
+  if (typeof displayGrok2ApiUploadStatus !== 'undefined' && displayGrok2ApiUploadStatus) {
+    const suffix = grok2ApiUpload.uploadedAt ? `，${new Date(grok2ApiUpload.uploadedAt).toLocaleString()}` : '';
+    displayGrok2ApiUploadStatus.textContent = `${getGrok2ApiUploadStatusLabel(grok2ApiUpload.status)}${grok2ApiUpload.message ? `：${grok2ApiUpload.message}` : ''}${suffix}`;
+    displayGrok2ApiUploadStatus.title = grok2ApiUpload.targetUrl || '';
+  }
   [btnCopyGrokSso, btnClearGrokSso].forEach((button) => {
     if (button) {
       button.disabled = cookies.length === 0;
@@ -3137,6 +3184,14 @@ function setClaude2ApiConnectionTestStatus(message = '') {
   claude2ApiConnectionTestStatusText = nextText;
   if (typeof displayClaude2ApiTestStatus !== 'undefined' && displayClaude2ApiTestStatus) {
     displayClaude2ApiTestStatus.textContent = nextText;
+  }
+}
+
+function setGrok2ApiConnectionTestStatus(message = '') {
+  const nextText = String(message || '').trim() || '未测试';
+  grok2ApiConnectionTestStatusText = nextText;
+  if (typeof displayGrok2ApiTestStatus !== 'undefined' && displayGrok2ApiTestStatus) {
+    displayGrok2ApiTestStatus.textContent = nextText;
   }
 }
 
@@ -4366,37 +4421,23 @@ function getLockedRunCountFromEmailPool(provider = selectMailProvider.value) {
 }
 
 function shouldLockRunCountToEmailPool(provider = (typeof selectMailProvider !== 'undefined' ? selectMailProvider?.value : undefined)) {
-  return getLockedRunCountFromEmailPool(provider) > 0;
+  // 邮箱池限制可用邮箱数量，但不能覆盖用户设置的自动轮数。
+  return false;
 }
 
 function syncRunCountFromCustomEmailPool() {
-  if (!usesCustomEmailPoolGenerator()) {
-    return;
-  }
-  inputRunCount.value = String(getCustomEmailPoolSize());
+  return usesCustomEmailPoolGenerator() ? getCustomEmailPoolSize() : 0;
 }
 
 function syncRunCountFromCustomMailProviderPool() {
-  if (!usesCustomMailProviderPool()) {
-    return;
-  }
-  inputRunCount.value = String(getCustomMailProviderPoolSize());
+  return usesCustomMailProviderPool() ? getCustomMailProviderPoolSize() : 0;
 }
 
 function syncRunCountFromConfiguredEmailPool(provider = selectMailProvider.value) {
-  const poolSize = getLockedRunCountFromEmailPool(provider);
-  if (poolSize > 0) {
-    inputRunCount.value = String(poolSize);
-  }
+  return getLockedRunCountFromEmailPool(provider);
 }
 
 function getRunCountValue() {
-  const lockedRunCount = typeof getLockedRunCountFromEmailPool === 'function'
-    ? getLockedRunCountFromEmailPool()
-    : 0;
-  if (lockedRunCount > 0) {
-    return lockedRunCount;
-  }
   return Math.max(1, parseInt(inputRunCount.value, 10) || 1);
 }
 
@@ -5646,6 +5687,18 @@ function collectSettingsPayload() {
   const currentGrokWebchat2ApiKeyValue = typeof inputGrokWebchat2ApiKey !== 'undefined' && inputGrokWebchat2ApiKey
     ? String(inputGrokWebchat2ApiKey.value ?? '').trim()
     : '';
+  const currentGrok2ApiUrlValue = typeof inputGrok2ApiUrl !== 'undefined' && inputGrok2ApiUrl
+    ? String(inputGrok2ApiUrl.value ?? '').trim()
+    : String(latestState?.grok2ApiUrl || '').trim();
+  const currentGrok2ApiAdminUsernameValue = typeof inputGrok2ApiAdminUsername !== 'undefined' && inputGrok2ApiAdminUsername
+    ? String(inputGrok2ApiAdminUsername.value ?? '').trim()
+    : String(latestState?.grok2ApiAdminUsername || '').trim();
+  const currentGrok2ApiAdminPasswordValue = typeof inputGrok2ApiAdminPassword !== 'undefined' && inputGrok2ApiAdminPassword
+    ? String(inputGrok2ApiAdminPassword.value ?? '')
+    : String(latestState?.grok2ApiAdminPassword || '');
+  const currentGrok2ApiUploadMethodValue = typeof selectGrok2ApiUploadMethod !== 'undefined' && selectGrok2ApiUploadMethod
+    ? String(selectGrok2ApiUploadMethod.value || '').trim()
+    : String(latestState?.grok2ApiUploadMethod || 'web-sso-import').trim();
   const readSharedWebchatUrlFromState = typeof getSharedWebchatUrlFromState === 'function'
     ? getSharedWebchatUrlFromState
     : ((state = {}) => String(
@@ -5707,6 +5760,12 @@ function collectSettingsPayload() {
       ? currentKiroRsKeyValue
       : String(latestState?.kiroRsKey || '').trim(),
     ...createSharedWebchatConfigPatch(sharedWebchatUrl, sharedWebchatAdminKey),
+    grok2ApiUrl: currentGrok2ApiUrlValue,
+    grok2ApiAdminUsername: currentGrok2ApiAdminUsernameValue,
+    grok2ApiAdminPassword: currentGrok2ApiAdminPasswordValue,
+    grok2ApiUploadMethod: currentGrok2ApiUploadMethodValue === 'build-device-oauth'
+      ? 'build-device-oauth'
+      : 'web-sso-import',
     openaiWebchatUploadEnabled: openAiWebchatUploadEnabled,
     vpsUrl: inputVpsUrl.value.trim(),
     vpsPassword: inputVpsPassword.value,
@@ -5790,7 +5849,9 @@ function collectSettingsPayload() {
         : '')
       : 'http://127.0.0.1:17374',
     currentMail2925AccountId: String(latestState?.currentMail2925AccountId || '').trim(),
-    emailGenerator: selectEmailGenerator.value,
+    emailGenerator: String(selectMailProvider?.value || '').trim().toLowerCase() === 'custom'
+      ? 'custom'
+      : selectEmailGenerator.value,
     customMailProviderPool: typeof normalizeCustomEmailPoolEntries === 'function'
       ? normalizeCustomEmailPoolEntries(inputCustomMailProviderPool?.value)
       : [],
@@ -12977,11 +13038,7 @@ function applyAutoRunStatus(payload = currentAutoRun) {
   setSettingsCardLocked(settingsCardLocked);
   setFreePhoneReuseControlsLocked(settingsCardLocked);
 
-  inputRunCount.disabled = currentAutoRun.autoRunning || (
-    typeof shouldLockRunCountToEmailPool === 'function'
-      ? shouldLockRunCountToEmailPool()
-      : getLockedRunCountFromEmailPool() > 0
-  );
+  inputRunCount.disabled = currentAutoRun.autoRunning;
   btnAutoRun.disabled = currentAutoRun.autoRunning;
   btnFetchEmail.disabled = locked
     || isCustomMailProvider()
@@ -12995,18 +13052,13 @@ function applyAutoRunStatus(payload = currentAutoRun) {
   }
   inputAutoSkipFailures.disabled = locked;
 
-  const lockedRunCount = typeof getLockedRunCountFromEmailPool === 'function'
-    ? getLockedRunCountFromEmailPool()
-    : 0;
   const isSyncPhase = typeof isAutoRunSourceSyncPhase === 'function'
     ? isAutoRunSourceSyncPhase
     : (phase) => ['running', 'waiting_step', 'waiting_email', 'retrying', 'waiting_interval'].includes(phase);
   const shouldSyncRunCount = typeof shouldSyncRunCountFromAutoRunSource === 'function'
     ? shouldSyncRunCountFromAutoRunSource(currentAutoRun)
     : (currentAutoRun.autoRunning || isSyncPhase(currentAutoRun.phase));
-  if (lockedRunCount > 0) {
-    inputRunCount.value = String(lockedRunCount);
-  } else if (shouldSyncRunCount && currentAutoRun.totalRuns > 0) {
+  if (shouldSyncRunCount && currentAutoRun.totalRuns > 0) {
     inputRunCount.value = String(currentAutoRun.totalRuns);
   }
 
@@ -13401,6 +13453,14 @@ function applySettingsState(state) {
   if (typeof inputGrokWebchat2ApiKey !== 'undefined' && inputGrokWebchat2ApiKey) {
     inputGrokWebchat2ApiKey.value = String(getSharedWebchatAdminKeyFromState(state) || '');
   }
+  if (typeof inputGrok2ApiUrl !== 'undefined' && inputGrok2ApiUrl) inputGrok2ApiUrl.value = String(state?.grok2ApiUrl || '').trim();
+  if (typeof inputGrok2ApiAdminUsername !== 'undefined' && inputGrok2ApiAdminUsername) inputGrok2ApiAdminUsername.value = String(state?.grok2ApiAdminUsername || '').trim();
+  if (typeof inputGrok2ApiAdminPassword !== 'undefined' && inputGrok2ApiAdminPassword) inputGrok2ApiAdminPassword.value = String(state?.grok2ApiAdminPassword || '');
+  if (typeof selectGrok2ApiUploadMethod !== 'undefined' && selectGrok2ApiUploadMethod) {
+    selectGrok2ApiUploadMethod.value = String(state?.grok2ApiUploadMethod || 'web-sso-import') === 'build-device-oauth'
+      ? 'build-device-oauth'
+      : 'web-sso-import';
+  }
   if (typeof inputOpenAiWebchatUrl !== 'undefined' && inputOpenAiWebchatUrl) {
     inputOpenAiWebchatUrl.value = String(getSharedWebchatUrlFromState(state) || '').trim();
   }
@@ -13415,6 +13475,9 @@ function applySettingsState(state) {
   }
   if (typeof displayClaude2ApiTestStatus !== 'undefined' && displayClaude2ApiTestStatus) {
     displayClaude2ApiTestStatus.textContent = claude2ApiConnectionTestStatusText;
+  }
+  if (typeof displayGrok2ApiTestStatus !== 'undefined' && displayGrok2ApiTestStatus) {
+    displayGrok2ApiTestStatus.textContent = grok2ApiConnectionTestStatusText;
   }
   const resolveKiroRuntimeState = typeof getKiroRuntimeState === 'function'
     ? getKiroRuntimeState
@@ -15127,11 +15190,11 @@ function updateMailProviderUI() {
   }
   if (autoHintText && useCustomEmailPool) {
     autoHintText.textContent = getCustomEmailPoolSize() > 0
-      ? `当前邮箱池共 ${getCustomEmailPoolSize()} 个邮箱，自动轮数会跟随数量；实际收码仍走当前邮箱服务`
-      : '请先在邮箱池里每行填写一个邮箱，自动轮数会跟随数量';
+      ? `当前邮箱池共 ${getCustomEmailPoolSize()} 个邮箱；自动注册次数可自行设置，但不能超过可用邮箱数；实际收码仍走当前邮箱服务`
+      : '请先在邮箱池里每行填写一个邮箱，再设置不超过可用邮箱数的自动注册次数';
   }
   if (autoHintText && useCustomEmail && useCustomMailProviderPool) {
-    autoHintText.textContent = `当前自定义号池共 ${getCustomMailProviderPoolSize()} 个邮箱，自动轮数会跟随数量；第 4/8 步仍需手动输入验证码`;
+    autoHintText.textContent = `当前自定义号池共 ${getCustomMailProviderPoolSize()} 个邮箱；自动注册次数可自行设置，但不能超过可用邮箱数；第 4/8 步仍需手动输入验证码`;
   }
   if (autoHintText && useGmail && useGeneratedAlias) {
     autoHintText.textContent = '请先填写 Gmail 原邮箱，步骤 3 会自动生成 Gmail +tag 地址';
@@ -15174,13 +15237,9 @@ function updateMailProviderUI() {
     inputEmail.value = getCurrentLuckmailEmail();
   }
   if (useCustomEmailPool) {
-    syncRunCountFromCustomEmailPool();
     if (typeof queueCustomEmailPoolRefresh === 'function') {
       queueCustomEmailPoolRefresh();
     }
-  }
-  if (useCustomMailProviderPool) {
-    syncRunCountFromCustomMailProviderPool();
   }
   if (typeof inputRunCount !== 'undefined' && inputRunCount) {
     inputRunCount.disabled = currentAutoRun.autoRunning || shouldLockRunCountToEmailPool();
@@ -16978,12 +17037,7 @@ autoStartMessage?.addEventListener('click', (event) => {
 btnAutoStartClose?.addEventListener('click', () => resolveModalChoice(null));
 
 async function startAutoRunFromCurrentSettings() {
-  const initialLockedRunCount = typeof getLockedRunCountFromEmailPool === 'function'
-    ? getLockedRunCountFromEmailPool()
-    : 0;
-  const requestedTotalRuns = initialLockedRunCount > 0
-    ? initialLockedRunCount
-    : getRunCountValue();
+  const requestedTotalRuns = getRunCountValue();
   registerPendingAutoRunStartRunCount(requestedTotalRuns);
 
   if (typeof persistCurrentSettingsForAction === 'function') {
@@ -17027,19 +17081,19 @@ async function startAutoRunFromCurrentSettings() {
     return false;
   }
 
-  const customEmailPoolEnabled = typeof usesCustomEmailPoolGenerator === 'function'
-    && usesCustomEmailPoolGenerator();
-  const lockedRunCount = typeof getLockedRunCountFromEmailPool === 'function'
+  const emailPoolSize = typeof getLockedRunCountFromEmailPool === 'function'
     ? getLockedRunCountFromEmailPool()
     : 0;
-  if (customEmailPoolEnabled && lockedRunCount <= 0) {
+  const usesEmailPool = (typeof usesCustomEmailPoolGenerator === 'function' && usesCustomEmailPoolGenerator())
+    || (typeof usesCustomMailProviderPool === 'function' && usesCustomMailProviderPool());
+  if (usesEmailPool && emailPoolSize <= 0) {
     throw new Error('请先在邮箱池里至少填写 1 个邮箱。');
   }
-  const totalRuns = lockedRunCount > 0 ? lockedRunCount : requestedTotalRuns;
-  registerPendingAutoRunStartRunCount(totalRuns);
-  if (lockedRunCount > 0) {
-    inputRunCount.value = String(lockedRunCount);
+  if (usesEmailPool && requestedTotalRuns > emailPoolSize) {
+    throw new Error(`自动注册次数 ${requestedTotalRuns} 超过邮箱池可用数量 ${emailPoolSize}，请减少次数或补充邮箱。`);
   }
+  const totalRuns = requestedTotalRuns;
+  registerPendingAutoRunStartRunCount(totalRuns);
   let mode = 'restart';
   const autoRunSkipFailures = inputAutoSkipFailures.checked;
   const fallbackThreadIntervalMinutes = normalizeAutoRunThreadIntervalMinutes(
@@ -17187,6 +17241,7 @@ btnReset.addEventListener('click', async () => {
   displayLocalhostUrl.classList.remove('has-value');
   setKiroRsConnectionTestStatus('未测试');
   setClaude2ApiConnectionTestStatus('未测试');
+  setGrok2ApiConnectionTestStatus('未测试');
   inputEmail.value = '';
   if (typeof inputSignupPhone !== 'undefined' && inputSignupPhone) {
     inputSignupPhone.value = '';
@@ -17443,6 +17498,37 @@ btnTestClaude2Api?.addEventListener('click', async () => {
   } finally {
     btnTestClaude2Api.disabled = false;
     btnTestClaude2Api.textContent = defaultLabel;
+  }
+});
+
+btnTestGrok2Api?.addEventListener('click', async () => {
+  const defaultLabel = btnTestGrok2Api.textContent || '测试';
+  btnTestGrok2Api.disabled = true;
+  btnTestGrok2Api.textContent = '测试中';
+  setGrok2ApiConnectionTestStatus('测试中...');
+  try {
+    await persistCurrentSettingsForAction();
+    const response = await sendSidepanelMessage({
+      type: 'CHECK_GROK2API_CONNECTION',
+      payload: {
+        baseUrl: String(inputGrok2ApiUrl?.value || '').trim(),
+        adminUsername: String(inputGrok2ApiAdminUsername?.value || '').trim(),
+        adminPassword: String(inputGrok2ApiAdminPassword?.value || ''),
+      },
+    });
+    if (response?.error) {
+      throw new Error(response.error);
+    }
+    const message = String(response?.message || '').trim() || 'grok2api 测试完成。';
+    setGrok2ApiConnectionTestStatus(message);
+    showToast(message, response?.ok ? 'success' : 'error', response?.ok ? 2200 : 4200);
+  } catch (error) {
+    const message = error?.message || 'grok2api 测试失败。';
+    setGrok2ApiConnectionTestStatus(message);
+    showToast(message, 'error', 4200);
+  } finally {
+    btnTestGrok2Api.disabled = false;
+    btnTestGrok2Api.textContent = defaultLabel;
   }
 });
 
@@ -17786,6 +17872,28 @@ selectPlusAccountAccessStrategy?.addEventListener('change', () => {
   input?.addEventListener('blur', () => {
     saveSettings({ silent: true }).catch(() => { });
   });
+});
+
+[inputGrok2ApiUrl, inputGrok2ApiAdminUsername, inputGrok2ApiAdminPassword].forEach((input) => {
+  input?.addEventListener('input', () => {
+    markSettingsDirty(true);
+    setGrok2ApiConnectionTestStatus('未测试');
+    scheduleSettingsAutoSave();
+  });
+  input?.addEventListener('blur', () => {
+    saveSettings({ silent: true }).catch(() => { });
+  });
+});
+
+selectGrok2ApiUploadMethod?.addEventListener('change', () => {
+  const uploadMethod = String(selectGrok2ApiUploadMethod.value || '').trim() === 'build-device-oauth'
+    ? 'build-device-oauth'
+    : 'web-sso-import';
+  selectGrok2ApiUploadMethod.value = uploadMethod;
+  syncLatestState({ grok2ApiUploadMethod: uploadMethod });
+  syncStepDefinitionsFromUiState(latestState);
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
 });
 
 [inputOpenAiWebchatUrl, inputOpenAiWebchatKey].forEach((input) => {
@@ -18491,11 +18599,6 @@ inputRunCount.addEventListener('input', () => {
   updateFallbackThreadIntervalInputState();
 });
 inputRunCount.addEventListener('blur', () => {
-  if (shouldLockRunCountToEmailPool()) {
-    syncRunCountFromConfiguredEmailPool();
-    updateFallbackThreadIntervalInputState();
-    return;
-  }
   inputRunCount.value = String(getRunCountValue());
   updateFallbackThreadIntervalInputState();
 });

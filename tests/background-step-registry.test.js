@@ -20,6 +20,7 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   assert.match(source, /flows\/grok\/background\/state\.js/);
   assert.match(source, /flows\/grok\/background\/register-runner\.js/);
   assert.match(source, /flows\/grok\/background\/publisher-webchat2api\.js/);
+  assert.match(source, /flows\/grok\/background\/publisher-grok2api\.js/);
   assert.match(source, /flows\/claude\/background\/register-runner\.js/);
   assert.match(source, /flows\/openai\/background\/session-reader\.js/);
   assert.match(source, /flows\/openai\/background\/publisher-webchat\.js/);
@@ -32,6 +33,7 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   assert.match(source, /const grokRegisterRunner = self\.MultiPageBackgroundGrokRegisterRunner\?\.createGrokRegisterRunner\(/);
   assert.match(source, /const claudeRegisterRunner = self\.MultiPageBackgroundClaudeRegisterRunner\?\.createClaudeRegisterRunner\(/);
   assert.match(source, /const grokWebchat2ApiPublisher = self\.MultiPageBackgroundGrokPublisherWebchat2Api\?\.createGrokWebchat2ApiPublisher\(/);
+  assert.match(source, /const grok2ApiPublisher = self\.MultiPageBackgroundGrokPublisherGrok2Api\?\.createGrok2ApiPublisher\(/);
   assert.match(source, /const openAiWebchatPublisher = self\.MultiPageBackgroundOpenAiPublisherWebchat\?\.createOpenAiWebchatPublisher\(/);
 
   assert.match(source, /'kiro-open-register-page': \(state\) => kiroRegisterRunner\.executeKiroOpenRegisterPage\(state\)/);
@@ -44,11 +46,17 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   assert.match(source, /'kiro-complete-desktop-authorize': \(state\) => kiroDesktopAuthorizeRunner\.executeKiroCompleteDesktopAuthorize\(state\)/);
   assert.match(source, /'kiro-upload-credential': \(state\) => kiroPublisher\.executeKiroUploadCredential\(state\)/);
   assert.match(source, /'grok-open-signup-page': \(state\) => grokRegisterRunner\.executeGrokOpenSignupPage\(state\)/);
+  assert.match(source, /'grok-continue-device-login': \(state\) => grokRegisterRunner\.executeGrokContinueDeviceLogin\(state\)/);
+  assert.match(source, /'grok-open-email-signup': \(state\) => grokRegisterRunner\.executeGrokOpenEmailSignup\(state\)/);
+  assert.match(source, /'grok-approve-device-authorization': \(state\) => grokRegisterRunner\.executeGrokApproveDeviceAuthorization\(state\)/);
   assert.match(source, /'grok-submit-email': \(state\) => grokRegisterRunner\.executeGrokSubmitEmail\(state\)/);
   assert.match(source, /'grok-submit-verification-code': \(state\) => grokRegisterRunner\.executeGrokSubmitVerificationCode\(state\)/);
   assert.match(source, /'grok-submit-profile': \(state\) => grokRegisterRunner\.executeGrokSubmitProfile\(state\)/);
   assert.match(source, /'grok-extract-sso-cookie': \(state\) => grokRegisterRunner\.executeGrokExtractSsoCookie\(state\)/);
   assert.match(source, /'grok-upload-sso-to-webchat2api': \(state\) => grokWebchat2ApiPublisher\.executeGrokUploadSsoToWebchat2Api\(state\)/);
+  assert.match(source, /'grok-upload-sso-to-grok2api': \(state\) => grok2ApiPublisher\.executeGrokUploadSsoToGrok2Api\(state\)/);
+  assert.match(source, /'grok-start-grok2api-device-auth': \(state\) => grok2ApiPublisher\.executeGrokStartGrok2ApiDeviceAuth\(state\)/);
+  assert.match(source, /'grok-complete-grok2api-device-auth': \(state\) => grok2ApiPublisher\.executeGrokCompleteGrok2ApiDeviceAuth\(state\)/);
   assert.match(source, /'claude-open-official-page': \(state\) => claudeRegisterRunner\.executeClaudeOpenOfficialPage\(state\)/);
   assert.match(source, /'claude-wait-official-page': \(state\) => claudeRegisterRunner\.executeClaudeWaitOfficialPageLoaded\(state\)/);
   assert.match(source, /'claude-fill-email': \(state\) => claudeRegisterRunner\.executeClaudeFillEmail\(state\)/);
@@ -69,8 +77,9 @@ test('background imports node registry and wires the rebuilt Kiro executors', ()
   );
   assert.match(
     source,
-    /'grok-open-signup-page',[\s\S]*'grok-submit-email',[\s\S]*'grok-submit-verification-code',[\s\S]*'grok-submit-profile',[\s\S]*'grok-extract-sso-cookie',[\s\S]*'grok-upload-sso-to-webchat2api'/
+    /'grok-open-signup-page',[\s\S]*'grok-continue-device-login',[\s\S]*'grok-open-email-signup',[\s\S]*'grok-approve-device-authorization',[\s\S]*'grok-submit-email',[\s\S]*'grok-submit-verification-code',[\s\S]*'grok-submit-profile',[\s\S]*'grok-extract-sso-cookie',[\s\S]*'grok-upload-sso-to-webchat2api'/
   );
+  assert.match(source, /'grok-upload-sso-to-webchat2api',[\s\S]*'grok-upload-sso-to-grok2api',[\s\S]*'grok-start-grok2api-device-auth',[\s\S]*'grok-complete-grok2api-device-auth'/);
   assert.match(
     source,
     /'claude-open-official-page',[\s\S]*'claude-fill-email',[\s\S]*'claude-submit-email-and-fetch-link',[\s\S]*'claude-open-login-link',[\s\S]*'claude-create-account',[\s\S]*'claude-select-free-plan',[\s\S]*'claude-skip-onboarding',[\s\S]*'claude-continue-onboarding',[\s\S]*'claude-submit-random-name',[\s\S]*'claude-set-up-later',[\s\S]*'claude-extract-session-key'/

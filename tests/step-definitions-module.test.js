@@ -259,6 +259,53 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
       [],
     ]
   );
+  const grok2ApiSteps = api.getSteps({ activeFlowId: 'grok', targetId: 'grok2api' });
+  assert.deepStrictEqual(
+    grok2ApiSteps.map((step) => step.key),
+    [
+      'grok-open-signup-page',
+      'grok-submit-email',
+      'grok-submit-verification-code',
+      'grok-submit-profile',
+      'grok-extract-sso-cookie',
+      'grok-upload-sso-to-grok2api',
+    ]
+  );
+  assert.equal(grok2ApiSteps.at(-1)?.title, '上传 SSO 到 grok2api Web');
+  assert.deepStrictEqual(
+    api.getNodes({ activeFlowId: 'grok', targetId: 'grok2api' }).map((node) => node.next),
+    [
+      ['grok-submit-email'],
+      ['grok-submit-verification-code'],
+      ['grok-submit-profile'],
+      ['grok-extract-sso-cookie'],
+      ['grok-upload-sso-to-grok2api'],
+      [],
+    ]
+  );
+  const grok2ApiDeviceSteps = api.getSteps({
+    activeFlowId: 'grok',
+    targetId: 'grok2api',
+    grok2ApiUploadMethod: 'build-device-oauth',
+  });
+  assert.deepStrictEqual(
+    grok2ApiDeviceSteps.map((step) => step.key),
+    [
+      'grok-start-grok2api-device-auth',
+      'grok-continue-device-login',
+      'grok-open-email-signup',
+      'grok-submit-email',
+      'grok-submit-verification-code',
+      'grok-submit-profile',
+      'grok-approve-device-authorization',
+      'grok-complete-grok2api-device-auth',
+    ]
+  );
+  assert.equal(grok2ApiDeviceSteps.at(0)?.title, '获取并打开 Grok Build 授权链接');
+  assert.equal(grok2ApiDeviceSteps.at(1)?.title, '点击页面“继续”');
+  assert.equal(grok2ApiDeviceSteps.at(2)?.title, '点击注册并使用邮箱注册');
+  assert.equal(grok2ApiDeviceSteps.at(-2)?.title, '继续并允许 Grok Build 设备授权');
+  assert.equal(grok2ApiDeviceSteps.at(-1)?.title, '完成设备授权并接入 grok2api');
   assert.deepStrictEqual(
     claudeSteps.map((step) => step.key),
     [

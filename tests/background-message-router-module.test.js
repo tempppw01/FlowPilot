@@ -867,6 +867,48 @@ test('CHECK_CLAUDE2API_CONNECTION prefers current sidepanel payload over stale s
   ]);
 });
 
+test('CHECK_GROK2API_CONNECTION prefers current sidepanel payload over stale saved config', async () => {
+  const source = fs.readFileSync('background/message-router.js', 'utf8');
+  const globalScope = { console };
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundMessageRouter;`)(globalScope);
+  const calls = [];
+  const router = api.createMessageRouter({
+    getState: async () => ({
+      grok2ApiUrl: 'https://old-grok2api.example',
+      grok2ApiAdminUsername: 'old-admin',
+      grok2ApiAdminPassword: 'old-pass',
+      settingsState: {
+        flows: {
+          grok: {
+            targets: {
+              grok2api: {
+                baseUrl: 'https://old-grok2api.example', adminUsername: 'old-admin', adminPassword: 'old-pass',
+              },
+            },
+          },
+        },
+      },
+    }),
+    testGrok2ApiConnection: async (baseUrl, adminUsername, adminPassword) => {
+      calls.push({ baseUrl, adminUsername, adminPassword });
+      return { ok: true, status: 200, message: 'grok2api 连接正常（HTTP 200）' };
+    },
+  });
+
+  const response = await router.handleMessage({
+    type: 'CHECK_GROK2API_CONNECTION',
+    payload: {
+      baseUrl: ' https://new-grok2api.example/ ', adminUsername: ' new-admin ', adminPassword: ' new-pass ',
+    },
+  });
+
+  assert.equal(response.ok, true);
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, [{
+    baseUrl: 'https://new-grok2api.example/', adminUsername: 'new-admin', adminPassword: ' new-pass ',
+  }]);
+});
+
 test('AUTO_RUN applies current flow selection from payload before starting loop', async () => {
   const source = fs.readFileSync('background/message-router.js', 'utf8');
   const globalScope = { console };

@@ -4,6 +4,10 @@ const GROK_REGISTER_PAGE_LISTENER_SENTINEL = 'data-multipage-grok-register-page-
 const GROK_SIGNUP_URL = 'https://accounts.x.ai/sign-up?redirect=grok-com';
 const GROK_EMAIL_SIGNUP_TEXT_PATTERN = /使用邮箱注册|sign\s*up\s*with\s*email|continue\s*with\s*email|email/i;
 const GROK_CONTINUE_TEXT_PATTERN = /continue|next|sign\s*up|submit|verify|继续|下一步|注册|提交|验证/i;
+const GROK_DEVICE_CONTINUE_TEXT_PATTERN = /^(?:继续|continue|next)$/i;
+const GROK_REGISTER_TEXT_PATTERN = /^(?:注册|sign\s*up|create\s+account)$/i;
+const GROK_DEVICE_ALLOW_TEXT_PATTERN = /^(?:允许|允许访问|allow|authorize)$/i;
+const GROK_COOKIE_CONSENT_TEXT_PATTERN = /^(?:全部拒绝|拒绝所有|接受所有(?:\s*cookie)?|accept\s+all(?:\s+cookies)?|reject\s+all(?:\s+cookies)?)$/i;
 const GROK_PROFILE_TEXT_PATTERN = /given\s*name|family\s*name|first\s*name|last\s*name|password|名字|姓氏|密码/i;
 const GROK_EMAIL_VERIFICATION_READY_TIMEOUT_MS = 90 * 1000;
 const GROK_HUMAN_VERIFICATION_SUCCESS_TIMEOUT_MS = 120 * 1000;
@@ -41,6 +45,13 @@ function findGrokClickableByText(pattern) {
     const text = element instanceof HTMLInputElement ? element.value : getGrokElementText(element);
     return pattern.test(text);
   }) || null;
+}
+
+function dismissGrokCookieConsent() {
+  const consentButton = findGrokClickableByText(GROK_COOKIE_CONSENT_TEXT_PATTERN);
+  if (!consentButton) return false;
+  simulateGrokClick(consentButton);
+  return true;
 }
 
 function simulateGrokClick(element) {
@@ -222,6 +233,114 @@ async function openGrokSignupPage() {
   return { submitted: true, state: getGrokPageState(), url: location.href };
 }
 
+async function continueGrokDeviceLogin() {
+  // The device authorization URL already displays the code from grok2api.
+  dismissGrokCookieConsent();
+  const continueButton = await waitForGrok(
+    () => {
+      dismissGrokCookieConsent();
+      return findGrokClickableByText(GROK_DEVICE_CONTINUE_TEXT_PATTERN);
+    },
+    { timeoutMs: 30000 }
+  );
+  if (!continueButton) throw new Error('未找到 Grok Build 的“继续”按钮。');
+  simulateGrokClick(continueButton);
+
+  const nextPage = await waitForGrok(() => {
+    dismissGrokCookieConsent();
+    const pageText = String(document.body?.innerText || '');
+    const isLoginEntry = /登录您的账户|login\s+to\s+your\s+account|没有账户|don't\s+have\s+an\s+account/i.test(pageText)
+      || Boolean(findGrokClickableByText(GROK_REGISTER_TEXT_PATTERN))
+      || Boolean(findGrokClickableByText(/^(?:使用邮箱登录|continue\s+with\s+email|email)$/i));
+    if (isLoginEntry) {
+      return { state: 'login_entry', url: location.href };
+    }
+    return null;
+  }, { timeoutMs: 45000, intervalMs: 500 });
+  if (!nextPage) throw new Error('点击“继续”后未进入 Grok 登录页面。');
+  return { submitted: true, ...nextPage };
+}
+
+async function openGrokEmailSignup() {
+  dismissGrokCookieConsent();
+  const registerButton = await waitForGrok(
+    () => findGrokClickableByText(GROK_REGISTER_TEXT_PATTERN),
+    { timeoutMs: 30000 }
+  );
+  if (!registerButton) throw new Error('未找到 Grok 登录页的“注册”入口。');
+  simulateGrokClick(registerButton);
+
+  const emailButton = await waitForGrok(() => {
+    dismissGrokCookieConsent();
+    return findGrokClickableByText(GROK_EMAIL_SIGNUP_TEXT_PATTERN) || findGrokEmailInput();
+  }, { timeoutMs: 30000, intervalMs: 500 });
+  if (!emailButton) throw new Error('未找到 xAI 的“使用邮箱注册”入口。');
+  if (!(emailButton instanceof HTMLInputElement)) {
+    simulateGrokClick(emailButton);
+  }
+  const emailInput = await waitForGrok(findGrokEmailInput, { timeoutMs: 30000, intervalMs: 300 });
+  if (!emailInput) throw new Error('选择“使用邮箱注册”后未出现邮箱输入框。');
+  return { submitted: true, state: 'email_entry', url: location.href };
+}
+
+function isGrokDeviceAuthorizedPage() {
+  const pageText = String(document.body?.innerText || '');
+  return /设备已授权|device\s+(?:is\s+)?authorized|you\s+may\s+close\s+this\s+window/i.test(pageText);
+}
+
+function isGrokDeviceCodePage() {
+  const pageText = String(document.body?.innerText || '');
+  return /登录\s*Grok\s*Build|sign\s*in\s*to\s*Grok\s*Build|输入终端中显示的代码|enter\s+the\s+code\s+shown\s+in\s+your\s+terminal/i.test(pageText);
+}
+
+function isGrokDisabledElement(element) {
+  return Boolean(element?.matches?.('[disabled], [aria-disabled="true"]'));
+}
+
+async function approveGrokDeviceAuthorization() {
+  if (isGrokDeviceAuthorizedPage()) {
+    return { submitted: true, state: 'device_authorized', url: location.href };
+  }
+  if (isGrokDeviceCodePage()) {
+    dismissGrokCookieConsent();
+    const continueButton = await waitForGrok(
+      () => {
+        dismissGrokCookieConsent();
+        return findGrokClickableByText(GROK_DEVICE_CONTINUE_TEXT_PATTERN);
+      },
+      { timeoutMs: 30000, intervalMs: 300 }
+    );
+    if (!continueButton) throw new Error('未找到 Grok Build 设备授权页的“继续”按钮。');
+    simulateGrokClick(continueButton);
+  }
+  const authorizationPage = await waitForGrok(
+    () => {
+      dismissGrokCookieConsent();
+      if (isGrokDeviceAuthorizedPage()) {
+        return { authorized: true };
+      }
+      const allowButton = findGrokClickableByText(GROK_DEVICE_ALLOW_TEXT_PATTERN);
+      return allowButton ? { allowButton } : null;
+    },
+    { timeoutMs: 45000, intervalMs: 500 }
+  );
+  if (authorizationPage?.authorized) {
+    return { submitted: true, state: 'device_authorized', url: location.href };
+  }
+  if (!authorizationPage?.allowButton) throw new Error('未找到 Grok Build 授权页的“允许”按钮。');
+  simulateGrokClick(authorizationPage.allowButton);
+  const submitted = await waitForGrok(() => {
+    if (isGrokDeviceAuthorizedPage()) {
+      return { state: 'device_authorized', url: location.href };
+    }
+    return isGrokDisabledElement(authorizationPage.allowButton)
+      ? { state: 'device_authorization_submitted', url: location.href }
+      : null;
+  }, { timeoutMs: 5000, intervalMs: 250 });
+  // grok2api polling is the source of truth when xAI keeps its consent page open.
+  return { submitted: true, ...(submitted || { state: 'device_authorization_submitted', url: location.href }) };
+}
+
 function getGrokEmailErrorText() {
   const text = String(document.body?.innerText || '').trim();
   const patterns = [
@@ -367,6 +486,12 @@ async function executeGrokCommand(command, payload = {}) {
   switch (command) {
     case 'grok-open-signup-page':
       return openGrokSignupPage(payload);
+    case 'grok-continue-device-login':
+      return continueGrokDeviceLogin(payload);
+    case 'grok-open-email-signup':
+      return openGrokEmailSignup(payload);
+    case 'grok-approve-device-authorization':
+      return approveGrokDeviceAuthorization(payload);
     case 'grok-submit-email':
       return submitGrokEmail(payload);
     case 'grok-submit-verification-code':

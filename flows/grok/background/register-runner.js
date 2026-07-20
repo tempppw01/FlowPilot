@@ -251,9 +251,11 @@
       return `https://${host}${path.startsWith('/') ? path : `/${path}`}`;
     }
 
-    async function clearGrokCookiesBeforeStep1() {
+    async function clearGrokCookies(options = {}) {
+      const nodeId = cleanString(options.nodeId) || 'grok-open-signup-page';
+      const label = cleanString(options.label) || '步骤 1';
       if (!chrome?.cookies?.getAll || !chrome.cookies?.remove) {
-        await log('步骤 1：当前浏览器不支持 cookies API，跳过 Grok Cookie 清理。', 'warn', 'grok-open-signup-page');
+        await log(`${label}：当前浏览器不支持 cookies API，跳过 Grok Cookie 清理。`, 'warn', nodeId);
         return;
       }
 
@@ -305,7 +307,7 @@
           }
         }
       }
-      await log(`步骤 1：已清理 Grok/xAI Cookie ${removedCount} 个。`, removedCount ? 'ok' : 'info', 'grok-open-signup-page');
+      await log(`${label}：已清理 Grok/xAI Cookie ${removedCount} 个。`, removedCount ? 'ok' : 'info', nodeId);
     }
 
     function resolveProfile(currentState = {}) {
@@ -358,7 +360,7 @@
       const nodeId = cleanString(state?.nodeId) || 'grok-open-signup-page';
       const currentState = await getExecutionState(state);
       try {
-        await clearGrokCookiesBeforeStep1();
+        await clearGrokCookies({ nodeId, label: '步骤 1' });
         const tabId = await ensureGrokRegisterTab(currentState, { openIfMissing: true });
         await activateTab(tabId);
         await persistState({
@@ -481,6 +483,105 @@
           },
         }));
         await log(`步骤 2：${message}`, 'error', nodeId);
+        throw error;
+      }
+    }
+
+    async function executeGrokContinueDeviceLogin(state = {}) {
+      const nodeId = cleanString(state?.nodeId) || 'grok-continue-device-login';
+      const currentState = await getExecutionState(state);
+      try {
+        const tabId = await ensureGrokRegisterTab(currentState, { openIfMissing: false });
+        await activateTab(tabId);
+        await ensureContentReady(tabId);
+        const result = await sendGrokCommand(nodeId, {}, {
+          timeoutMs: DEFAULT_GROK_PAGE_TIMEOUT_MS,
+          logMessage: '正在关闭 Cookie 提示并点击 Grok Build 页面“继续”...',
+        });
+        await completeNode(nodeId, {
+          grokPageState: result.state || 'login_entry',
+          grokPageUrl: result.url || '',
+          ...buildGrokRuntimePatch({
+            session: {
+              pageState: result.state || 'login_entry',
+              pageUrl: result.url || '',
+              lastError: '',
+            },
+          }),
+        });
+        await log('已点击 Grok Build 页面“继续”并进入登录页。', 'ok', nodeId);
+      } catch (error) {
+        const message = getErrorMessage(error);
+        await persistState(buildGrokRuntimePatch({ session: { lastError: message } }));
+        await log(`点击 Grok Build“继续”失败：${message}`, 'error', nodeId);
+        throw error;
+      }
+    }
+
+    async function executeGrokOpenEmailSignup(state = {}) {
+      const nodeId = cleanString(state?.nodeId) || 'grok-open-email-signup';
+      const currentState = await getExecutionState(state);
+      try {
+        const tabId = await ensureGrokRegisterTab(currentState, { openIfMissing: false });
+        await activateTab(tabId);
+        await ensureContentReady(tabId);
+        const result = await sendGrokCommand(nodeId, {}, {
+          timeoutMs: DEFAULT_GROK_PAGE_TIMEOUT_MS,
+          logMessage: '正在点击注册并选择邮箱注册...',
+        });
+        await completeNode(nodeId, {
+          grokPageState: result.state || 'email_entry',
+          grokPageUrl: result.url || '',
+          ...buildGrokRuntimePatch({
+            session: {
+              pageState: result.state || 'email_entry',
+              pageUrl: result.url || '',
+              lastError: '',
+            },
+            register: {
+              status: 'email_signup_ready',
+            },
+          }),
+        });
+        await log('已进入“使用邮箱注册”页面。', 'ok', nodeId);
+      } catch (error) {
+        const message = getErrorMessage(error);
+        await persistState(buildGrokRuntimePatch({ session: { lastError: message } }));
+        await log(`打开邮箱注册失败：${message}`, 'error', nodeId);
+        throw error;
+      }
+    }
+
+    async function executeGrokApproveDeviceAuthorization(state = {}) {
+      const nodeId = cleanString(state?.nodeId) || 'grok-approve-device-authorization';
+      const currentState = await getExecutionState(state);
+      try {
+        const tabId = await ensureGrokRegisterTab(currentState, { openIfMissing: false });
+        await activateTab(tabId);
+        await ensureContentReady(tabId);
+        const result = await sendGrokCommand(nodeId, {}, {
+          timeoutMs: DEFAULT_GROK_PAGE_TIMEOUT_MS,
+          logMessage: '正在继续 Grok Build 并允许设备授权...',
+        });
+        await completeNode(nodeId, {
+          grokPageState: result.state || 'device_authorization_submitted',
+          grokPageUrl: result.url || '',
+          ...buildGrokRuntimePatch({
+            session: {
+              pageState: result.state || 'device_authorization_submitted',
+              pageUrl: result.url || '',
+              lastError: '',
+            },
+            register: {
+              status: 'device_authorization_submitted',
+            },
+          }),
+        });
+        await log('已提交 Grok Build 设备授权，正在等待 grok2api 确认。', 'ok', nodeId);
+      } catch (error) {
+        const message = getErrorMessage(error);
+        await persistState(buildGrokRuntimePatch({ session: { lastError: message } }));
+        await log(`继续并允许设备授权失败：${message}`, 'error', nodeId);
         throw error;
       }
     }
@@ -740,7 +841,11 @@
     }
 
     return {
+      clearGrokCookies,
+      executeGrokApproveDeviceAuthorization,
+      executeGrokContinueDeviceLogin,
       executeGrokExtractSsoCookie,
+      executeGrokOpenEmailSignup,
       executeGrokOpenSignupPage,
       executeGrokSubmitEmail,
       executeGrokSubmitProfile,

@@ -43,6 +43,7 @@
       refreshGpcCardBalance,
       testKiroRsConnection,
       testClaude2ApiConnection,
+      testGrok2ApiConnection,
       finalizePhoneActivationAfterSuccessfulFlow,
       finalizeStep3Completion,
       finalizeStep5Completion = null,
@@ -1750,6 +1751,40 @@
             ?? ''
           );
           const result = await testClaude2ApiConnection(baseUrl, adminPassword);
+          return {
+            ok: Boolean(result?.ok),
+            status: Number(result?.status) || 0,
+            message: String(result?.message || '').trim(),
+          };
+        }
+
+        case 'CHECK_GROK2API_CONNECTION': {
+          if (typeof testGrok2ApiConnection !== 'function') {
+            throw new Error('grok2api 连接测试能力尚未接入。');
+          }
+          const currentState = await getState();
+          const nestedTargetConfig = currentState?.settingsState?.flows?.grok?.targets?.grok2api
+            || currentState?.flows?.grok?.targets?.grok2api
+            || {};
+          const baseUrl = String(
+            message.payload?.baseUrl
+            ?? nestedTargetConfig.baseUrl
+            ?? currentState?.grok2ApiUrl
+            ?? ''
+          ).trim();
+          const adminUsername = String(
+            message.payload?.adminUsername
+            ?? nestedTargetConfig.adminUsername
+            ?? currentState?.grok2ApiAdminUsername
+            ?? ''
+          ).trim();
+          const adminPassword = String(
+            message.payload?.adminPassword
+            ?? nestedTargetConfig.adminPassword
+            ?? currentState?.grok2ApiAdminPassword
+            ?? ''
+          );
+          const result = await testGrok2ApiConnection(baseUrl, adminUsername, adminPassword);
           return {
             ok: Boolean(result?.ok),
             status: Number(result?.status) || 0,

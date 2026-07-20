@@ -32,6 +32,20 @@ test('grok content script does not patch global MouseEvent prototypes', () => {
   assert.match(source, /screenY:/);
 });
 
+test('grok device approval continues the prefilled device page before allowing access', () => {
+  const source = fs.readFileSync('flows/grok/content/register-page.js', 'utf8');
+  const approvalIndex = source.indexOf('async function approveGrokDeviceAuthorization');
+  const devicePageIndex = source.indexOf('if (isGrokDeviceCodePage())', approvalIndex);
+  const continueIndex = source.indexOf('findGrokClickableByText(GROK_DEVICE_CONTINUE_TEXT_PATTERN)', approvalIndex);
+  const allowIndex = source.indexOf('findGrokClickableByText(GROK_DEVICE_ALLOW_TEXT_PATTERN)', approvalIndex);
+
+  assert.notEqual(approvalIndex, -1);
+  assert.ok(devicePageIndex > approvalIndex);
+  assert.ok(continueIndex > devicePageIndex);
+  assert.ok(allowIndex > continueIndex);
+  assert.match(source, /state: 'device_authorization_submitted'/);
+});
+
 test('grok profile submission waits for human verification success before clicking complete', () => {
   const source = fs.readFileSync('flows/grok/content/register-page.js', 'utf8');
   const profileIndex = source.indexOf('async function submitGrokProfile');

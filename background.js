@@ -55,6 +55,7 @@ importScripts(
   'flows/kiro/background/desktop-authorize-runner.js',
   'flows/kiro/background/publisher-kiro-rs.js',
   'flows/grok/background/publisher-webchat2api.js',
+  'flows/grok/background/publisher-grok2api.js',
   'flows/openai/background/session-reader.js',
   'flows/openai/background/publisher-webchat.js',
   'background/email-local-part-helpers.js',
@@ -1411,6 +1412,10 @@ const PERSISTED_SETTING_DEFAULTS = {
   kiroRsKey: '',
   grokWebchat2ApiUrl: '',
   grokWebchat2ApiAdminKey: '',
+  grok2ApiUrl: '',
+  grok2ApiAdminUsername: '',
+  grok2ApiAdminPassword: '',
+  grok2ApiUploadMethod: 'web-sso-import',
   openaiWebchatUrl: '',
   openaiWebchatAdminKey: '',
   openaiWebchatUploadEnabled: false,
@@ -1644,6 +1649,10 @@ const SETTINGS_SCHEMA_VIEW_KEYS = Object.freeze([
   'kiroRsKey',
   'grokWebchat2ApiUrl',
   'grokWebchat2ApiAdminKey',
+  'grok2ApiUrl',
+  'grok2ApiAdminUsername',
+  'grok2ApiAdminPassword',
+  'grok2ApiUploadMethod',
   'openaiWebchatUrl',
   'openaiWebchatAdminKey',
   'openaiWebchatUploadEnabled',
@@ -3574,6 +3583,14 @@ function normalizePersistentSettingValue(key, value) {
     case 'grokWebchat2ApiAdminKey':
     case 'openaiWebchatAdminKey':
       return String(value || '').trim();
+    case 'grok2ApiUrl':
+    case 'grok2ApiAdminUsername':
+    case 'grok2ApiAdminPassword':
+      return String(value || '').trim();
+    case 'grok2ApiUploadMethod':
+      return String(value || '').trim().toLowerCase() === 'build-device-oauth'
+        ? 'build-device-oauth'
+        : 'web-sso-import';
     case 'openaiWebchatUploadEnabled':
       return Boolean(value);
     case 'openaiWebchatUploadStatus':
@@ -4298,6 +4315,10 @@ function buildSettingsStatePatchFromFlatUpdates(updates = {}) {
     setSettingsStatePatchValue(patch, ['flows', 'openai', 'targets', 'webchat', 'apiKey'], sharedWebchatAdminKey);
     setSettingsStatePatchValue(patch, ['flows', 'grok', 'targets', 'webchat2api', 'apiKey'], sharedWebchatAdminKey);
   }
+  assignIfUpdated('grok2ApiUrl', ['flows', 'grok', 'targets', 'grok2api', 'baseUrl']);
+  assignIfUpdated('grok2ApiAdminUsername', ['flows', 'grok', 'targets', 'grok2api', 'adminUsername']);
+  assignIfUpdated('grok2ApiAdminPassword', ['flows', 'grok', 'targets', 'grok2api', 'adminPassword']);
+  assignIfUpdated('grok2ApiUploadMethod', ['flows', 'grok', 'targets', 'grok2api', 'uploadMethod']);
   assignIfUpdated('openaiWebchatUploadEnabled', ['flows', 'openai', 'webchatUpload', 'enabled']);
 
   if (hasUpdate('stepExecutionRangeByFlow') && isPlainObjectValue(updates.stepExecutionRangeByFlow)) {
@@ -11905,11 +11926,17 @@ const AUTO_RUN_BACKGROUND_COMPLETED_STEP_KEYS = new Set([
   'kiro-complete-desktop-authorize',
   'kiro-upload-credential',
   'grok-open-signup-page',
+  'grok-continue-device-login',
+  'grok-open-email-signup',
+  'grok-approve-device-authorization',
   'grok-submit-email',
   'grok-submit-verification-code',
   'grok-submit-profile',
   'grok-extract-sso-cookie',
   'grok-upload-sso-to-webchat2api',
+  'grok-upload-sso-to-grok2api',
+  'grok-start-grok2api-device-auth',
+  'grok-complete-grok2api-device-auth',
   'claude-open-official-page',
   'claude-fill-email',
   'claude-submit-email-and-fetch-link',
@@ -13151,6 +13178,13 @@ async function fetchGeneratedEmail(state, options = {}) {
     ? SMSBOWER_MAIL_GENERATOR
     : 'smsbower-mail';
   const requestedMailProvider = normalizeMailProvider(options.mailProvider ?? currentState.mailProvider);
+  if (isCustomMailProvider({ ...currentState, mailProvider: requestedMailProvider })) {
+    // A previous iCloud selection must never leak into a custom-domain mailbox run.
+    return generatedEmailHelpers.fetchGeneratedEmail(
+      { ...currentState, mailProvider: requestedMailProvider, emailGenerator: 'custom' },
+      { ...options, mailProvider: requestedMailProvider, generator: 'custom' }
+    );
+  }
   if (requestedMailProvider === yydsMailProvider) {
     return fetchYydsMailAddress(currentState, options);
   }
@@ -13745,10 +13779,6 @@ async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
     return null;
   }
 
-  if (currentState.email) {
-    return currentState.email;
-  }
-
   if (isCustomMailProvider(currentState)) {
     const poolSize = getCustomMailProviderPool(currentState).length;
     if (poolSize > 0) {
@@ -13775,6 +13805,11 @@ async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
     await setEmailState(queuedEmail);
     await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：自定义邮箱池已就绪：${queuedEmail}（第 ${attemptRuns} 次尝试）===`, 'ok');
     return queuedEmail;
+  }
+
+  // A custom pool must take precedence over a stale address from another provider.
+  if (currentState.email) {
+    return currentState.email;
   }
 
   if (shouldUseCustomRegistrationEmail(currentState)) {
@@ -13909,10 +13944,6 @@ async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
     return null;
   }
 
-  if (currentState.email) {
-    return currentState.email;
-  }
-
   if (isCustomMailProvider(currentState)) {
     const poolSize = getCustomMailProviderPool(currentState).length;
     if (poolSize > 0) {
@@ -13939,6 +13970,11 @@ async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
     await setEmailState(queuedEmail);
     await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：自定义邮箱池已就绪：${queuedEmail}（第 ${attemptRuns} 次尝试）===`, 'ok');
     return queuedEmail;
+  }
+
+  // A custom pool must take precedence over a stale address from another provider.
+  if (currentState.email) {
+    return currentState.email;
   }
 
   if (shouldUseCustomRegistrationEmail(currentState)) {
@@ -15323,6 +15359,20 @@ const grokWebchat2ApiPublisher = self.MultiPageBackgroundGrokPublisherWebchat2Ap
   getState,
   setState,
 });
+const grok2ApiPublisher = self.MultiPageBackgroundGrokPublisherGrok2Api?.createGrok2ApiPublisher({
+  addLog,
+  chrome,
+  clearGrokCookies: (options) => grokRegisterRunner.clearGrokCookies(options),
+  completeNodeFromBackground,
+  fetchImpl: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
+  getState,
+  registerTab,
+  reuseOrCreateTab,
+  setState,
+  sleepWithStop,
+  throwIfStopped,
+  GROK_REGISTER_INJECT_FILES,
+});
 const openAiWebchatPublisher = self.MultiPageBackgroundOpenAiPublisherWebchat?.createOpenAiWebchatPublisher({
   addLog,
   broadcastDataUpdate,
@@ -15432,11 +15482,17 @@ const stepExecutorsByKey = {
   'kiro-complete-desktop-authorize': (state) => kiroDesktopAuthorizeRunner.executeKiroCompleteDesktopAuthorize(state),
   'kiro-upload-credential': (state) => kiroPublisher.executeKiroUploadCredential(state),
   'grok-open-signup-page': (state) => grokRegisterRunner.executeGrokOpenSignupPage(state),
+  'grok-continue-device-login': (state) => grokRegisterRunner.executeGrokContinueDeviceLogin(state),
+  'grok-open-email-signup': (state) => grokRegisterRunner.executeGrokOpenEmailSignup(state),
+  'grok-approve-device-authorization': (state) => grokRegisterRunner.executeGrokApproveDeviceAuthorization(state),
   'grok-submit-email': (state) => grokRegisterRunner.executeGrokSubmitEmail(state),
   'grok-submit-verification-code': (state) => grokRegisterRunner.executeGrokSubmitVerificationCode(state),
   'grok-submit-profile': (state) => grokRegisterRunner.executeGrokSubmitProfile(state),
   'grok-extract-sso-cookie': (state) => grokRegisterRunner.executeGrokExtractSsoCookie(state),
   'grok-upload-sso-to-webchat2api': (state) => grokWebchat2ApiPublisher.executeGrokUploadSsoToWebchat2Api(state),
+  'grok-upload-sso-to-grok2api': (state) => grok2ApiPublisher.executeGrokUploadSsoToGrok2Api(state),
+  'grok-start-grok2api-device-auth': (state) => grok2ApiPublisher.executeGrokStartGrok2ApiDeviceAuth(state),
+  'grok-complete-grok2api-device-auth': (state) => grok2ApiPublisher.executeGrokCompleteGrok2ApiDeviceAuth(state),
   'claude-open-official-page': (state) => claudeRegisterRunner.executeClaudeOpenOfficialPage(state),
   'claude-wait-official-page': (state) => claudeRegisterRunner.executeClaudeWaitOfficialPageLoaded(state),
   'claude-fill-email': (state) => claudeRegisterRunner.executeClaudeFillEmail(state),
@@ -15505,6 +15561,17 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
     }
     return self.MultiPageBackgroundClaude2ApiClient.testClaude2ApiConnection(
       baseUrl,
+      adminPassword,
+      typeof fetch === 'function' ? fetch.bind(globalThis) : null
+    );
+  },
+  testGrok2ApiConnection: async (baseUrl, adminUsername, adminPassword) => {
+    if (typeof self.MultiPageBackgroundGrokPublisherGrok2Api?.testGrok2ApiConnection !== 'function') {
+      throw new Error('grok2api 连接测试能力尚未接入。');
+    }
+    return self.MultiPageBackgroundGrokPublisherGrok2Api.testGrok2ApiConnection(
+      baseUrl,
+      adminUsername,
       adminPassword,
       typeof fetch === 'function' ? fetch.bind(globalThis) : null
     );

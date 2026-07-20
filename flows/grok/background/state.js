@@ -113,6 +113,22 @@
         message: '',
         targetUrl: '',
       },
+      grok2ApiUpload: {
+        status: '',
+        uploadedAt: 0,
+        message: '',
+        targetUrl: '',
+      },
+      deviceAuth: {
+        status: '',
+        sessionId: '',
+        userCode: '',
+        verificationUri: '',
+        expiresAt: 0,
+        intervalSeconds: 0,
+        completedAt: 0,
+        message: '',
+      },
     };
   }
 
@@ -146,6 +162,22 @@
         uploadedAt: Math.max(0, normalizeInteger(merged.upload?.uploadedAt)),
         message: cleanString(merged.upload?.message),
         targetUrl: cleanString(merged.upload?.targetUrl),
+      },
+      grok2ApiUpload: {
+        status: cleanString(merged.grok2ApiUpload?.status),
+        uploadedAt: Math.max(0, normalizeInteger(merged.grok2ApiUpload?.uploadedAt)),
+        message: cleanString(merged.grok2ApiUpload?.message),
+        targetUrl: cleanString(merged.grok2ApiUpload?.targetUrl),
+      },
+      deviceAuth: {
+        status: cleanString(merged.deviceAuth?.status),
+        sessionId: cleanString(merged.deviceAuth?.sessionId),
+        userCode: cleanString(merged.deviceAuth?.userCode),
+        verificationUri: cleanString(merged.deviceAuth?.verificationUri),
+        expiresAt: Math.max(0, normalizeInteger(merged.deviceAuth?.expiresAt)),
+        intervalSeconds: Math.max(0, normalizeInteger(merged.deviceAuth?.intervalSeconds)),
+        completedAt: Math.max(0, normalizeInteger(merged.deviceAuth?.completedAt)),
+        message: cleanString(merged.deviceAuth?.message),
       },
     };
   }
@@ -188,6 +220,16 @@
       grokWebchat2ApiUploadedAt: normalizedRuntimeState.upload.uploadedAt,
       grokWebchat2ApiUploadMessage: normalizedRuntimeState.upload.message,
       grokWebchat2ApiTargetUrl: normalizedRuntimeState.upload.targetUrl,
+      grok2ApiUploadStatus: normalizedRuntimeState.grok2ApiUpload.status,
+      grok2ApiUploadedAt: normalizedRuntimeState.grok2ApiUpload.uploadedAt,
+      grok2ApiUploadMessage: normalizedRuntimeState.grok2ApiUpload.message,
+      grok2ApiUploadTargetUrl: normalizedRuntimeState.grok2ApiUpload.targetUrl,
+      grok2ApiDeviceAuthStatus: normalizedRuntimeState.deviceAuth.status,
+      grok2ApiDeviceUserCode: normalizedRuntimeState.deviceAuth.userCode,
+      grok2ApiDeviceVerificationUri: normalizedRuntimeState.deviceAuth.verificationUri,
+      grok2ApiDeviceExpiresAt: normalizedRuntimeState.deviceAuth.expiresAt,
+      grok2ApiDeviceCompletedAt: normalizedRuntimeState.deviceAuth.completedAt,
+      grok2ApiDeviceMessage: normalizedRuntimeState.deviceAuth.message,
     };
   }
 
@@ -203,6 +245,8 @@
       register: {},
       sso: {},
       upload: {},
+      grok2ApiUpload: {},
+      deviceAuth: {},
     };
     assignPositiveInteger(flatRuntime.session, 'registerTabId', state.grokRegisterTabId);
     assignCleanString(flatRuntime.session, 'pageState', state.grokPageState);
@@ -222,6 +266,16 @@
     assignPositiveInteger(flatRuntime.upload, 'uploadedAt', state.grokWebchat2ApiUploadedAt);
     assignCleanString(flatRuntime.upload, 'message', state.grokWebchat2ApiUploadMessage);
     assignCleanString(flatRuntime.upload, 'targetUrl', state.grokWebchat2ApiTargetUrl);
+    assignCleanString(flatRuntime.grok2ApiUpload, 'status', state.grok2ApiUploadStatus);
+    assignPositiveInteger(flatRuntime.grok2ApiUpload, 'uploadedAt', state.grok2ApiUploadedAt);
+    assignCleanString(flatRuntime.grok2ApiUpload, 'message', state.grok2ApiUploadMessage);
+    assignCleanString(flatRuntime.grok2ApiUpload, 'targetUrl', state.grok2ApiUploadTargetUrl);
+    assignCleanString(flatRuntime.deviceAuth, 'status', state.grok2ApiDeviceAuthStatus);
+    assignCleanString(flatRuntime.deviceAuth, 'userCode', state.grok2ApiDeviceUserCode);
+    assignCleanString(flatRuntime.deviceAuth, 'verificationUri', state.grok2ApiDeviceVerificationUri);
+    assignPositiveInteger(flatRuntime.deviceAuth, 'expiresAt', state.grok2ApiDeviceExpiresAt);
+    assignPositiveInteger(flatRuntime.deviceAuth, 'completedAt', state.grok2ApiDeviceCompletedAt);
+    assignCleanString(flatRuntime.deviceAuth, 'message', state.grok2ApiDeviceMessage);
     return normalizeRuntimeState(deepMerge(deepMerge(runtimeFlowState.grok || {}, legacyFlowState), flatRuntime));
   }
 
@@ -395,6 +449,18 @@
     }
     if (Object.prototype.hasOwnProperty.call(payload, 'grokWebchat2ApiTargetUrl')) {
       patch.upload = { ...(patch.upload || {}), targetUrl: payload.grokWebchat2ApiTargetUrl };
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'grok2ApiUploadStatus')) {
+      patch.grok2ApiUpload = { ...(patch.grok2ApiUpload || {}), status: payload.grok2ApiUploadStatus };
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'grok2ApiUploadedAt')) {
+      patch.grok2ApiUpload = { ...(patch.grok2ApiUpload || {}), uploadedAt: payload.grok2ApiUploadedAt };
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'grok2ApiUploadMessage')) {
+      patch.grok2ApiUpload = { ...(patch.grok2ApiUpload || {}), message: payload.grok2ApiUploadMessage };
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'grok2ApiUploadTargetUrl')) {
+      patch.grok2ApiUpload = { ...(patch.grok2ApiUpload || {}), targetUrl: payload.grok2ApiUploadTargetUrl };
     }
     if (!Object.keys(patch).length) {
       return {};

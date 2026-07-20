@@ -63,6 +63,10 @@ test('flow registry exposes canonical flow and target metadata', () => {
     ['grok-runtime-status', 'shared-auto-run', 'grok-target-webchat2api', 'service-account', 'service-email', 'service-proxy']
   );
   assert.deepEqual(
+    flowRegistry.getVisibleGroupIds('grok', 'grok2api'),
+    ['grok-runtime-status', 'shared-auto-run', 'grok-target-grok2api', 'service-account', 'service-email', 'service-proxy']
+  );
+  assert.deepEqual(
     flowRegistry.getVisibleGroupIds('claude', 'claude'),
     ['claude-runtime-status', 'shared-auto-run', 'claude-target-claude2api', 'service-account', 'service-email', 'service-proxy']
   );
@@ -76,7 +80,7 @@ test('flow registry exposes canonical flow and target metadata', () => {
   );
   assert.deepEqual(
     flowRegistry.getTargetOptions('grok').map((entry) => entry.id),
-    ['webchat2api']
+    ['webchat2api', 'grok2api']
   );
   assert.deepEqual(
     flowRegistry.getTargetOptions('claude').map((entry) => entry.id),
@@ -107,7 +111,7 @@ test('flow registry exposes canonical flow and target metadata', () => {
   assert.equal(flowRegistry.getFlowCapabilities('kiro').supportsAccountContribution, true);
   assert.equal(flowRegistry.getFlowCapabilities('grok').supportsAccountContribution, false);
   assert.equal(flowRegistry.getFlowCapabilities('claude').supportsAccountContribution, false);
-  assert.deepEqual(flowRegistry.getFlowCapabilities('grok').supportedTargetIds, ['webchat2api']);
+  assert.deepEqual(flowRegistry.getFlowCapabilities('grok').supportedTargetIds, ['webchat2api', 'grok2api']);
   assert.deepEqual(
     flowRegistry.getFlowCapabilities('openai').contributionAdapterIds,
     ['openai-oauth', 'openai-codex-file', 'openai-sub2api-file']
@@ -136,6 +140,9 @@ test('settings schema normalizes view input into canonical nested namespaces', (
     openaiWebchatUrl: ' https://webchat.example.com/admin ',
     openaiWebchatAdminKey: ' webchat-key ',
     openaiWebchatUploadEnabled: true,
+    grok2ApiUrl: ' https://grok2api.example.com/ ',
+    grok2ApiAdminUsername: ' admin ',
+    grok2ApiAdminPassword: ' grok2api-secret ',
     stepExecutionRangeByFlow: {
       openai: { enabled: true, fromStep: 2, toStep: 9 },
       kiro: { enabled: true, fromStep: 1, toStep: 9 },
@@ -153,6 +160,10 @@ test('settings schema normalizes view input into canonical nested namespaces', (
   assert.equal(normalized.flows.openai.targets.webchat.apiKey, 'webchat-key');
   assert.equal(normalized.flows.grok.targets.webchat2api.baseUrl, 'https://webchat.example.com/admin');
   assert.equal(normalized.flows.grok.targets.webchat2api.apiKey, 'webchat-key');
+  assert.equal(normalized.flows.grok.targets.grok2api.baseUrl, 'https://grok2api.example.com/');
+  assert.equal(normalized.flows.grok.targets.grok2api.adminUsername, 'admin');
+  assert.equal(normalized.flows.grok.targets.grok2api.adminPassword, 'grok2api-secret');
+  assert.equal(normalized.flows.grok.targets.grok2api.uploadMethod, 'web-sso-import');
   assert.equal(normalized.flows.openai.webchatUpload.enabled, false);
   assert.equal(normalized.flows.kiro.selectedTargetId, 'kiro-rs');
   assert.equal(normalized.flows.grok.selectedTargetId, 'webchat2api');

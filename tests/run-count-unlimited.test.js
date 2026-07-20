@@ -151,8 +151,8 @@ return {
   api.setValue('9');
   api.setLockedRunCount(2);
   api.applyAutoRunStatus({ autoRunning: false, autoRunPhase: 'idle', autoRunTotalRuns: 1 });
-  assert.equal(api.getValue(), '2');
-  assert.equal(api.isDisabled(), true);
+  assert.equal(api.getValue(), '9');
+  assert.equal(api.isDisabled(), false);
 });
 
 test('sidepanel pending auto-run start ignores stale active run count sync', () => {

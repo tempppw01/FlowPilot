@@ -342,6 +342,16 @@
           apiKey: String(targetState.apiKey ?? ''),
         };
       }
+      if (flowId === 'grok' && targetId === 'grok2api') {
+        const uploadMethod = String(targetState.uploadMethod ?? 'web-sso-import').trim().toLowerCase();
+        return {
+          ...targetState,
+          baseUrl: String(targetState.baseUrl ?? '').trim(),
+          adminUsername: String(targetState.adminUsername ?? '').trim(),
+          adminPassword: String(targetState.adminPassword ?? '').trim(),
+          uploadMethod: uploadMethod === 'build-device-oauth' ? 'build-device-oauth' : 'web-sso-import',
+        };
+      }
       if (flowId === 'claude' && targetId === 'claude') {
         return {
           ...targetState,
@@ -591,11 +601,25 @@
         baseUrl: sharedWebchatConfig.baseUrl,
         apiKey: sharedWebchatConfig.apiKey,
       };
+      const grok2ApiTargetSource = {
+        ...currentFlow.targets.grok2api,
+        ...getTargetValue(
+          nested,
+          (state) => state.flows?.grok?.integrationTargets?.grok2api,
+          null,
+          {}
+        ),
+        baseUrl: input?.grok2ApiUrl ?? currentFlow.targets.grok2api?.baseUrl,
+        adminUsername: input?.grok2ApiAdminUsername ?? currentFlow.targets.grok2api?.adminUsername,
+        adminPassword: input?.grok2ApiAdminPassword ?? currentFlow.targets.grok2api?.adminPassword,
+        uploadMethod: input?.grok2ApiUploadMethod ?? currentFlow.targets.grok2api?.uploadMethod,
+      };
       return {
         ...currentFlow,
         targets: {
           ...currentFlow.targets,
           webchat2api: normalizeFlowTargetState('grok', 'webchat2api', targetSource, defaultGrokTargets.webchat2api || {}),
+          grok2api: normalizeFlowTargetState('grok', 'grok2api', grok2ApiTargetSource, defaultGrokTargets.grok2api || {}),
         },
       };
     }
@@ -818,6 +842,10 @@
       next.kiroRsKey = kiroState.targets['kiro-rs']?.apiKey || '';
       next.grokWebchat2ApiUrl = grokState.targets.webchat2api?.baseUrl || '';
       next.grokWebchat2ApiAdminKey = grokState.targets.webchat2api?.apiKey || '';
+      next.grok2ApiUrl = grokState.targets.grok2api?.baseUrl || '';
+      next.grok2ApiAdminUsername = grokState.targets.grok2api?.adminUsername || '';
+      next.grok2ApiAdminPassword = grokState.targets.grok2api?.adminPassword || '';
+      next.grok2ApiUploadMethod = grokState.targets.grok2api?.uploadMethod || 'web-sso-import';
       next.stepExecutionRangeByFlow = buildStepExecutionRangeByFlow(normalizedState);
       next.settingsSchemaVersion = normalizedState.schemaVersion;
       next.settingsState = cloneValue(normalizedState);

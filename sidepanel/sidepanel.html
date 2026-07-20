@@ -301,6 +301,36 @@
             title="显示 webchat2api 管理密钥"></button>
         </div>
       </div>
+      <div class="data-row" id="row-grok2api-url" style="display:none;">
+        <span class="data-label">grok2api</span>
+        <input type="text" id="input-grok2api-url" class="data-input"
+          placeholder="请输入 grok2api 地址，例如 http://localhost:8080" />
+      </div>
+      <div class="data-row" id="row-grok2api-admin-username" style="display:none;">
+        <span class="data-label">管理员账号</span>
+        <input type="text" id="input-grok2api-admin-username" class="data-input" placeholder="grok2api 管理员用户名" autocomplete="username" />
+      </div>
+      <div class="data-row" id="row-grok2api-admin-password" style="display:none;">
+        <span class="data-label">管理员密码</span>
+        <div class="data-inline">
+          <div class="input-with-icon">
+            <input type="password" id="input-grok2api-admin-password" class="data-input data-input-with-icon" placeholder="grok2api 管理员密码" autocomplete="current-password" />
+            <button id="btn-toggle-grok2api-admin-password" class="input-icon-btn" type="button" data-password-toggle="input-grok2api-admin-password" data-show-label="显示 grok2api 管理员密码" data-hide-label="隐藏 grok2api 管理员密码" aria-label="显示 grok2api 管理员密码" title="显示 grok2api 管理员密码"></button>
+          </div>
+          <button id="btn-test-grok2api" class="btn btn-ghost btn-xs data-inline-btn" type="button">测试</button>
+        </div>
+      </div>
+      <div class="data-row" id="row-grok2api-upload-method" style="display:none;">
+        <span class="data-label">接入方式</span>
+        <select id="select-grok2api-upload-method" class="data-select">
+          <option value="web-sso-import">Web SSO 导入（自动注册）</option>
+          <option value="build-device-oauth">Grok Build 设备授权</option>
+        </select>
+      </div>
+      <div class="data-row" id="row-grok2api-test-status" style="display:none;">
+        <span class="data-label">连接测试</span>
+        <span id="display-grok2api-test-status" class="data-value mono">未测试</span>
+      </div>
       <div class="data-row" id="row-grok-register-status" style="display:none;">
         <span class="data-label">Grok 注册</span>
         <span id="display-grok-register-status" class="data-value mono">未开始</span>
@@ -312,6 +342,18 @@
       <div class="data-row" id="row-grok-webchat2api-upload-status" style="display:none;">
         <span class="data-label">上传状态</span>
         <span id="display-grok-webchat2api-upload-status" class="data-value mono">未开始</span>
+      </div>
+      <div class="data-row" id="row-grok2api-device-status" style="display:none;">
+        <span class="data-label">设备授权</span>
+        <span id="display-grok2api-device-status" class="data-value mono">未开始</span>
+      </div>
+      <div class="data-row" id="row-grok2api-device-auth" style="display:none;">
+        <span class="data-label">设备代码</span>
+        <span id="display-grok2api-device-code" class="data-value mono">未获取</span>
+      </div>
+      <div class="data-row" id="row-grok2api-upload-status" style="display:none;">
+        <span class="data-label">Web 导入</span>
+        <span id="display-grok2api-upload-status" class="data-value mono">未开始</span>
       </div>
       <div class="data-row" id="row-grok-sso-settings" style="display:none;">
         <span class="data-label">SSO Cookie</span>

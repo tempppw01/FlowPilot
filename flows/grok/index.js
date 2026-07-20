@@ -28,7 +28,7 @@
       supportsAccountContribution: false,
       supportsOpenAiOAuthContribution: false,
       contributionAdapterIds: [],
-      supportedTargetIds: ['webchat2api'],
+      supportedTargetIds: ['webchat2api', 'grok2api'],
       supportsLuckmail: false,
       canSwitchFlow: true,
       stepDefinitionMode: 'grok',
@@ -45,6 +45,19 @@
         defaultState: {
           baseUrl: '',
           apiKey: '',
+        },
+      },
+      grok2api: {
+        id: 'grok2api',
+        label: 'grok2api',
+        groups: [
+          'grok-target-grok2api',
+        ],
+        defaultState: {
+          baseUrl: '',
+          adminUsername: '',
+          adminPassword: '',
+          uploadMethod: 'web-sso-import',
         },
       },
     },
@@ -93,6 +106,9 @@
         sourceId: 'grok-register-page',
         commands: [
           'grok-open-signup-page',
+          'grok-continue-device-login',
+          'grok-open-email-signup',
+          'grok-approve-device-authorization',
           'grok-submit-email',
           'grok-submit-verification-code',
           'grok-submit-profile',
@@ -103,6 +119,9 @@
         sourceId: 'grok-register-page',
         commands: [
           'grok-open-signup-page',
+          'grok-continue-device-login',
+          'grok-open-email-signup',
+          'grok-approve-device-authorization',
           'grok-submit-email',
           'grok-submit-verification-code',
           'grok-submit-profile',
@@ -115,6 +134,14 @@
           'grok-upload-sso-to-webchat2api',
         ],
       },
+      'flows/grok/background/publisher-grok2api': {
+        sourceId: 'grok2api',
+        commands: [
+          'grok-upload-sso-to-grok2api',
+          'grok-start-grok2api-device-auth',
+          'grok-complete-grok2api-device-auth',
+        ],
+      },
     },
     defaultTargetId: 'webchat2api',
     settingsDefaults: {
@@ -122,6 +149,12 @@
         webchat2api: {
           baseUrl: '',
           apiKey: '',
+        },
+        grok2api: {
+          baseUrl: '',
+          adminUsername: '',
+          adminPassword: '',
+          uploadMethod: 'web-sso-import',
         },
       },
       autoRun: {
@@ -140,6 +173,21 @@
           'row-grok-webchat2api-url',
           'row-grok-webchat2api-key',
           'row-grok-sso-settings',
+        ],
+      },
+      'grok-target-grok2api': {
+        id: 'grok-target-grok2api',
+        label: 'grok2api',
+        rowIds: [
+          'row-grok2api-url',
+          'row-grok2api-admin-username',
+          'row-grok2api-admin-password',
+          'row-grok2api-test-status',
+          'row-grok2api-upload-method',
+          'row-grok-sso-settings',
+          'row-grok2api-upload-status',
+          'row-grok2api-device-status',
+          'row-grok2api-device-auth',
         ],
       },
       'grok-runtime-status': {
