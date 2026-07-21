@@ -6,7 +6,6 @@
   const DEFAULT_GROK_PAGE_TIMEOUT_MS = 90 * 1000;
   const GROK_VERIFICATION_PAGE_STATE = 'verification_code_entry';
   const GROK_VERIFICATION_READY_TIMEOUT_MS = 90 * 1000;
-  const GROK_POST_PROFILE_CF_WAIT_MS = 20 * 1000;
   const GROK_PROFILE_SUBMIT_COMMAND_TIMEOUT_MS = 150 * 1000;
   const GROK_PRE_SSO_EXTRACT_WAIT_MS = 10 * 1000;
   const MAIL_2925_FILTER_LOOKBACK_MS = 10 * 60 * 1000;
@@ -421,34 +420,54 @@
         const tabId = await ensureGrokRegisterTab(currentState, { openIfMissing: false });
         await activateTab(tabId);
         await ensureContentReady(tabId);
-        const resolvedEmail = await resolveSignupEmailForFlow(currentState, {
-          preserveAccountIdentity: true,
+        const existingRegister = currentState?.runtimeState?.flowState?.grok?.register || {};
+        let email = cleanString(existingRegister.email || currentState.grokEmail || currentState.email).toLowerCase();
+        let requestedAt = Number(existingRegister.verificationRequestedAt || currentState.grokVerificationRequestedAt) || 0;
+        let result = await getGrokRegisterPageState({
+          step: 2,
+          timeoutMs: 15000,
+          logMessage: '正在确认 Grok 邮箱验证页面状态...',
         });
-        const email = cleanString(resolvedEmail).toLowerCase();
+
+        if (result.state !== GROK_VERIFICATION_PAGE_STATE) {
+          const resolvedEmail = await resolveSignupEmailForFlow(currentState, {
+            preserveAccountIdentity: true,
+          });
+          email = cleanString(resolvedEmail).toLowerCase();
+        }
         if (!email) {
           throw new Error('Grok 注册邮箱为空，无法继续执行。');
         }
-        const requestedAt = Date.now();
-        await persistState({
-          grokEmail: email,
-          email,
-          accountIdentifierType: 'email',
-          accountIdentifier: email,
-          ...buildGrokRuntimePatch({
-            register: {
-              email,
-              verificationRequestedAt: requestedAt,
-              status: 'email_submitting',
-            },
-          }),
-        });
-        const result = await sendGrokCommand(nodeId, { email }, {
-          step: 2,
-          timeoutMs: GROK_VERIFICATION_READY_TIMEOUT_MS + 15000,
-          logMessage: '步骤 2：正在提交 Grok 注册邮箱...',
-        });
+        if (result.state === GROK_VERIFICATION_PAGE_STATE) {
+          requestedAt = requestedAt || Date.now();
+          await log(`步骤 2：已在 Grok 邮箱验证码页面，继续使用 ${email}。`, 'info', nodeId);
+        } else {
+          requestedAt = Date.now();
+          await persistState({
+            grokEmail: email,
+            email,
+            accountIdentifierType: 'email',
+            accountIdentifier: email,
+            ...buildGrokRuntimePatch({
+              register: {
+                email,
+                verificationRequestedAt: requestedAt,
+                status: 'email_submitting',
+              },
+            }),
+          });
+          result = await sendGrokCommand(nodeId, { email }, {
+            step: 2,
+            timeoutMs: 15000,
+            logMessage: '步骤 2：正在提交 Grok 注册邮箱...',
+          });
+        }
         if (result.state !== GROK_VERIFICATION_PAGE_STATE) {
-          throw new Error(`Grok 邮箱提交后尚未进入验证码页面，当前状态：${cleanString(result.state) || 'unknown'}${cleanString(result.url) ? `，URL：${cleanString(result.url)}` : ''}。`);
+          result = await waitForGrokVerificationPageReady(tabId, {
+            step: 2,
+            timeoutMs: GROK_VERIFICATION_READY_TIMEOUT_MS,
+            logMessage: '步骤 2：正在等待 xAI 显示邮箱验证码页面...',
+          });
         }
         await log(`步骤 2：已提交 Grok 注册邮箱 ${email}。`, 'ok', nodeId);
         await completeNode(nodeId, {
@@ -577,7 +596,13 @@
             },
           }),
         });
-        await log('已提交 Grok Build 设备授权，正在等待 grok2api 确认。', 'ok', nodeId);
+        await log(
+          result.clickedAllow
+            ? '已点击“允许”并提交 Grok Build 设备授权，正在等待 grok2api 确认。'
+            : '已提交 Grok Build 设备授权，正在等待 grok2api 确认。',
+          'ok',
+          nodeId
+        );
       } catch (error) {
         const message = getErrorMessage(error);
         await persistState(buildGrokRuntimePatch({ session: { lastError: message } }));
@@ -721,10 +746,8 @@
           timeoutMs: GROK_PROFILE_SUBMIT_COMMAND_TIMEOUT_MS,
           logMessage: '步骤 4：正在填写 xAI 注册资料并等待人机验证成功...',
         });
-        await log(`步骤 4：已提交 Grok 注册资料，等待 ${Math.floor(GROK_POST_PROFILE_CF_WAIT_MS / 1000)} 秒完成注册验证...`, 'info', nodeId);
-        await sleepWithStop(GROK_POST_PROFILE_CF_WAIT_MS);
-        await ensureContentReady(tabId, { timeoutMs: DEFAULT_GROK_PAGE_TIMEOUT_MS });
-        await log('步骤 4：已提交 Grok 注册资料并完成等待。', 'ok', nodeId);
+        // The content script only submits after Cloudflare reports success.
+        await log('步骤 4：已提交 Grok 注册资料，继续设备授权。', 'ok', nodeId);
         await completeNode(nodeId, {
           grokFirstName: profile.firstName,
           grokLastName: profile.lastName,
@@ -856,7 +879,6 @@
   return {
     DEFAULT_GROK_PAGE_TIMEOUT_MS,
     GROK_COOKIE_CLEAR_DOMAINS,
-    GROK_POST_PROFILE_CF_WAIT_MS,
     GROK_PROFILE_SUBMIT_COMMAND_TIMEOUT_MS,
     GROK_PRE_SSO_EXTRACT_WAIT_MS,
     GROK_REGISTER_PAGE_SOURCE_ID,

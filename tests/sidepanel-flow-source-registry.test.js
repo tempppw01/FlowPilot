@@ -67,6 +67,10 @@ test('sidepanel html exposes flow selector and kiro source fields', () => {
     'id="btn-test-grok2api"',
     'id="row-grok2api-test-status"',
     'id="display-grok2api-test-status"',
+    'id="row-grok2api-device-auth"',
+    'id="display-grok2api-device-code"',
+    'id="btn-copy-grok2api-device-code"',
+    'id="btn-open-grok2api-device-auth"',
     'id="row-grok-sso-settings"',
     'id="btn-copy-grok-sso"',
     'id="btn-clear-grok-sso"',
@@ -133,6 +137,7 @@ test('sidepanel renders Grok SSO status from canonical runtime state', () => {
     extractFunction(sidepanelSource, 'normalizeGrokSsoCookies'),
     extractFunction(sidepanelSource, 'getGrokRegisterStatusLabel'),
     extractFunction(sidepanelSource, 'getGrokWebchat2ApiUploadStatusLabel'),
+    extractFunction(sidepanelSource, 'getGrok2ApiDeviceStatusLabel'),
     extractFunction(sidepanelSource, 'renderGrokRuntimeState'),
   ].join('\n');
 
@@ -142,6 +147,10 @@ const displayGrokRegisterStatus = { textContent: '' };
 const displayGrokSsoStatus = { textContent: '' };
 const displayGrokSsoCookie = { textContent: '', title: '' };
 const displayGrokWebchat2ApiUploadStatus = { textContent: '', title: '' };
+const displayGrok2ApiDeviceStatus = { textContent: '' };
+const displayGrok2ApiDeviceCode = { textContent: '', title: '' };
+const btnCopyGrok2ApiDeviceCode = { disabled: false };
+const btnOpenGrok2ApiDeviceAuth = { disabled: false };
 const buttons = [];
 const btnCopyGrokSso = { disabled: false };
 const btnClearGrokSso = { disabled: false };
@@ -151,6 +160,10 @@ return {
   displayGrokSsoStatus,
   displayGrokSsoCookie,
   displayGrokWebchat2ApiUploadStatus,
+  displayGrok2ApiDeviceStatus,
+  displayGrok2ApiDeviceCode,
+  btnCopyGrok2ApiDeviceCode,
+  btnOpenGrok2ApiDeviceAuth,
   btnCopyGrokSso,
   btnClearGrokSso,
   renderGrokRuntimeState,
@@ -173,6 +186,11 @@ return {
             message: '上传成功',
             targetUrl: 'https://remote.example.com/api/remote-account/inject',
           },
+          deviceAuth: {
+            status: 'awaiting_authorization',
+            userCode: 'PDD9-T3AZ',
+            verificationUri: 'https://accounts.x.ai/oauth2/device?user_code=PDD9-T3AZ',
+          },
         },
       },
     },
@@ -183,6 +201,11 @@ return {
   assert.equal(api.displayGrokSsoCookie.textContent, '12345678...abcdef');
   assert.equal(api.displayGrokWebchat2ApiUploadStatus.textContent, '已上传：上传成功');
   assert.equal(api.displayGrokWebchat2ApiUploadStatus.title, 'https://remote.example.com/api/remote-account/inject');
+  assert.equal(api.displayGrok2ApiDeviceStatus.textContent, '等待 xAI 授权');
+  assert.equal(api.displayGrok2ApiDeviceCode.textContent, 'PDD9-T3AZ');
+  assert.equal(api.displayGrok2ApiDeviceCode.title, 'https://accounts.x.ai/oauth2/device?user_code=PDD9-T3AZ');
+  assert.equal(api.btnCopyGrok2ApiDeviceCode.disabled, false);
+  assert.equal(api.btnOpenGrok2ApiDeviceAuth.disabled, false);
   assert.equal(api.btnCopyGrokSso.disabled, false);
   assert.equal(api.btnClearGrokSso.disabled, false);
 });

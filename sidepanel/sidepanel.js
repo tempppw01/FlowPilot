@@ -203,6 +203,8 @@ const rowGrokWebchat2ApiUploadStatus = document.getElementById('row-grok-webchat
 const displayGrokWebchat2ApiUploadStatus = document.getElementById('display-grok-webchat2api-upload-status');
 const displayGrok2ApiDeviceStatus = document.getElementById('display-grok2api-device-status');
 const displayGrok2ApiDeviceCode = document.getElementById('display-grok2api-device-code');
+const btnCopyGrok2ApiDeviceCode = document.getElementById('btn-copy-grok2api-device-code');
+const btnOpenGrok2ApiDeviceAuth = document.getElementById('btn-open-grok2api-device-auth');
 const displayGrok2ApiUploadStatus = document.getElementById('display-grok2api-upload-status');
 const rowGrokSsoSettings = document.getElementById('row-grok-sso-settings');
 const displayGrokSsoCookie = document.getElementById('display-grok-sso-cookie');
@@ -3158,6 +3160,13 @@ function renderGrokRuntimeState(state = latestState) {
   if (typeof displayGrok2ApiDeviceCode !== 'undefined' && displayGrok2ApiDeviceCode) {
     displayGrok2ApiDeviceCode.textContent = deviceAuth.userCode || '未获取';
     displayGrok2ApiDeviceCode.title = deviceAuth.verificationUri || '';
+  }
+  const hasDeviceAuthorization = Boolean(deviceAuth.userCode && deviceAuth.verificationUri);
+  if (typeof btnCopyGrok2ApiDeviceCode !== 'undefined' && btnCopyGrok2ApiDeviceCode) {
+    btnCopyGrok2ApiDeviceCode.disabled = !hasDeviceAuthorization;
+  }
+  if (typeof btnOpenGrok2ApiDeviceAuth !== 'undefined' && btnOpenGrok2ApiDeviceAuth) {
+    btnOpenGrok2ApiDeviceAuth.disabled = !hasDeviceAuthorization;
   }
   if (typeof displayGrok2ApiUploadStatus !== 'undefined' && displayGrok2ApiUploadStatus) {
     const suffix = grok2ApiUpload.uploadedAt ? `，${new Date(grok2ApiUpload.uploadedAt).toLocaleString()}` : '';
@@ -16205,6 +16214,25 @@ btnCopyGrokSso?.addEventListener('click', async () => {
   } catch (error) {
     showToast(error?.message || '复制 Grok SSO Cookie 失败。', 'error');
   }
+});
+
+btnCopyGrok2ApiDeviceCode?.addEventListener('click', async () => {
+  try {
+    const deviceCode = String(getGrokRuntimeState(latestState)?.deviceAuth?.userCode || '').trim();
+    await copyTextToClipboard(deviceCode);
+    showToast('Grok Build 设备代码已复制。', 'success');
+  } catch (error) {
+    showToast(error?.message || '复制 Grok Build 设备代码失败。', 'error');
+  }
+});
+
+btnOpenGrok2ApiDeviceAuth?.addEventListener('click', () => {
+  const verificationUri = String(getGrokRuntimeState(latestState)?.deviceAuth?.verificationUri || '').trim();
+  if (!verificationUri) {
+    showToast('请先通过 grok2api 创建设备授权会话。', 'info');
+    return;
+  }
+  openExternalUrl(verificationUri);
 });
 
 btnClearGrokSso?.addEventListener('click', async () => {
