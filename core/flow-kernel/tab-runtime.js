@@ -518,6 +518,7 @@
         logMessage = '',
         logStep = null,
         logStepKey = '',
+        forceInject = false,
       } = options;
 
       const start = Date.now();
@@ -533,7 +534,7 @@
       while (Date.now() - start < timeoutMs) {
         attempt += 1;
         const pong = await pingContentScriptOnTab(tabId);
-        if (pong?.ok && (!pong.source || sourcesMatch(pong.source, source))) {
+        if (!forceInject && pong?.ok && (!pong.source || sourcesMatch(pong.source, source))) {
           console.log(LOG_PREFIX, `[ensureContentScriptReadyOnTab] ready ${source} tab=${tabId} on attempt ${attempt} after ${Date.now() - start}ms`);
           await registerTab(source, tabId);
           return;

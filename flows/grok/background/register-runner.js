@@ -4,6 +4,8 @@
   const GROK_SIGNUP_URL = 'https://accounts.x.ai/sign-up?redirect=grok-com';
   const GROK_REGISTER_PAGE_SOURCE_ID = 'grok-register-page';
   const DEFAULT_GROK_PAGE_TIMEOUT_MS = 90 * 1000;
+  const GROK_REGISTER_PAGE_COMMAND_TYPE = 'GROK_EXECUTE_NODE_V4';
+  const GROK_REGISTER_PAGE_HANDLER_VERSION = 4;
   const GROK_VERIFICATION_PAGE_STATE = 'verification_code_entry';
   const GROK_VERIFICATION_READY_TIMEOUT_MS = 90 * 1000;
   const GROK_PROFILE_SUBMIT_COMMAND_TIMEOUT_MS = 150 * 1000;
@@ -166,6 +168,7 @@
           inject: Array.isArray(GROK_REGISTER_INJECT_FILES) ? GROK_REGISTER_INJECT_FILES : null,
           injectSource: GROK_REGISTER_PAGE_SOURCE_ID,
           timeoutMs: options.timeoutMs || DEFAULT_GROK_PAGE_TIMEOUT_MS,
+          forceInject: Boolean(options.forceInject),
           retryDelayMs: 700,
           logMessage: options.logMessage || 'Grok 注册页内容脚本未就绪，正在等待页面恢复...',
         });
@@ -177,18 +180,25 @@
         throw new Error('Grok 注册页通信能力不可用。');
       }
       const result = await sendToContentScriptResilient(GROK_REGISTER_PAGE_SOURCE_ID, {
-        type: 'EXECUTE_NODE',
+        type: GROK_REGISTER_PAGE_COMMAND_TYPE,
         nodeId,
         step: options.step || 0,
         source: 'background',
         payload,
       }, {
         timeoutMs: options.timeoutMs || 45000,
+        responseTimeoutMs: options.responseTimeoutMs,
         retryDelayMs: 700,
         logMessage: options.logMessage || '',
+        onRetryableError: typeof options.onRetryableError === 'function'
+          ? options.onRetryableError
+          : null,
       });
       if (result?.error) {
         throw new Error(result.error);
+      }
+      if (result?.handlerVersion !== GROK_REGISTER_PAGE_HANDLER_VERSION || result?.command !== nodeId) {
+        throw new Error('Grok 注册页仍在使用旧内容脚本，请在扩展管理页重新加载 FlowPilot 后重试当前步骤。');
       }
       return result || {};
     }
@@ -199,6 +209,49 @@
         timeoutMs: options.timeoutMs || 15000,
         logMessage: options.logMessage || '',
       });
+    }
+
+    function isGrokLoginReadyState(state) {
+      return ['login_entry', 'email_entry', 'verification_code_entry', 'profile_entry', 'signed_in']
+        .includes(cleanString(state));
+    }
+
+    async function waitForGrokLoginPageReady(tabId, options = {}) {
+      const timeoutMs = Math.max(1000, Number(options.timeoutMs) || DEFAULT_GROK_PAGE_TIMEOUT_MS);
+      const intervalMs = Math.max(250, Number(options.intervalMs) || 700);
+      const deadline = Date.now() + timeoutMs;
+      let lastState = null;
+      let lastError = '';
+      let forceInject = true;
+
+      while (Date.now() <= deadline) {
+        throwIfStopped();
+        try {
+          await ensureContentReady(tabId, {
+            timeoutMs: Math.min(15000, Math.max(5000, intervalMs + 3000)),
+            stableMs: 300,
+            initialDelayMs: 0,
+            forceInject,
+            logMessage: options.logMessage || '',
+          });
+          forceInject = false;
+          lastState = await getGrokRegisterPageState({
+            timeoutMs: Math.max(5000, intervalMs + 3000),
+          });
+          lastError = '';
+          if (isGrokLoginReadyState(lastState?.state)) {
+            return lastState;
+          }
+        } catch (error) {
+          lastError = getErrorMessage(error);
+        }
+        await sleepWithStop(Math.min(intervalMs, Math.max(0, deadline - Date.now())));
+      }
+
+      const stateLabel = cleanString(lastState?.state) || 'unknown';
+      const urlLabel = cleanString(lastState?.url);
+      const errorLabel = lastError ? `，最后通信错误：${lastError}` : '';
+      throw new Error(`点击“继续”后尚未进入 Grok 登录页面，当前状态：${stateLabel}${urlLabel ? `，URL：${urlLabel}` : ''}${errorLabel}。`);
     }
 
     async function waitForGrokVerificationPageReady(tabId, options = {}) {
@@ -374,7 +427,7 @@
             },
           }),
         });
-        await ensureContentReady(tabId);
+        await ensureContentReady(tabId, { forceInject: true });
         const result = await sendGrokCommand(nodeId, {}, {
           step: 1,
           timeoutMs: DEFAULT_GROK_PAGE_TIMEOUT_MS,
@@ -419,7 +472,7 @@
         }
         const tabId = await ensureGrokRegisterTab(currentState, { openIfMissing: false });
         await activateTab(tabId);
-        await ensureContentReady(tabId);
+        await ensureContentReady(tabId, { forceInject: true });
         const existingRegister = currentState?.runtimeState?.flowState?.grok?.register || {};
         let email = cleanString(existingRegister.email || currentState.grokEmail || currentState.email).toLowerCase();
         let requestedAt = Number(existingRegister.verificationRequestedAt || currentState.grokVerificationRequestedAt) || 0;
@@ -458,8 +511,17 @@
           });
           result = await sendGrokCommand(nodeId, { email }, {
             step: 2,
-            timeoutMs: 15000,
+            timeoutMs: 45000,
+            responseTimeoutMs: 5000,
             logMessage: '步骤 2：正在提交 Grok 注册邮箱...',
+            onRetryableError: async () => {
+              await ensureContentReady(tabId, {
+                timeoutMs: 15000,
+                stableMs: 300,
+                initialDelayMs: 0,
+                forceInject: true,
+              });
+            },
           });
         }
         if (result.state !== GROK_VERIFICATION_PAGE_STATE) {
@@ -512,11 +574,29 @@
       try {
         const tabId = await ensureGrokRegisterTab(currentState, { openIfMissing: false });
         await activateTab(tabId);
-        await ensureContentReady(tabId);
-        const result = await sendGrokCommand(nodeId, {}, {
+        await ensureContentReady(tabId, { forceInject: true });
+        let result = await sendGrokCommand(nodeId, {}, {
           timeoutMs: DEFAULT_GROK_PAGE_TIMEOUT_MS,
-          logMessage: '正在关闭 Cookie 提示并点击 Grok Build 页面“继续”...',
+          responseTimeoutMs: 5000,
+          logMessage: '正在点击 Grok Build 页面“继续”并确认进入登录页...',
+          onRetryableError: async () => {
+            await ensureContentReady(tabId, {
+              timeoutMs: 15000,
+              stableMs: 300,
+              initialDelayMs: 0,
+              forceInject: true,
+            });
+          },
         });
+        if (cleanString(result.state) === 'device_login_submitted') {
+          result = await waitForGrokLoginPageReady(tabId, {
+            timeoutMs: DEFAULT_GROK_PAGE_TIMEOUT_MS,
+            logMessage: '已点击“继续”，正在重新连接并确认 Grok 登录页...',
+          });
+        }
+        if (!isGrokLoginReadyState(result.state)) {
+          throw new Error(`点击“继续”后页面未进入登录流程，当前状态：${cleanString(result.state) || 'unknown'}。`);
+        }
         await completeNode(nodeId, {
           grokPageState: result.state || 'login_entry',
           grokPageUrl: result.url || '',
@@ -543,7 +623,7 @@
       try {
         const tabId = await ensureGrokRegisterTab(currentState, { openIfMissing: false });
         await activateTab(tabId);
-        await ensureContentReady(tabId);
+        await ensureContentReady(tabId, { forceInject: true });
         const result = await sendGrokCommand(nodeId, {}, {
           timeoutMs: DEFAULT_GROK_PAGE_TIMEOUT_MS,
           logMessage: '正在点击注册并选择邮箱注册...',
@@ -577,11 +657,23 @@
       try {
         const tabId = await ensureGrokRegisterTab(currentState, { openIfMissing: false });
         await activateTab(tabId);
-        await ensureContentReady(tabId);
+        await ensureContentReady(tabId, { forceInject: true });
         const result = await sendGrokCommand(nodeId, {}, {
           timeoutMs: DEFAULT_GROK_PAGE_TIMEOUT_MS,
+          responseTimeoutMs: 5000,
           logMessage: '正在继续 Grok Build 并允许设备授权...',
+          onRetryableError: async () => {
+            await ensureContentReady(tabId, {
+              timeoutMs: 15000,
+              stableMs: 300,
+              initialDelayMs: 0,
+              forceInject: true,
+            });
+          },
         });
+        if (!['device_authorized', 'device_authorization_submitted'].includes(cleanString(result.state))) {
+          throw new Error(`点击“允许”后未检测到设备授权已提交，当前状态：${cleanString(result.state) || 'unknown'}。`);
+        }
         await completeNode(nodeId, {
           grokPageState: result.state || 'device_authorization_submitted',
           grokPageUrl: result.url || '',
@@ -635,6 +727,7 @@
         ).toLowerCase();
         const tabId = await ensureGrokRegisterTab(currentState, { openIfMissing: false });
         await activateTab(tabId);
+        await ensureContentReady(tabId, { forceInject: true });
         const readyState = await waitForGrokVerificationPageReady(tabId, {
           step: 3,
           logMessage: '步骤 3：正在等待 Grok 验证码页面就绪...',
@@ -673,7 +766,7 @@
           throw new Error('未能获取到 xAI 邮箱验证码。');
         }
         await activateTab(tabId);
-        await ensureContentReady(tabId);
+        await ensureContentReady(tabId, { forceInject: true });
         const result = await sendGrokCommand(nodeId, { code }, {
           step: 3,
           logMessage: '步骤 3：正在填写 xAI 邮箱验证码...',
@@ -736,7 +829,7 @@
           await setPasswordState(password);
         }
         await activateTab(tabId);
-        await ensureContentReady(tabId);
+        await ensureContentReady(tabId, { forceInject: true });
         const result = await sendGrokCommand(nodeId, {
           firstName: profile.firstName,
           lastName: profile.lastName,
@@ -794,7 +887,7 @@
 
         let ssoCookie = await readSsoCookieFromChrome();
         if (!ssoCookie) {
-          await ensureContentReady(tabId);
+          await ensureContentReady(tabId, { forceInject: true });
           const result = await sendGrokCommand(nodeId, {}, {
             step: 5,
             logMessage: '步骤 5：正在从 Grok 注册页读取 sso Cookie...',

@@ -1,6 +1,9 @@
 console.log('[MultiPage:grok-register-page] Content script loaded on', location.href);
 
 const GROK_REGISTER_PAGE_LISTENER_SENTINEL = '__multipageGrokRegisterPageListener__';
+const GROK_REGISTER_PAGE_LISTENER_KEY = '__multipageGrokRegisterPageV4Listener__';
+const GROK_REGISTER_PAGE_COMMAND_TYPE = 'GROK_EXECUTE_NODE_V4';
+const GROK_REGISTER_PAGE_HANDLER_VERSION = 4;
 const GROK_SIGNUP_URL = 'https://accounts.x.ai/sign-up?redirect=grok-com';
 const GROK_EMAIL_SIGNUP_TEXT_PATTERN = /使用邮箱注册|sign\s*up\s*with\s*email|continue\s*with\s*email|email/i;
 const GROK_CONTINUE_TEXT_PATTERN = /continue|next|sign\s*up|submit|verify|继续|下一步|注册|提交|验证/i;
@@ -8,10 +11,13 @@ const GROK_DEVICE_CONTINUE_TEXT_PATTERN = /^(?:继续|continue|next)$/i;
 const GROK_REGISTER_TEXT_PATTERN = /^(?:注册|sign\s*up|create\s+account)$/i;
 const GROK_DEVICE_ALLOW_TEXT_PATTERN = /^(?:允许|允许访问|允许并继续|allow(?:\s+access)?|authorize(?:\s+device)?)$/i;
 const GROK_COOKIE_CONSENT_TEXT_PATTERN = /^(?:全部拒绝|拒绝所有|接受所有(?:\s*cookie)?|accept\s+all(?:\s+cookies)?|reject\s+all(?:\s+cookies)?)$/i;
-const GROK_LOGIN_ENTRY_TEXT_PATTERN = /登录(?:您的)?(?:账户|账号)?|login|sign\s*in|注册|sign\s*up|create\s+account|使用邮箱|continue\s+with\s+email/i;
+const GROK_LOGIN_ENTRY_TEXT_PATTERN = /登录(?:您的)?(?:账户|账号)|还没有(?:账户|账号)|login\s+to\s+your\s+account|sign\s+in\s+to\s+your\s+account|don'?t\s+have\s+an\s+account/i;
 const GROK_LOGIN_ENTRY_PATH_PATTERN = /\/(?:sign-in|signin|login|sign-up|signup|register)(?:[/?#]|$)/i;
 const GROK_PROFILE_TEXT_PATTERN = /given\s*name|family\s*name|first\s*name|last\s*name|password|名字|姓氏|密码/i;
 const GROK_VERIFICATION_PAGE_TEXT_PATTERN = /验证您(?:的)?邮箱|verify\s+(?:your\s+)?email|check\s+your\s+email|一次性安全代码|one[-\s]*time\s+(?:security\s+)?code/i;
+const GROK_VERIFICATION_PAGE_PATH_PATTERN = /\/(?:verify(?:-email)?|email[-_/]?verification|confirmation)(?:[/?#]|$)/i;
+const GROK_VERIFICATION_SUBMIT_TEXT_PATTERN = /^(?:确认邮箱|确认|verify(?:\s+(?:email|code))?|confirm(?:\s+(?:email|code))?|continue)$/i;
+const GROK_VERIFICATION_EMAIL_ACTION_TEXT_PATTERN = /^(?:确认邮箱|验证邮箱|verify\s+email|confirm\s+email)$/i;
 const GROK_HUMAN_VERIFICATION_SUCCESS_TIMEOUT_MS = 120 * 1000;
 const GROK_HUMAN_VERIFICATION_SUCCESS_TEXT_PATTERN = /成功|success|verified|verification\s*(?:complete|successful)|challenge\s*(?:complete|passed)/i;
 
@@ -52,6 +58,19 @@ function getGrokElements(selector, root = document, elements = []) {
   return elements;
 }
 
+function getGrokPageText(root = document, segments = []) {
+  if (!root?.querySelectorAll) return segments.join(' ');
+  if (root === document) {
+    segments.push(String(document.body?.innerText || document.body?.textContent || ''));
+  }
+  for (const host of Array.from(root.querySelectorAll('*'))) {
+    if (!host.shadowRoot) continue;
+    segments.push(String(host.shadowRoot.innerText || host.shadowRoot.textContent || ''));
+    getGrokPageText(host.shadowRoot, segments);
+  }
+  return segments.join(' ').replace(/\s+/g, ' ').trim();
+}
+
 function findGrokClickableByText(pattern) {
   const selectors = 'button, a, [role="button"], input[type="button"], input[type="submit"]';
   return getGrokElements(selectors).find((element) => {
@@ -71,8 +90,8 @@ function getGrokClickableDiagnostics() {
     .join(' | ') || '无可见可点击元素';
 }
 
-function dismissGrokCookieConsent() {
-  const consentButton = findGrokClickableByText(GROK_COOKIE_CONSENT_TEXT_PATTERN)
+function findGrokCookieConsentButton() {
+  return findGrokClickableByText(GROK_COOKIE_CONSENT_TEXT_PATTERN)
     || queryVisibleGrokElement([
       '#onetrust-reject-all-handler',
       '#onetrust-accept-btn-handler',
@@ -80,6 +99,10 @@ function dismissGrokCookieConsent() {
       '[id*="cookie" i] button',
       '[class*="cookie" i] button',
     ].join(', '));
+}
+
+function dismissGrokCookieConsent() {
+  const consentButton = findGrokCookieConsentButton();
   if (!consentButton) return false;
   simulateGrokClick(consentButton);
   return true;
@@ -119,6 +142,14 @@ function simulateGrokClick(element) {
   element.dispatchEvent(new MouseEvent('click', eventOptions));
 }
 
+function submitGrokFormControl(control) {
+  if (control?.form?.requestSubmit) {
+    control.form.requestSubmit(control);
+    return;
+  }
+  simulateGrokClick(control);
+}
+
 async function waitForGrok(predicate, options = {}) {
   const timeoutMs = Math.max(1000, Number(options.timeoutMs) || 30000);
   const intervalMs = Math.max(100, Number(options.intervalMs) || 250);
@@ -144,23 +175,26 @@ function findGrokEmailInput() {
 }
 
 function findGrokOtpInputs() {
-  const inputs = Array.from(document.querySelectorAll([
+  const inputs = getGrokElements([
     'input[autocomplete="one-time-code"]',
     'input[inputmode="numeric"]',
     'input[name*="otp" i]',
     'input[name*="code" i]',
     'input[aria-label*="code" i]',
     'input[placeholder*="code" i]',
-  ].join(', '))).filter(isVisibleGrokElement);
+    'input[maxlength="1"]',
+  ].join(', ')).filter(isVisibleGrokElement);
   if (inputs.length) return inputs;
-  const oneCharInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"])'))
+  const oneCharInputs = getGrokElements('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"])')
     .filter((input) => isVisibleGrokElement(input) && Number(input.maxLength || 0) === 1);
   return oneCharInputs.length >= 4 ? oneCharInputs : [];
 }
 
 function isGrokVerificationPage() {
   return findGrokOtpInputs().length > 0
-    || GROK_VERIFICATION_PAGE_TEXT_PATTERN.test(String(document.body?.innerText || ''));
+    || GROK_VERIFICATION_PAGE_TEXT_PATTERN.test(getGrokPageText())
+    || Boolean(findGrokClickableByText(GROK_VERIFICATION_EMAIL_ACTION_TEXT_PATTERN))
+    || GROK_VERIFICATION_PAGE_PATH_PATTERN.test(String(location.pathname || ''));
 }
 
 function findGrokProfileInput(names) {
@@ -188,6 +222,11 @@ function findGrokSubmitButton(contextPattern = GROK_CONTINUE_TEXT_PATTERN) {
   return findGrokClickableByText(contextPattern)
     || Array.from(document.querySelectorAll('button:not([disabled]), [role="button"]')).filter(isVisibleGrokElement).at(-1)
     || null;
+}
+
+function findGrokVerificationSubmitButton() {
+  return findGrokClickableByText(GROK_VERIFICATION_SUBMIT_TEXT_PATTERN)
+    || findGrokSubmitButton(GROK_VERIFICATION_SUBMIT_TEXT_PATTERN);
 }
 
 function getGrokTurnstileResponseValue() {
@@ -253,10 +292,14 @@ async function waitForGrokHumanVerificationSuccess() {
 
 function getGrokPageState() {
   const pageText = document.body?.innerText || '';
-  if (/grok|xai|x\.ai/i.test(location.hostname) && /(?:^|;\s*)sso=/.test(document.cookie || '')) return 'signed_in';
-  if (findGrokProfileInput(['givenName', 'firstName']) || findGrokPasswordInputs().length || GROK_PROFILE_TEXT_PATTERN.test(pageText)) return 'profile_entry';
+  if (isGrokDeviceCodePage()) return 'device_code';
+  // Visible page state must win over cookies. xAI can create a provisional SSO
+  // cookie while the account is still waiting for email verification.
   if (isGrokVerificationPage()) return 'verification_code_entry';
+  if (findGrokProfileInput(['givenName', 'firstName']) || findGrokPasswordInputs().length || GROK_PROFILE_TEXT_PATTERN.test(pageText)) return 'profile_entry';
   if (findGrokEmailInput()) return 'email_entry';
+  if (isGrokLoginEntryPage()) return 'login_entry';
+  if (/grok|xai|x\.ai/i.test(location.hostname) && /(?:^|;\s*)sso=/.test(document.cookie || '')) return 'signed_in';
   return 'unknown';
 }
 
@@ -277,55 +320,55 @@ async function openGrokSignupPage() {
 }
 
 async function continueGrokDeviceLogin() {
+  const currentState = getGrokPageState();
+  const readyStates = ['login_entry', 'email_entry', 'verification_code_entry', 'profile_entry', 'signed_in'];
+  if (!isGrokDeviceCodePage() && readyStates.includes(currentState)) {
+    return { submitted: true, state: currentState, url: location.href };
+  }
+  if (!isGrokDeviceCodePage()) {
+    throw new Error(`当前页面不是 Grok Build 设备码页或登录页，状态：${currentState || 'unknown'}。`);
+  }
   // The device authorization URL already displays the code from grok2api.
-  dismissGrokCookieConsent();
   const continueButton = await waitForGrok(
-    () => {
-      dismissGrokCookieConsent();
-      return findGrokClickableByText(GROK_DEVICE_CONTINUE_TEXT_PATTERN);
-    },
-    { timeoutMs: 30000 }
+    () => findGrokClickableByText(GROK_DEVICE_CONTINUE_TEXT_PATTERN),
+    { timeoutMs: 30000, intervalMs: 500 }
   );
   if (!continueButton) throw new Error('未找到 Grok Build 的“继续”按钮。');
-  simulateGrokClick(continueButton);
-
-  const nextPage = await waitForGrok(() => {
-    dismissGrokCookieConsent();
-    const pageText = String(document.body?.innerText || '');
-    const pageState = getGrokPageState();
-    const isLoginEntry = GROK_LOGIN_ENTRY_TEXT_PATTERN.test(pageText)
-      || GROK_LOGIN_ENTRY_PATH_PATTERN.test(location.pathname)
-      || Boolean(findGrokClickableByText(GROK_REGISTER_TEXT_PATTERN))
-      || Boolean(findGrokClickableByText(GROK_EMAIL_SIGNUP_TEXT_PATTERN))
-      || Boolean(findGrokEmailInput())
-      || ['email_entry', 'verification_code_entry', 'profile_entry', 'signed_in'].includes(pageState);
-    if (isLoginEntry) {
-      return { state: pageState === 'unknown' ? 'login_entry' : pageState, url: location.href };
-    }
-    return null;
-  }, { timeoutMs: 45000, intervalMs: 500 });
-  if (!nextPage) throw new Error('点击“继续”后未进入 Grok 登录页面。');
-  return { submitted: true, ...nextPage };
+  // The device-login action is a regular POST form. Prefer its native submit
+  // path over synthetic pointer events, which xAI can ignore in an extension
+  // content-script context.
+  submitGrokFormControl(continueButton);
+  // Return before the form navigation destroys this document and its message
+  // response channel. The background reconnects to the new page and confirms
+  // the login state separately.
+  return { submitted: true, state: 'device_login_submitted', url: location.href };
 }
 
 async function openGrokEmailSignup() {
-  dismissGrokCookieConsent();
+  if (isGrokDeviceCodePage()) {
+    throw new Error('仍停留在 Grok Build 设备码页面，不能进入邮箱注册。请先完成第 2 步并确认页面已离开设备码页。');
+  }
   const registerButton = await waitForGrok(
-    () => findGrokClickableByText(GROK_REGISTER_TEXT_PATTERN),
+    () => {
+      if (isGrokDeviceCodePage()) return null;
+      return findGrokClickableByText(GROK_REGISTER_TEXT_PATTERN);
+    },
     { timeoutMs: 30000 }
   );
   if (!registerButton) throw new Error('未找到 Grok 登录页的“注册”入口。');
   simulateGrokClick(registerButton);
 
   const emailButton = await waitForGrok(() => {
-    dismissGrokCookieConsent();
+    if (isGrokDeviceCodePage()) return null;
     return findGrokClickableByText(GROK_EMAIL_SIGNUP_TEXT_PATTERN) || findGrokEmailInput();
   }, { timeoutMs: 30000, intervalMs: 500 });
   if (!emailButton) throw new Error('未找到 xAI 的“使用邮箱注册”入口。');
   if (!(emailButton instanceof HTMLInputElement)) {
     simulateGrokClick(emailButton);
   }
-  const emailInput = await waitForGrok(findGrokEmailInput, { timeoutMs: 30000, intervalMs: 300 });
+  const emailInput = await waitForGrok(() => (
+    isGrokDeviceCodePage() ? null : findGrokEmailInput()
+  ), { timeoutMs: 30000, intervalMs: 300 });
   if (!emailInput) throw new Error('选择“使用邮箱注册”后未出现邮箱输入框。');
   return { submitted: true, state: 'email_entry', url: location.href };
 }
@@ -338,6 +381,15 @@ function isGrokDeviceAuthorizedPage() {
 function isGrokDeviceCodePage() {
   const pageText = String(document.body?.innerText || '');
   return /登录\s*Grok\s*Build|sign\s*in\s*to\s*Grok\s*Build|输入终端中显示的代码|enter\s+the\s+code\s+shown\s+in\s+your\s+terminal/i.test(pageText);
+}
+
+function isGrokLoginEntryPage() {
+  if (isGrokDeviceCodePage()) return false;
+  const pageText = String(document.body?.innerText || '');
+  return GROK_LOGIN_ENTRY_TEXT_PATTERN.test(pageText)
+    || GROK_LOGIN_ENTRY_PATH_PATTERN.test(location.pathname)
+    || Boolean(findGrokClickableByText(GROK_REGISTER_TEXT_PATTERN))
+    || Boolean(findGrokClickableByText(GROK_EMAIL_SIGNUP_TEXT_PATTERN));
 }
 
 function isGrokDisabledElement(element) {
@@ -358,7 +410,7 @@ async function approveGrokDeviceAuthorization() {
       { timeoutMs: 30000, intervalMs: 300 }
     );
     if (!continueButton) throw new Error('未找到 Grok Build 设备授权页的“继续”按钮。');
-    simulateGrokClick(continueButton);
+    submitGrokFormControl(continueButton);
   }
   const authorizationPage = await waitForGrok(
     () => {
@@ -377,8 +429,7 @@ async function approveGrokDeviceAuthorization() {
   if (!authorizationPage?.allowButton) {
     throw new Error(`未找到 Grok Build 授权页的“允许”按钮。可见操作：${getGrokClickableDiagnostics()}`);
   }
-  simulateGrokClick(authorizationPage.allowButton);
-  const submitted = await waitForGrok(() => {
+  const readSubmittedState = () => {
     if (isGrokDeviceAuthorizedPage()) {
       return { state: 'device_authorized', url: location.href };
     }
@@ -388,16 +439,33 @@ async function approveGrokDeviceAuthorization() {
       || !findGrokClickableByText(GROK_DEVICE_ALLOW_TEXT_PATTERN)
       ? { state: 'device_authorization_submitted', url: location.href }
       : null;
-  }, { timeoutMs: 12000, intervalMs: 250 });
+  };
+
+  let submitted = readSubmittedState();
+  let clickedAllow = false;
+  for (let attempt = 1; !submitted && attempt <= 3; attempt += 1) {
+    submitGrokFormControl(authorizationPage.allowButton);
+    clickedAllow = true;
+    submitted = await waitForGrok(readSubmittedState, { timeoutMs: 4000, intervalMs: 250 });
+  }
+  if (!submitted) {
+    throw new Error(`点击 Grok Build“允许”后按钮仍可用，授权未提交。可见操作：${getGrokClickableDiagnostics()}`);
+  }
   // grok2api polling is the source of truth when xAI keeps its consent page open.
   return {
     submitted: true,
-    clickedAllow: true,
-    ...(submitted || { state: 'device_authorization_submitted', url: location.href }),
+    clickedAllow,
+    ...submitted,
   };
 }
 
 async function submitGrokEmail(payload = {}) {
+  // The first submit response can be lost when xAI replaces the document.
+  // If the background retries this command on the OTP page, treat the visible
+  // verification state as proof that the email submission already succeeded.
+  if (isGrokVerificationPage()) {
+    return { submitted: true, state: 'verification_code_entry', url: location.href };
+  }
   const email = String(payload.email || '').trim();
   if (!email) throw new Error('缺少 Grok 注册邮箱。');
   const input = await waitForGrok(findGrokEmailInput, { timeoutMs: 45000 });
@@ -406,9 +474,16 @@ async function submitGrokEmail(payload = {}) {
   await sleep(200);
   const button = findGrokSubmitButton();
   if (!button) throw new Error('未找到 x.ai 邮箱提交按钮。');
-  simulateGrokClick(button);
-  // The submit causes a full document replacement. Return before unload so
-  // the background can reconnect to the page that contains the OTP controls.
+  // requestSubmit() can synchronously replace the document before the content
+  // script answers the background message. Defer it one task so the
+  // email_submitted response is delivered first, then reconnect on the OTP UI.
+  setTimeout(() => {
+    try {
+      submitGrokFormControl(button);
+    } catch (error) {
+      console.warn('[MultiPage:grok-register-page] Deferred email submit failed', error);
+    }
+  }, 0);
   return { submitted: true, state: 'email_submitted', url: location.href };
 }
 
@@ -440,6 +515,12 @@ async function submitGrokVerificationCode(payload = {}) {
     });
   }
   await sleep(200);
+  const confirmButton = await waitForGrok(findGrokVerificationSubmitButton, {
+    timeoutMs: 5000,
+    intervalMs: 200,
+  });
+  if (!confirmButton) throw new Error('未找到 x.ai“确认邮箱”按钮。');
+  submitGrokFormControl(confirmButton);
   const settledState = await waitForGrok(() => {
     const errorText = getGrokVerificationErrorText();
     if (errorText) return { state: 'verification_error', error: errorText };
@@ -477,7 +558,7 @@ async function submitGrokProfile(payload = {}) {
   const humanVerification = await waitForGrokHumanVerificationSuccess();
   const button = findGrokSubmitButton();
   if (!button) throw new Error('未找到 x.ai 资料提交按钮。');
-  simulateGrokClick(button);
+  submitGrokFormControl(button);
   return {
     submitted: true,
     state: 'profile_submitted',
@@ -541,6 +622,50 @@ if (!globalThis[GROK_REGISTER_PAGE_LISTENER_SENTINEL]) {
     return true;
   });
 }
+
+// Always replace the current protocol listener when this file is injected.
+// This makes force-injection actually refresh the behavior in an already-open
+// xAI SPA tab instead of leaving an older listener behind a boolean sentinel.
+const previousVersionedListener = globalThis[GROK_REGISTER_PAGE_LISTENER_KEY];
+if (typeof previousVersionedListener === 'function') {
+  try {
+    chrome.runtime.onMessage.removeListener(previousVersionedListener);
+  } catch (_) {
+    // An extension reload can invalidate the old listener context.
+  }
+}
+const currentVersionedListener = (message, _sender, sendResponse) => {
+  if (message?.type !== GROK_REGISTER_PAGE_COMMAND_TYPE) return false;
+  resetStopState();
+  const command = message.command || message.nodeId || message.type;
+  executeGrokCommand(command, message.payload || {})
+    .then((result) => sendResponse({
+      ok: true,
+      handlerVersion: GROK_REGISTER_PAGE_HANDLER_VERSION,
+      command,
+      ...result,
+    }))
+    .catch((error) => {
+      if (isStopError(error)) {
+        sendResponse({
+          stopped: true,
+          handlerVersion: GROK_REGISTER_PAGE_HANDLER_VERSION,
+          command,
+          error: error.message,
+        });
+        return;
+      }
+      sendResponse({
+        ok: false,
+        handlerVersion: GROK_REGISTER_PAGE_HANDLER_VERSION,
+        command,
+        error: error?.message || String(error),
+      });
+    });
+  return true;
+};
+globalThis[GROK_REGISTER_PAGE_LISTENER_KEY] = currentVersionedListener;
+chrome.runtime.onMessage.addListener(currentVersionedListener);
 
 window.__MULTIPAGE_GROK_REGISTER_PAGE__ = {
   executeGrokCommand,

@@ -12,6 +12,14 @@ function getGrokRuntime(state = {}) {
   return state?.runtimeState?.flowState?.grok || {};
 }
 
+function grokHandlerResponse(message, result = {}) {
+  return {
+    handlerVersion: 4,
+    command: message.nodeId,
+    ...result,
+  };
+}
+
 test('grok runner delegates verification polling to the shared flow mail service', () => {
   const source = fs.readFileSync('flows/grok/background/register-runner.js', 'utf8');
   assert.match(source, /pollFlowVerificationCode/);
@@ -26,6 +34,7 @@ test('grok runner delegates verification polling to the shared flow mail service
 
 test('grok content script does not patch global MouseEvent prototypes', () => {
   const source = fs.readFileSync('flows/grok/content/register-page.js', 'utf8');
+  assert.doesNotThrow(() => new Function(source));
   assert.doesNotMatch(source, /MouseEvent\.prototype/);
   assert.doesNotMatch(source, /Object\.defineProperty\(MouseEvent/);
   assert.match(source, /screenX:/);
@@ -38,6 +47,101 @@ test('grok content listener can rebind after the extension reloads', () => {
   assert.match(source, /globalThis\[GROK_REGISTER_PAGE_LISTENER_SENTINEL\]/);
   assert.doesNotMatch(source, /document\.documentElement\.hasAttribute\(GROK_REGISTER_PAGE_LISTENER_SENTINEL\)/);
   assert.doesNotMatch(source, /document\.documentElement\.setAttribute\(GROK_REGISTER_PAGE_LISTENER_SENTINEL/);
+  assert.match(source, /GROK_REGISTER_PAGE_LISTENER_KEY/);
+  assert.match(source, /GROK_EXECUTE_NODE_V4/);
+  assert.match(source, /removeListener\(previousVersionedListener\)/);
+  assert.match(source, /globalThis\[GROK_REGISTER_PAGE_LISTENER_KEY\] = currentVersionedListener/);
+});
+
+test('grok runner uses the versioned command channel and refreshes its page script for device login', () => {
+  const source = fs.readFileSync('flows/grok/background/register-runner.js', 'utf8');
+  const continueIndex = source.indexOf('async function executeGrokContinueDeviceLogin');
+  const nextFunctionIndex = source.indexOf('async function executeGrokOpenEmailSignup', continueIndex);
+  const block = source.slice(continueIndex, nextFunctionIndex);
+
+  assert.match(source, /GROK_REGISTER_PAGE_COMMAND_TYPE = 'GROK_EXECUTE_NODE_V4'/);
+  assert.match(source, /handlerVersion !== GROK_REGISTER_PAGE_HANDLER_VERSION/);
+  assert.match(block, /ensureContentReady\(tabId, \{ forceInject: true \}\)/);
+});
+
+test('grok runner does not complete device login while the page still reports the device-code state', async () => {
+  const api = loadGrokRunnerApi();
+  let completed = false;
+  const currentState = {
+    activeFlowId: 'grok',
+    grokRegisterTabId: 77,
+    runtimeState: { flowState: { grok: { session: { registerTabId: 77 } } } },
+  };
+  const runner = api.createGrokRegisterRunner({
+    addLog: async () => {},
+    chrome: { tabs: { get: async (id) => ({ id }), update: async () => {} } },
+    completeNodeFromBackground: async () => { completed = true; },
+    ensureContentScriptReadyOnTab: async () => {},
+    getState: async () => currentState,
+    getTabId: async () => 77,
+    isTabAlive: async () => true,
+    registerTab: async () => {},
+    sendToContentScriptResilient: async (_sourceId, message) => grokHandlerResponse(message, {
+      submitted: true,
+      state: 'device_code',
+      url: 'https://accounts.x.ai/oauth2/device?user_code=TEST-CODE',
+    }),
+    setState: async () => {},
+    waitForTabStableComplete: async () => {},
+  });
+
+  await assert.rejects(
+    () => runner.executeGrokContinueDeviceLogin({ nodeId: 'grok-continue-device-login', ...currentState }),
+    /页面未进入登录流程/
+  );
+  assert.equal(completed, false);
+});
+
+test('grok runner reconnects after device form navigation before completing step 2', async () => {
+  const api = loadGrokRunnerApi();
+  const calls = [];
+  let completedPayload = null;
+  const currentState = {
+    activeFlowId: 'grok',
+    grokRegisterTabId: 78,
+    runtimeState: { flowState: { grok: { session: { registerTabId: 78 } } } },
+  };
+  const runner = api.createGrokRegisterRunner({
+    addLog: async () => {},
+    chrome: { tabs: { get: async (id) => ({ id }), update: async () => {} } },
+    completeNodeFromBackground: async (_nodeId, payload) => { completedPayload = payload; },
+    ensureContentScriptReadyOnTab: async () => {},
+    getState: async () => currentState,
+    getTabId: async () => 78,
+    isTabAlive: async () => true,
+    registerTab: async () => {},
+    sendToContentScriptResilient: async (_sourceId, message) => {
+      calls.push(message.nodeId);
+      if (message.nodeId === 'grok-continue-device-login') {
+        return grokHandlerResponse(message, {
+          submitted: true,
+          state: 'device_login_submitted',
+          url: 'https://accounts.x.ai/oauth2/device?user_code=TEST-CODE',
+        });
+      }
+      if (message.nodeId === 'GET_PAGE_STATE') {
+        return grokHandlerResponse(message, {
+          state: 'login_entry',
+          url: 'https://accounts.x.ai/sign-in?redirect=oauth2-provider',
+        });
+      }
+      throw new Error(`unexpected command ${message.nodeId}`);
+    },
+    setState: async () => {},
+    sleepWithStop: async () => {},
+    waitForTabStableComplete: async () => {},
+  });
+
+  await runner.executeGrokContinueDeviceLogin({ nodeId: 'grok-continue-device-login', ...currentState });
+
+  assert.deepEqual(calls, ['grok-continue-device-login', 'GET_PAGE_STATE']);
+  assert.equal(completedPayload.grokPageState, 'login_entry');
+  assert.match(completedPayload.grokPageUrl, /\/sign-in/);
 });
 
 test('grok device approval continues the prefilled device page before allowing access', () => {
@@ -52,7 +156,7 @@ test('grok device approval continues the prefilled device page before allowing a
   assert.ok(continueIndex > devicePageIndex);
   assert.ok(allowIndex > continueIndex);
   assert.match(source, /state: 'device_authorization_submitted'/);
-  assert.match(source, /clickedAllow: true/);
+  assert.match(source, /clickedAllow,/);
 });
 
 test('grok device approval finds and confirms allow controls rendered by xAI components', () => {
@@ -64,7 +168,10 @@ test('grok device approval finds and confirms allow controls rendered by xAI com
   assert.match(source, /PointerEvent/);
   assert.match(source, /getGrokClickableDiagnostics\(\)/);
   assert.match(source, /!authorizationPage\.allowButton\.isConnected/);
-  assert.match(source, /timeoutMs: 12000/);
+  assert.match(source, /submitGrokFormControl\(authorizationPage\.allowButton\)/);
+  assert.match(source, /attempt <= 3/);
+  assert.match(source, /timeoutMs: 4000/);
+  assert.match(source, /按钮仍可用/);
   assert.match(source, /允许并继续/);
 });
 
@@ -75,22 +182,48 @@ test('grok device authorization runner reports that it clicked allow', () => {
   const block = source.slice(approvalIndex, nextFunctionIndex);
 
   assert.match(block, /result\.clickedAllow/);
+  assert.match(block, /responseTimeoutMs: 5000/);
+  assert.match(block, /onRetryableError: async \(\) =>/);
+  assert.match(block, /device_authorization_submitted/);
   assert.match(block, /已点击“允许”/);
 });
 
-test('grok device login recognizes localized login pages and clears cookie consent before continuing', () => {
+test('grok device login ignores cookie consent and only accepts a real login-page state', () => {
   const source = fs.readFileSync('flows/grok/content/register-page.js', 'utf8');
   const continueIndex = source.indexOf('async function continueGrokDeviceLogin');
   const nextFunctionIndex = source.indexOf('async function openGrokEmailSignup', continueIndex);
   const block = source.slice(continueIndex, nextFunctionIndex);
 
   assert.notEqual(continueIndex, -1);
-  assert.match(block, /dismissGrokCookieConsent\(\)/);
-  assert.match(block, /GROK_LOGIN_ENTRY_TEXT_PATTERN/);
-  assert.match(block, /GROK_LOGIN_ENTRY_PATH_PATTERN/);
-  assert.match(block, /findGrokEmailInput\(\)/);
-  assert.match(block, /\['email_entry', 'verification_code_entry', 'profile_entry', 'signed_in'\]/);
+  assert.doesNotMatch(block, /hasGrokCookieConsent\(\)/);
+  assert.doesNotMatch(block, /dismissGrokCookieConsentAndWait\(\)/);
+  assert.match(block, /!isGrokDeviceCodePage\(\)/);
+  assert.match(block, /\['login_entry', 'email_entry', 'verification_code_entry', 'profile_entry', 'signed_in'\]/);
   assert.match(source, /#onetrust-reject-all-handler/);
+  assert.match(source, /function findGrokCookieConsentButton\(\)/);
+  assert.doesNotMatch(source, /function hasGrokCookieConsent\(\)/);
+  assert.match(source, /if \(isGrokDeviceCodePage\(\)\) return 'device_code'/);
+  assert.match(source, /function isGrokLoginEntryPage\(\)/);
+  assert.doesNotMatch(source, /GROK_LOGIN_ENTRY_TEXT_PATTERN = \/登录\(\?:您的\)\?\(\?:账户\|账号\)\?\|login\|/);
+  const submitIndex = block.indexOf('submitGrokFormControl(continueButton)');
+  const syntheticFallbackIndex = source.indexOf('simulateGrokClick(control)');
+  assert.notEqual(submitIndex, -1);
+  assert.notEqual(syntheticFallbackIndex, -1);
+  assert.ok(submitIndex < syntheticFallbackIndex);
+  assert.match(block.slice(submitIndex), /state: 'device_login_submitted'/);
+  assert.doesNotMatch(block.slice(submitIndex), /await waitForGrok/);
+  assert.match(source, /function submitGrokFormControl\(control\)/);
+});
+
+test('grok email-signup step refuses to advance while still on the device-code page', () => {
+  const source = fs.readFileSync('flows/grok/content/register-page.js', 'utf8');
+  const start = source.indexOf('async function openGrokEmailSignup');
+  const end = source.indexOf('function isGrokDeviceAuthorizedPage', start);
+  const block = source.slice(start, end);
+
+  assert.match(block, /if \(isGrokDeviceCodePage\(\)\)/);
+  assert.match(block, /不能进入邮箱注册/);
+  assert.doesNotMatch(block, /hasGrokCookieConsent\(\)/);
 });
 
 test('grok email submission recognizes the localized verification page even before OTP controls are readable', () => {
@@ -98,6 +231,11 @@ test('grok email submission recognizes the localized verification page even befo
 
   assert.match(source, /GROK_VERIFICATION_PAGE_TEXT_PATTERN/);
   assert.ok(source.includes('验证您(?:的)?邮箱'));
+  assert.match(source, /GROK_VERIFICATION_PAGE_PATH_PATTERN/);
+  assert.match(source, /GROK_VERIFICATION_EMAIL_ACTION_TEXT_PATTERN/);
+  assert.match(source, /GROK_VERIFICATION_PAGE_TEXT_PATTERN\.test\(getGrokPageText\(\)\)/);
+  assert.match(source, /function findGrokOtpInputs\(\)[\s\S]*?getGrokElements\(/);
+  assert.match(source, /input\[maxlength="1"\]/);
   assert.match(source, /function isGrokVerificationPage\(\)/);
   assert.match(source, /if \(isGrokVerificationPage\(\)\) return 'verification_code_entry';/);
 });
@@ -108,9 +246,42 @@ test('grok email submission returns before the xAI document is replaced', () => 
   const end = source.indexOf('function getGrokVerificationErrorText', start);
   const block = source.slice(start, end);
 
+  const verificationGuardIndex = block.indexOf('if (isGrokVerificationPage())');
+  const emailInputIndex = block.indexOf('waitForGrok(findGrokEmailInput');
+  assert.notEqual(verificationGuardIndex, -1);
+  assert.notEqual(emailInputIndex, -1);
+  assert.ok(verificationGuardIndex < emailInputIndex);
+  assert.match(block, /state: 'verification_code_entry'/);
   assert.match(block, /state: 'email_submitted'/);
+  assert.match(block, /setTimeout\(\(\) => \{/);
+  assert.match(block, /submitGrokFormControl\(button\)/);
   assert.doesNotMatch(block, /await waitForGrokVerificationPageAfterEmailSubmit/);
   assert.doesNotMatch(block, /await sleep\(1200\)/);
+});
+
+test('grok verification UI takes precedence over a provisional sso cookie', () => {
+  const source = fs.readFileSync('flows/grok/content/register-page.js', 'utf8');
+  const start = source.indexOf('function getGrokPageState');
+  const end = source.indexOf('async function openGrokSignupPage', start);
+  const block = source.slice(start, end);
+  const verificationIndex = block.indexOf("return 'verification_code_entry'");
+  const signedInIndex = block.indexOf("return 'signed_in'");
+
+  assert.notEqual(verificationIndex, -1);
+  assert.notEqual(signedInIndex, -1);
+  assert.ok(verificationIndex < signedInIndex);
+  assert.match(block, /provisional SSO/);
+});
+
+test('grok verification submission confirms the filled one-time code', () => {
+  const source = fs.readFileSync('flows/grok/content/register-page.js', 'utf8');
+  const start = source.indexOf('async function submitGrokVerificationCode');
+  const end = source.indexOf('async function submitGrokProfile', start);
+  const block = source.slice(start, end);
+
+  assert.match(source, /GROK_VERIFICATION_SUBMIT_TEXT_PATTERN/);
+  assert.match(block, /findGrokVerificationSubmitButton/);
+  assert.match(block, /submitGrokFormControl\(confirmButton\)/);
 });
 
 test('grok profile submission waits for human verification success before clicking complete', () => {
@@ -118,7 +289,7 @@ test('grok profile submission waits for human verification success before clicki
   const profileIndex = source.indexOf('async function submitGrokProfile');
   const waitIndex = source.indexOf('await waitForGrokHumanVerificationSuccess()', profileIndex);
   const buttonIndex = source.indexOf('const button = findGrokSubmitButton()', profileIndex);
-  const clickIndex = source.indexOf('simulateGrokClick(button)', profileIndex);
+  const clickIndex = source.indexOf('submitGrokFormControl(button)', profileIndex);
 
   assert.notEqual(profileIndex, -1);
   assert.notEqual(waitIndex, -1);
@@ -164,12 +335,12 @@ test('grok profile runner allows the content script to wait for human verificati
     registerTab: async () => {},
     sendToContentScriptResilient: async (_sourceId, message, options = {}) => {
       sendCalls.push({ message, options });
-      return {
+      return grokHandlerResponse(message, {
         submitted: true,
         state: 'profile_submitted',
         humanVerification: 'turnstile_response',
         url: 'https://accounts.x.ai/sign-up',
-      };
+      });
     },
     setPasswordState: async () => {},
     setState: async (patch) => {
@@ -239,7 +410,7 @@ test('grok email runner resumes from an already-open verification page without r
     sendToContentScriptResilient: async (_sourceId, message) => {
       sendCalls.push(message);
       if (message.nodeId === 'GET_PAGE_STATE') {
-        return { state: 'verification_code_entry', url: 'https://accounts.x.ai/sign-up' };
+        return grokHandlerResponse(message, { state: 'verification_code_entry', url: 'https://accounts.x.ai/sign-up' });
       }
       throw new Error(`验证码页恢复不应执行 ${message.nodeId}。`);
     },
@@ -280,13 +451,13 @@ test('grok email runner reconnects after xAI navigates to the verification page'
       calls.push(message.nodeId);
       if (message.nodeId === 'GET_PAGE_STATE') {
         pageStateChecks += 1;
-        return {
+        return grokHandlerResponse(message, {
           state: pageStateChecks === 1 ? 'email_entry' : 'verification_code_entry',
           url: 'https://accounts.x.ai/sign-up',
-        };
+        });
       }
       if (message.nodeId === 'grok-submit-email') {
-        return { submitted: true, state: 'email_submitted', url: 'https://accounts.x.ai/sign-up' };
+        return grokHandlerResponse(message, { submitted: true, state: 'email_submitted', url: 'https://accounts.x.ai/sign-up' });
       }
       throw new Error(`不应执行 ${message.nodeId}`);
     },
@@ -301,6 +472,18 @@ test('grok email runner reconnects after xAI navigates to the verification page'
   assert.equal(completed.length, 1);
   assert.equal(completed[0].payload.grokPageState, 'verification_code_entry');
   assert.equal(completed[0].payload.grokEmail, 'reconnect@example.com');
+});
+
+test('grok email runner refreshes the page script when submit navigation drops the response', () => {
+  const source = fs.readFileSync('flows/grok/background/register-runner.js', 'utf8');
+  const start = source.indexOf('async function executeGrokSubmitEmail');
+  const end = source.indexOf('async function executeGrokContinueDeviceLogin', start);
+  const block = source.slice(start, end);
+
+  assert.match(block, /timeoutMs: 45000/);
+  assert.match(block, /onRetryableError: async \(\) =>/);
+  assert.match(block, /ensureContentReady\(tabId, \{/);
+  assert.match(block, /forceInject: true/);
 });
 
 test('grok verification runner polls by flow node and submits normalized code', async () => {
@@ -350,9 +533,9 @@ test('grok verification runner polls by flow node and submits normalized code', 
     sendToContentScriptResilient: async (sourceId, message) => {
       calls.push({ type: 'send', sourceId, message });
       if (message.nodeId === 'GET_PAGE_STATE') {
-        return { submitted: true, state: 'verification_code_entry', url: 'https://accounts.x.ai/verify' };
+        return grokHandlerResponse(message, { submitted: true, state: 'verification_code_entry', url: 'https://accounts.x.ai/verify' });
       }
-      return { submitted: true, state: 'profile_entry', url: 'https://accounts.x.ai/profile' };
+      return grokHandlerResponse(message, { submitted: true, state: 'profile_entry', url: 'https://accounts.x.ai/profile' });
     },
     setState: async (patch) => {
       currentState = { ...currentState, ...patch };
@@ -375,7 +558,7 @@ test('grok verification runner polls by flow node and submits normalized code', 
     entry.type === 'send' && entry.message.nodeId === 'grok-submit-verification-code'
   ));
   assert.equal(sendCall.sourceId, 'grok-register-page');
-  assert.equal(sendCall.message.type, 'EXECUTE_NODE');
+  assert.equal(sendCall.message.type, 'GROK_EXECUTE_NODE_V4');
   assert.equal(sendCall.message.nodeId, 'grok-submit-verification-code');
   assert.deepEqual(sendCall.message.payload, { code: 'ABC123' });
 
@@ -430,9 +613,9 @@ test('grok verification runner waits for verification page before polling mail',
     registerTab: async () => {},
     sendToContentScriptResilient: async (_sourceId, message) => {
       if (message.nodeId === 'GET_PAGE_STATE') {
-        return { submitted: true, state: 'email_entry', url: 'https://accounts.x.ai/sign-up' };
+        return grokHandlerResponse(message, { submitted: true, state: 'email_entry', url: 'https://accounts.x.ai/sign-up' });
       }
-      return { submitted: true, state: 'profile_entry', url: 'https://accounts.x.ai/profile' };
+      return grokHandlerResponse(message, { submitted: true, state: 'profile_entry', url: 'https://accounts.x.ai/profile' });
     },
     setState: async (patch) => {
       currentState = { ...currentState, ...patch };

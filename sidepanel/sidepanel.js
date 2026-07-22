@@ -5910,11 +5910,10 @@ function collectSettingsPayload() {
     emailGenerator: String(selectMailProvider?.value || '').trim().toLowerCase() === 'custom'
       ? 'custom'
       : selectEmailGenerator.value,
-    duckEmailGenerationMode: typeof getSelectedDuckEmailGenerationMode === 'function'
-      ? getSelectedDuckEmailGenerationMode()
-      : 'page',    duckDdgToken: typeof inputDuckDdgToken !== 'undefined' && inputDuckDdgToken
+    duckDdgToken: typeof inputDuckDdgToken !== 'undefined' && inputDuckDdgToken
       ? String(inputDuckDdgToken.value || '').trim()
-      : '',    customMailProviderPool: typeof normalizeCustomEmailPoolEntries === 'function'
+      : '',
+    customMailProviderPool: typeof normalizeCustomEmailPoolEntries === 'function'
       ? normalizeCustomEmailPoolEntries(inputCustomMailProviderPool?.value)
       : [],
     customEmailPool: normalizedCustomEmailPool,
@@ -15886,7 +15885,6 @@ async function fetchGeneratedEmail(options = {}) {
         smsbowerMailServiceCode: inputSmsBowerMailServiceCode ? normalizeSmsBowerMailServiceCode(inputSmsBowerMailServiceCode.value) : '',
         smsbowerMailDomain: inputSmsBowerMailDomain ? normalizeSmsBowerMailDomain(inputSmsBowerMailDomain.value) : '',
         smsbowerMailMaxPrice: inputSmsBowerMailMaxPrice ? normalizeSmsBowerMailMaxPrice(inputSmsBowerMailMaxPrice.value) : '',
-        duckEmailGenerationMode: getSelectedDuckEmailGenerationMode(),
         duckDdgToken: inputDuckDdgToken ? String(inputDuckDdgToken.value || '').trim() : '',
         ...(getSelectedEmailGenerator() === CUSTOM_EMAIL_POOL_GENERATOR          ? {
               customEmailPool: getActiveCustomEmailPoolEmails(),
@@ -15904,6 +15902,11 @@ async function fetchGeneratedEmail(options = {}) {
     }
 
     inputEmail.value = response.email;
+    // Programmatic value assignment does not emit the input's change event.
+    // Keep the background state in sync so a manually started flow node uses
+    // the address that is visible in the side panel.
+    await setRuntimeEmailState(response.email);
+    syncLatestState({ email: response.email });
     if (getSelectedEmailGenerator() === 'icloud') {
       queueIcloudAliasRefresh();
     }
@@ -16742,7 +16745,30 @@ stepsList?.addEventListener('click', async (event) => {
       });
       syncLatestState({ customPassword: inputPassword.value });
     }
-    if (nodeId === 'fill-password') {
+    if (nodeId === 'grok-submit-email') {
+      let email = inputEmail.value.trim();
+      if (!email) {
+        try {
+          email = await fetchGeneratedEmail({ showFailureToast: false });
+        } catch (err) {
+          showToast(`自动获取邮箱失败：${err.message}，请手动粘贴邮箱后重试。`, 'warn');
+          return;
+        }
+      }
+      if (!validateCurrentRegistrationEmail(email, { showToastOnFailure: true })) {
+        return;
+      }
+      await setRuntimeEmailState(email);
+      syncLatestState({ email });
+      const response = await sendSidepanelMessage({
+        type: 'EXECUTE_NODE',
+        source: 'sidepanel',
+        payload: { nodeId, email },
+      });
+      if (response?.error) {
+        throw new Error(response.error);
+      }
+    } else if (nodeId === 'fill-password') {
       if (shouldExecuteStep3WithSignupPhoneIdentity(latestState)) {
         const response = await sendSidepanelMessage({ type: 'EXECUTE_NODE', source: 'sidepanel', payload: { nodeId } });
         if (response?.error) {
@@ -20249,10 +20275,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       if (message.payload.smsbowerMailMaxPrice !== undefined && inputSmsBowerMailMaxPrice) {
         inputSmsBowerMailMaxPrice.value = normalizeSmsBowerMailMaxPrice(message.payload.smsbowerMailMaxPrice);
-      }
-      if (message.payload.duckEmailGenerationMode !== undefined && selectDuckEmailGenerationMode) {
-        selectDuckEmailGenerationMode.value = normalizeDuckEmailGenerationMode(message.payload.duckEmailGenerationMode);
-        updateMailProviderUI();
       }
       if (message.payload.duckDdgToken !== undefined && inputDuckDdgToken) {
         inputDuckDdgToken.value = String(message.payload.duckDdgToken || '').trim();
