@@ -19,6 +19,15 @@ function createJsonResponse(payload, status = 200) {
   };
 }
 
+function createTextResponse(text, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status >= 200 && status < 300 ? 'OK' : 'Error',
+    text: async () => text,
+  };
+}
+
 function mergeState(current, updates) {
   return {
     ...current,
@@ -112,6 +121,45 @@ test('grok2api publisher imports an extracted SSO as a Web credential file', asy
   assert.equal(uploadedFile.name, 'grok-web-sso-tokens.txt');
   assert.equal(await uploadedFile.text(), 'sso-cookie-value');
   assert.match(result.message, /创建 1/);
+});
+
+test('grok2api Web SSO importer accepts the SSE task response used by current grok2api', async () => {
+  const api = loadPublisherApi();
+  const result = await api.uploadGrokSsoToGrok2ApiWeb(
+    'https://grok.example.com',
+    'access-token',
+    'sso-cookie-value',
+    async (_url, options) => {
+      assert.equal(options.headers.Accept, 'text/event-stream, application/json');
+      return createTextResponse([
+        ': connected',
+        '',
+        'event: progress',
+        'data: {"completed":1,"total":1,"phase":"importing"}',
+        '',
+        'event: complete',
+        'data: {"created":1,"updated":0,"synced":1,"syncFailed":0}',
+        '',
+      ].join('\n'));
+    }
+  );
+
+  assert.match(result.message, /创建 1/);
+  assert.match(result.message, /同步成功 1/);
+});
+
+test('grok2api Web SSO importer surfaces an SSE task error', async () => {
+  const api = loadPublisherApi();
+
+  await assert.rejects(
+    () => api.uploadGrokSsoToGrok2ApiWeb(
+      'https://grok.example.com',
+      'access-token',
+      'sso-cookie-value',
+      async () => createTextResponse('event: error\ndata: {"code":"authImportFailed","message":"导入账号失败"}\n\n')
+    ),
+    /grok2api Web SSO 上传失败：导入账号失败/
+  );
 });
 
 test('grok2api Web SSO executor completes with its own upload runtime state', async () => {

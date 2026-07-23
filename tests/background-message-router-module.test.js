@@ -755,6 +755,51 @@ test('SAVE_SETTING syncs canonical kiro settingsState back into session state', 
   assert.equal(state.settingsState.flows.kiro.targets['kiro-rs'].apiKey, 'live-key');
 });
 
+test('CHECK_CPA_CONNECTION prefers current sidepanel payload over stale saved config', async () => {
+  const source = fs.readFileSync('background/message-router.js', 'utf8');
+  const globalScope = { console };
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundMessageRouter;`)(globalScope);
+  const calls = [];
+  const router = api.createMessageRouter({
+    getState: async () => ({
+      vpsUrl: 'https://old-cpa.example.com/management.html#/oauth',
+      vpsPassword: 'old-key',
+      settingsState: {
+        flows: {
+          openai: {
+            targets: {
+              cpa: {
+                vpsUrl: 'https://old-cpa.example.com/management.html#/oauth',
+                vpsPassword: 'old-key',
+              },
+            },
+          },
+        },
+      },
+    }),
+    testCpaConnection: async (baseUrl, managementKey) => {
+      calls.push({ baseUrl, managementKey });
+      return { ok: true, status: 200, message: 'CPA 连接测试成功，管理密钥有效。' };
+    },
+  });
+
+  const response = await router.handleMessage({
+    type: 'CHECK_CPA_CONNECTION',
+    payload: {
+      vpsUrl: ' https://new-cpa.example.com/management.html#/oauth ',
+      vpsPassword: ' new-key ',
+    },
+  });
+
+  assert.equal(response.ok, true);
+  assert.equal(response.status, 200);
+  assert.equal(response.message, 'CPA 连接测试成功，管理密钥有效。');
+  assert.deepEqual(calls, [{
+    baseUrl: 'https://new-cpa.example.com/management.html#/oauth',
+    managementKey: ' new-key ',
+  }]);
+});
+
 test('CHECK_KIRO_RS_CONNECTION prefers current sidepanel payload over stale saved kiro.rs config', async () => {
   const source = fs.readFileSync('background/message-router.js', 'utf8');
   const globalScope = { console };

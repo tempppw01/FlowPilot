@@ -75,6 +75,8 @@ const rowVpsUrl = document.getElementById('row-vps-url');
 const inputVpsUrl = document.getElementById('input-vps-url');
 const rowVpsPassword = document.getElementById('row-vps-password');
 const inputVpsPassword = document.getElementById('input-vps-password');
+const btnTestCpa = document.getElementById('btn-test-cpa');
+const displayCpaTestStatus = document.getElementById('display-cpa-test-status');
 const rowLocalCpaStep9Mode = document.getElementById('row-local-cpa-step9-mode');
 const localCpaStep9ModeButtons = Array.from(document.querySelectorAll('[data-local-cpa-step9-mode]'));
 const rowSub2ApiUrl = document.getElementById('row-sub2api-url');
@@ -645,6 +647,7 @@ let phoneSignupReuseUiWasLocked = false;
 let kiroRsConnectionTestStatusText = '未测试';
 let claude2ApiConnectionTestStatusText = '未测试';
 let grok2ApiConnectionTestStatusText = '未测试';
+let cpaConnectionTestStatusText = '未测试';
 let lastPhoneSmsProviderBeforeChange = null;
 let heroSmsCountrySelectionOrder = [];
 let heroSmsOperatorsByCountryId = new Map();
@@ -3235,6 +3238,14 @@ function setKiroRsConnectionTestStatus(message = '') {
   kiroRsConnectionTestStatusText = nextText;
   if (typeof displayKiroRsTestStatus !== 'undefined' && displayKiroRsTestStatus) {
     displayKiroRsTestStatus.textContent = nextText;
+  }
+}
+
+function setCpaConnectionTestStatus(message = '') {
+  const nextText = String(message || '').trim() || '未测试';
+  cpaConnectionTestStatusText = nextText;
+  if (typeof displayCpaTestStatus !== 'undefined' && displayCpaTestStatus) {
+    displayCpaTestStatus.textContent = nextText;
   }
 }
 
@@ -13378,6 +13389,9 @@ function applySettingsState(state) {
   if (typeof displayKiroRsTestStatus !== 'undefined' && displayKiroRsTestStatus) {
     displayKiroRsTestStatus.textContent = kiroRsConnectionTestStatusText;
   }
+  if (typeof displayCpaTestStatus !== 'undefined' && displayCpaTestStatus) {
+    displayCpaTestStatus.textContent = cpaConnectionTestStatusText;
+  }
   if (typeof displayClaude2ApiTestStatus !== 'undefined' && displayClaude2ApiTestStatus) {
     displayClaude2ApiTestStatus.textContent = claude2ApiConnectionTestStatusText;
   }
@@ -17278,6 +17292,7 @@ if (typeof inputSignupPhone !== 'undefined' && inputSignupPhone) {
 }
 inputVpsUrl.addEventListener('input', () => {
   markSettingsDirty(true);
+  setCpaConnectionTestStatus('未测试');
   scheduleSettingsAutoSave();
 });
 inputVpsUrl.addEventListener('blur', () => {
@@ -17286,6 +17301,7 @@ inputVpsUrl.addEventListener('blur', () => {
 
 inputVpsPassword.addEventListener('input', () => {
   markSettingsDirty(true);
+  setCpaConnectionTestStatus('未测试');
   scheduleSettingsAutoSave();
 });
 inputVpsPassword.addEventListener('blur', () => {
@@ -17374,6 +17390,36 @@ btnOpenTargetRepository?.addEventListener('click', () => {
     || getTargetRepositoryUrl(getSelectedFlowId(), getSelectedTargetId());
   if (repositoryUrl) {
     openExternalUrl(repositoryUrl);
+  }
+});
+
+btnTestCpa?.addEventListener('click', async () => {
+  const defaultLabel = btnTestCpa.textContent || '测试';
+  btnTestCpa.disabled = true;
+  btnTestCpa.textContent = '测试中';
+  setCpaConnectionTestStatus('测试中...');
+  try {
+    await persistCurrentSettingsForAction();
+    const response = await sendSidepanelMessage({
+      type: 'CHECK_CPA_CONNECTION',
+      payload: {
+        vpsUrl: String(inputVpsUrl?.value || '').trim(),
+        vpsPassword: String(inputVpsPassword?.value || ''),
+      },
+    });
+    if (response?.error) {
+      throw new Error(response.error);
+    }
+    const message = String(response?.message || '').trim() || 'CPA 测试完成。';
+    setCpaConnectionTestStatus(message);
+    showToast(message, response?.ok ? 'success' : 'error', response?.ok ? 2200 : 4200);
+  } catch (error) {
+    const message = error?.message || 'CPA 测试失败。';
+    setCpaConnectionTestStatus(message);
+    showToast(message, 'error', 4200);
+  } finally {
+    btnTestCpa.disabled = false;
+    btnTestCpa.textContent = defaultLabel;
   }
 });
 

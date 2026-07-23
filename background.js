@@ -15189,6 +15189,15 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
   exportSettingsBundle,
   fetchGeneratedEmail,
   finalizePhoneActivationAfterSuccessfulFlow,
+  testCpaConnection: async (baseUrl, managementKey) => {
+    if (typeof self.MultiPageBackgroundCpaApi?.createCpaApi !== 'function') {
+      throw new Error('CPA 连接测试能力尚未接入。');
+    }
+    const cpaApi = self.MultiPageBackgroundCpaApi.createCpaApi({
+      fetchImpl: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
+    });
+    return cpaApi.testCpaConnection(baseUrl, managementKey);
+  },
   testKiroRsConnection: async (baseUrl, apiKey) => {
     if (typeof self.MultiPageBackgroundKiroPublisherKiroRs?.checkKiroRsConnection !== 'function') {
       throw new Error('kiro.rs 连接测试能力尚未接入。');

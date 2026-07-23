@@ -40,6 +40,7 @@
       executeNodeViaCompletionSignal,
       exportSettingsBundle,
       fetchGeneratedEmail,
+      testCpaConnection,
       testKiroRsConnection,
       testClaude2ApiConnection,
       testGrok2ApiConnection,
@@ -1662,6 +1663,34 @@
             modeValidation,
             proxyRouting,
             state: await getState(),
+          };
+        }
+
+        case 'CHECK_CPA_CONNECTION': {
+          if (typeof testCpaConnection !== 'function') {
+            throw new Error('CPA 连接测试能力尚未接入。');
+          }
+          const currentState = await getState();
+          const nestedTargetConfig = currentState?.settingsState?.flows?.openai?.targets?.cpa
+            || currentState?.flows?.openai?.targets?.cpa
+            || {};
+          const baseUrl = String(
+            message.payload?.vpsUrl
+            ?? nestedTargetConfig.vpsUrl
+            ?? currentState?.vpsUrl
+            ?? ''
+          ).trim();
+          const managementKey = String(
+            message.payload?.vpsPassword
+            ?? nestedTargetConfig.vpsPassword
+            ?? currentState?.vpsPassword
+            ?? ''
+          );
+          const result = await testCpaConnection(baseUrl, managementKey);
+          return {
+            ok: Boolean(result?.ok),
+            status: Number(result?.status) || 0,
+            message: String(result?.message || '').trim(),
           };
         }
 

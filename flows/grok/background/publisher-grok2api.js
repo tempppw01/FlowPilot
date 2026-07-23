@@ -68,6 +68,48 @@
     return body.json.data;
   }
 
+  function parseServerSentEvents(text = '') {
+    return String(text || '')
+      .replace(/\r\n/g, '\n')
+      .split(/\n\n+/)
+      .map((block) => {
+        let event = 'message';
+        const dataLines = [];
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim() || event;
+          if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+        }
+        const rawData = dataLines.join('\n').trim();
+        if (!rawData) return null;
+        try {
+          return { event, data: JSON.parse(rawData) };
+        } catch (_error) {
+          return { event, data: rawData };
+        }
+      })
+      .filter(Boolean);
+  }
+
+  function readTaskResultEnvelope(body = {}, label = 'grok2api 任务') {
+    // Older grok2api releases return JSON while current imports stream SSE.
+    if (isPlainObject(body?.json) && isPlainObject(body.json.data)) {
+      return body.json.data;
+    }
+    const events = parseServerSentEvents(body?.text);
+    for (const entry of [...events].reverse()) {
+      if (entry.event !== 'error') continue;
+      const detail = isPlainObject(entry.data)
+        ? cleanString(entry.data.message || entry.data.error || entry.data.code)
+        : cleanString(entry.data);
+      throw new Error(`${label}失败：${detail || '服务返回 error 事件。'}`);
+    }
+    const complete = [...events].reverse().find((entry) => entry.event === 'complete' && isPlainObject(entry.data));
+    if (!complete) {
+      throw new Error(`${label} 返回格式无效：未找到 SSE complete 事件。`);
+    }
+    return complete.data;
+  }
+
   async function loginGrok2Api(baseUrl, username, password, fetchImpl) {
     const normalizedUsername = cleanString(username);
     const normalizedPassword = String(password ?? '');
@@ -137,14 +179,14 @@
     }
   }
 
-  function buildAdminHeaders(accessToken = '') {
+  function buildAdminHeaders(accessToken = '', accept = 'application/json') {
     const normalizedToken = cleanString(accessToken);
     if (!normalizedToken) {
       throw new Error('缺少 grok2api 管理员 accessToken。');
     }
     return {
       Authorization: `Bearer ${normalizedToken}`,
-      Accept: 'application/json',
+      Accept: accept,
     };
   }
 
@@ -170,14 +212,14 @@
     const endpointUrl = buildGrok2ApiEndpoint(baseUrl, '/accounts/web/import');
     const response = await fetchImpl(endpointUrl, {
       method: 'POST',
-      headers: buildAdminHeaders(accessToken),
+      headers: buildAdminHeaders(accessToken, 'text/event-stream, application/json'),
       body: buildGrok2ApiWebSsoImportBody(ssoCookie),
     });
     const body = await readResponse(response);
     if (!response.ok) {
       throw new Error(`grok2api Web SSO 上传失败：${readResponseMessage(body, `HTTP ${response.status}`)}`);
     }
-    const data = readDataEnvelope(body, 'grok2api Web SSO 上传');
+    const data = readTaskResultEnvelope(body, 'grok2api Web SSO 上传');
     const created = Math.max(0, Math.floor(Number(data.created) || 0));
     const updated = Math.max(0, Math.floor(Number(data.updated) || 0));
     const skipped = Math.max(0, Math.floor(Number(data.skipped) || 0));

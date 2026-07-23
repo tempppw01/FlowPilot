@@ -438,6 +438,24 @@
       };
     }
 
+    async function testCpaConnection(vpsUrl, managementKey, options = {}) {
+      try {
+        // The OAuth URL endpoint requires both the management API and key, without opening a browser tab.
+        await requestOAuthUrl({ vpsUrl, vpsPassword: managementKey }, options);
+        return {
+          ok: true,
+          status: 200,
+          message: 'CPA 连接测试成功，管理密钥有效。',
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          status: 0,
+          message: `CPA 连接测试失败：${error instanceof Error ? error.message : String(error || '未知错误')}`,
+        };
+      }
+    }
+
     async function submitOAuthCallback(state, callbackUrl, options = {}) {
       const managementKey = normalizeString(state?.vpsPassword);
       if (!managementKey) {
@@ -498,6 +516,7 @@
       importCurrentChatGptSession,
       requestOAuthUrl,
       submitOAuthCallback,
+      testCpaConnection,
     };
   }
 

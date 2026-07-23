@@ -421,6 +421,7 @@
       "rowIds": [
         "row-vps-url",
         "row-vps-password",
+        "row-cpa-test-status",
         "row-local-cpa-step9-mode"
       ]
     },

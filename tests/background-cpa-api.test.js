@@ -182,3 +182,44 @@ test('cpa api preserves provided id_token and refresh_token when available', () 
   assert.equal(result.authJson.session_token, 'session-token-1');
   assert.equal(result.hasRefreshToken, true);
 });
+
+test('cpa connection test validates the management key through the OAuth URL endpoint without opening it', async () => {
+  const apiModule = loadCpaApiModule();
+  const fetchCalls = [];
+  const api = apiModule.createCpaApi({
+    fetchImpl: async (url, options = {}) => {
+      fetchCalls.push({ url, options });
+      return createJsonResponse({ auth_url: 'https://auth.openai.example/authorize?state=test-state' });
+    },
+  });
+
+  const result = await api.testCpaConnection(
+    'https://cpa.example.com/management.html#/oauth',
+    'management-key'
+  );
+
+  assert.deepEqual(result, {
+    ok: true,
+    status: 200,
+    message: 'CPA 连接测试成功，管理密钥有效。',
+  });
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].url, 'https://cpa.example.com/v0/management/codex-auth-url');
+  assert.equal(fetchCalls[0].options.method, 'GET');
+  assert.equal(fetchCalls[0].options.headers.Authorization, 'Bearer management-key');
+  assert.equal(fetchCalls[0].options.headers['X-Management-Key'], 'management-key');
+});
+
+test('cpa connection test returns the management endpoint failure without exposing the key', async () => {
+  const apiModule = loadCpaApiModule();
+  const api = apiModule.createCpaApi({
+    fetchImpl: async () => createJsonResponse({ message: 'invalid management key' }, 401),
+  });
+
+  const result = await api.testCpaConnection('https://cpa.example.com', 'management-key');
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 0);
+  assert.equal(result.message, 'CPA 连接测试失败：invalid management key');
+  assert.equal(result.message.includes('management-key'), false);
+});
