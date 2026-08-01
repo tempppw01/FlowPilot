@@ -167,6 +167,7 @@ const btnTestClaude2Api = document.getElementById('btn-test-claude2api');
 const displayClaude2ApiTestStatus = document.getElementById('display-claude2api-test-status');
 const rowKiroRsUrl = document.getElementById('row-kiro-rs-url');
 const inputKiroRsUrl = document.getElementById('input-kiro-rs-url');
+const btnOpenKiroRsPanel = document.getElementById('btn-open-kiro-rs-panel');
 const rowKiroRsKey = document.getElementById('row-kiro-rs-key');
 const inputKiroRsKey = document.getElementById('input-kiro-rs-key');
 const btnTestKiroRs = document.getElementById('btn-test-kiro-rs');
@@ -17421,6 +17422,15 @@ btnTestCpa?.addEventListener('click', async () => {
     btnTestCpa.disabled = false;
     btnTestCpa.textContent = defaultLabel;
   }
+});
+
+btnOpenKiroRsPanel?.addEventListener('click', () => {
+  const panelUrl = String(inputKiroRsUrl?.value || '').trim();
+  if (!panelUrl) {
+    showToast('请先填写 kiro.rs 管理地址。', 'info', 2200);
+    return;
+  }
+  openExternalUrl(panelUrl);
 });
 
 btnTestKiroRs?.addEventListener('click', async () => {

@@ -52,6 +52,7 @@ test('sidepanel html exposes flow selector and kiro source fields', () => {
     'id="row-auto-run-thread-interval"',
     'id="row-oauth-callback"',
     'id="row-kiro-rs-url"',
+    'id="btn-open-kiro-rs-panel"',
     'id="row-kiro-rs-key"',
     'id="btn-test-kiro-rs"',
     'id="row-kiro-rs-test-status"',
@@ -108,6 +109,10 @@ test('sidepanel html exposes flow selector and kiro source fields', () => {
     sidepanelHtml,
     /id="btn-open-target-repository"[^>]*class="btn btn-outline btn-sm data-inline-btn"[^>]*>GitHub<\/button>/
   );
+  assert.match(
+    sidepanelHtml,
+    /id="btn-open-kiro-rs-panel"[^>]*class="btn btn-outline btn-sm data-inline-btn"[^>]*>前往面板<\/button>/
+  );
   const repositoryButtonTag = sidepanelHtml.match(/<button[^>]*id="btn-open-target-repository"[\s\S]*?<\/button>/)?.[0] || '';
   assert.doesNotMatch(repositoryButtonTag, /<svg/);
   assert.ok(
@@ -122,6 +127,17 @@ test('sidepanel html exposes flow selector and kiro source fields', () => {
     sidepanelHtml.indexOf('<script src="../flows/claude/workflow.js"></script>')
       < sidepanelHtml.indexOf('<script src="../flows/index.js"></script>')
   );
+});
+
+test('kiro.rs panel button opens the current management address', () => {
+  const buttonIndex = sidepanelSource.indexOf("btnOpenKiroRsPanel?.addEventListener('click'");
+  assert.notEqual(buttonIndex, -1);
+  const nextHandlerIndex = sidepanelSource.indexOf("btnTestKiroRs?.addEventListener('click'", buttonIndex);
+  assert.notEqual(nextHandlerIndex, -1);
+  const block = sidepanelSource.slice(buttonIndex, nextHandlerIndex);
+  assert.match(block, /inputKiroRsUrl\?\.value/);
+  assert.match(block, /openExternalUrl\(panelUrl\)/);
+  assert.match(block, /请先填写 kiro\.rs 管理地址/);
 });
 
 test('sidepanel Grok SSO clear action goes through background message instead of direct storage writes', () => {
