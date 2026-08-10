@@ -79,6 +79,7 @@ test('background account history settings are normalized independently from hotm
     extractFunction('normalizeMaDaoOperator'),
     extractFunction('normalizeMaDaoPrice'),
     extractFunction('normalizeSmsBowerCountryId'),
+    extractFunction('normalizeSmsBowerCountryMode'),
     extractFunction('normalizeSmsBowerCountryOrder'),
     extractFunction('getSmsBowerProviderIdsForCountryOrder'),
     extractFunction('normalizeSmsBowerServiceCode'),
@@ -146,6 +147,8 @@ const DEFAULT_PHONE_SMS_PROVIDER = PHONE_SMS_PROVIDER_HERO_SMS;
 const DEFAULT_MADAO_BASE_URL = 'http://127.0.0.1:7822';
 const DEFAULT_MADAO_MODE = 'routing_plan';
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
+const SMSBOWER_COUNTRY_MODE_PRIORITY = 'priority';
+const SMSBOWER_COUNTRY_MODE_FIXED = 'fixed';
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = [48, 78, 6, 33, 16, 151, 31, 73, 52, 95, 85, 19, 10, 269, 160, 5560, 1099, 708, 976, 2058, 3118, 18397, 43, 53, 54, 39, 46, 215, 187];
 const SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID = {
   48: '2442',
@@ -269,7 +272,10 @@ const PERSISTED_SETTING_DEFAULTS = {
   mailProvider: '163',
   heroSmsMinPrice: '',
   fiveSimMinPrice: '',
+  smsbowerCountryMode: 'priority',
   smsbowerCountryOrder: [6, 33, 31, 151, 10, 73, 19, 52, 53, 187],
+  smsbowerFixedCountryId: 0,
+  smsbowerFixedCountryLabel: '',
   smsbowerProviderIds: '3170',
   smsbowerMinPrice: '',
   smsbowerMaxPrice: '0.134',
@@ -445,6 +451,8 @@ return {
   assert.equal(api.normalizePersistentSettingValue('madaoMaxPrice', '-1'), '');
   assert.equal(api.normalizePersistentSettingValue('smsbowerApiKey', ' demo-smsbower '), ' demo-smsbower ');
   assert.equal(api.normalizePersistentSettingValue('smsbowerServiceCode', ' DR! '), 'dr');
+  assert.equal(api.normalizePersistentSettingValue('smsbowerCountryMode', 'fixed'), 'fixed');
+  assert.equal(api.normalizePersistentSettingValue('smsbowerCountryMode', 'unknown'), 'priority');
   assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [187, '52', 187]), [187, 52]);
   assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [3237, 3398, 187]), [52, 73, 187]);
   assert.equal(api.normalizePersistentSettingValue('smsbowerProviderIds', '3170, abc, 3001'), '3170,3001');
@@ -452,6 +460,16 @@ return {
   assert.equal(api.normalizePersistentSettingValue('smsbowerRandomMode', 0), false);
   assert.equal(api.normalizePersistentSettingValue('smsbowerMinPrice', '0.123456'), '0.1235');
   assert.equal(api.normalizePersistentSettingValue('smsbowerMaxPrice', ''), '0.12');
+  const smsBowerEmptyFixedModePayload = api.buildPersistentSettingsPayload({
+    smsbowerCountryMode: 'fixed',
+    smsbowerFixedCountryId: 0,
+  });
+  assert.equal(smsBowerEmptyFixedModePayload.smsbowerCountryMode, 'fixed');
+  assert.equal(smsBowerEmptyFixedModePayload.smsbowerFixedCountryId, 0);
+  const smsBowerLegacyFixedModePayload = api.buildPersistentSettingsPayload({
+    smsbowerFixedCountryId: 999,
+  });
+  assert.equal(smsBowerLegacyFixedModePayload.smsbowerCountryMode, 'fixed');
   const smsBowerOrderPayload = api.buildPersistentSettingsPayload({
     smsbowerCountryOrder: [6, 33, 187],
     smsbowerProviderIds: '3170',

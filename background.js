@@ -665,6 +665,16 @@ const CUSTOM_MAIL_RECEIVE_MODE_MANUAL = 'manual';
 const CUSTOM_MAIL_RECEIVE_MODE_HELPER = 'helper';
 const DEFAULT_CUSTOM_MAIL_RECEIVE_MODE = CUSTOM_MAIL_RECEIVE_MODE_MANUAL;
 const DEFAULT_CUSTOM_MAIL_HELPER_BASE_URL = 'http://127.0.0.1:17374';
+const IMAP_MAIL_PROVIDER = 'imap';
+const DEFAULT_IMAP_HOST = 'imap.163.com';
+const DEFAULT_IMAP_PORT = 993;
+const DEFAULT_IMAP_MAILBOX = 'INBOX';
+const IMAP_CODE_WAIT_SECONDS_MIN = 60;
+const IMAP_CODE_WAIT_SECONDS_MAX = 600;
+const DEFAULT_IMAP_CODE_WAIT_SECONDS = 60;
+const IMAP_VERIFICATION_RESEND_COUNT_MIN = 0;
+const IMAP_VERIFICATION_RESEND_COUNT_MAX = 10;
+const DEFAULT_IMAP_VERIFICATION_RESEND_COUNT = 2;
 const HOTMAIL_LOCAL_HELPER_TIMEOUT_MS = 45000;
 const DEFAULT_LUCKMAIL_PROJECT_CODE = 'openai';
 const DEFAULT_HERO_SMS_BASE_URL = 'https://hero-sms.com/stubs/handler_api.php';
@@ -700,6 +710,8 @@ const DEFAULT_NEX_SMS_COUNTRY_ORDER = Object.freeze([1]);
 const DEFAULT_MADAO_BASE_URL = 'http://127.0.0.1:7822';
 const DEFAULT_MADAO_MODE = 'routing_plan';
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
+const SMSBOWER_COUNTRY_MODE_PRIORITY = 'priority';
+const SMSBOWER_COUNTRY_MODE_FIXED = 'fixed';
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([
   48,
   78,
@@ -1423,6 +1435,14 @@ const PERSISTED_SETTING_DEFAULTS = {
   mail2925UseAccountPool: false,
   customMailReceiveMode: DEFAULT_CUSTOM_MAIL_RECEIVE_MODE,
   customMailHelperBaseUrl: DEFAULT_CUSTOM_MAIL_HELPER_BASE_URL,
+  imapHelperBaseUrl: DEFAULT_CUSTOM_MAIL_HELPER_BASE_URL,
+  imapHost: DEFAULT_IMAP_HOST,
+  imapPort: DEFAULT_IMAP_PORT,
+  imapUsername: '',
+  imapPassword: '',
+  imapMailbox: DEFAULT_IMAP_MAILBOX,
+  imapCodeWaitSeconds: DEFAULT_IMAP_CODE_WAIT_SECONDS,
+  imapVerificationResendCount: DEFAULT_IMAP_VERIFICATION_RESEND_COUNT,
   emailGenerator: 'duck',
   duckDdgToken: '',
   customMailProviderPool: [],
@@ -1519,7 +1539,10 @@ const PERSISTED_SETTING_DEFAULTS = {
   customUrlSmsPoolCursor: 0,
   smsbowerApiKey: '',
   smsbowerServiceCode: DEFAULT_SMSBOWER_SERVICE_CODE,
+  smsbowerCountryMode: SMSBOWER_COUNTRY_MODE_PRIORITY,
   smsbowerCountryOrder: [...DEFAULT_SMSBOWER_COUNTRY_ORDER],
+  smsbowerFixedCountryId: 0,
+  smsbowerFixedCountryLabel: '',
   smsbowerProviderIds: DEFAULT_SMSBOWER_PROVIDER_IDS,
   smsbowerMinPrice: '',
   smsbowerMaxPrice: DEFAULT_SMSBOWER_MAX_PRICE,
@@ -1561,6 +1584,14 @@ const SETTINGS_SCHEMA_VIEW_KEYS = Object.freeze([
   'mailProvider',
   'customMailReceiveMode',
   'customMailHelperBaseUrl',
+  'imapHelperBaseUrl',
+  'imapHost',
+  'imapPort',
+  'imapUsername',
+  'imapPassword',
+  'imapMailbox',
+  'imapCodeWaitSeconds',
+  'imapVerificationResendCount',
   'ipProxyEnabled',
   'ipProxyService',
   'ipProxyMode',
@@ -2350,7 +2381,20 @@ function normalizeSmsBowerCountryId(value, fallback = DEFAULT_SMSBOWER_COUNTRY_O
   if (Number.isFinite(fallbackParsed) && fallbackParsed > 0) {
     return fallbackParsed;
   }
+  if (fallbackParsed === 0) {
+    return 0;
+  }
   return DEFAULT_SMSBOWER_COUNTRY_ORDER[0];
+}
+
+function normalizeSmsBowerCountryMode(value = '', fixedCountryId = 0) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === SMSBOWER_COUNTRY_MODE_FIXED || normalized === SMSBOWER_COUNTRY_MODE_PRIORITY) {
+    return normalized;
+  }
+  return normalizeSmsBowerCountryId(fixedCountryId, 0)
+    ? SMSBOWER_COUNTRY_MODE_FIXED
+    : SMSBOWER_COUNTRY_MODE_PRIORITY;
 }
 
 function resolveSmsBowerCountryId(value, fallback = DEFAULT_SMSBOWER_COUNTRY_ORDER[0]) {
@@ -3010,6 +3054,7 @@ function normalizeMailProvider(value = '') {
     : 'smsbower-mail';
   switch (normalized) {
     case 'custom':
+    case 'imap':
     case ICLOUD_PROVIDER:
     case GMAIL_PROVIDER:
     case HOTMAIL_PROVIDER:
@@ -3102,9 +3147,47 @@ function normalizeCustomMailHelperBaseUrl(value = '') {
   }
 }
 
+function normalizeImapPort(value = DEFAULT_IMAP_PORT) {
+  const numeric = Math.floor(Number(value));
+  return Number.isInteger(numeric) && numeric > 0 && numeric <= 65535 ? numeric : DEFAULT_IMAP_PORT;
+}
+
+function normalizeImapMailbox(value = '') {
+  return String(value || '').trim() || DEFAULT_IMAP_MAILBOX;
+}
+
+function normalizeImapCodeWaitSeconds(value, fallback = DEFAULT_IMAP_CODE_WAIT_SECONDS) {
+  const numeric = Number(String(value ?? '').trim());
+  const fallbackValue = Math.floor(Number(fallback) || DEFAULT_IMAP_CODE_WAIT_SECONDS);
+  return Math.min(
+    IMAP_CODE_WAIT_SECONDS_MAX,
+    Math.max(IMAP_CODE_WAIT_SECONDS_MIN, Number.isFinite(numeric) ? Math.floor(numeric) : fallbackValue)
+  );
+}
+
+function normalizeImapVerificationResendCount(value, fallback = DEFAULT_IMAP_VERIFICATION_RESEND_COUNT) {
+  const numeric = Number(String(value ?? '').trim());
+  const fallbackValue = Math.floor(Number(fallback) || DEFAULT_IMAP_VERIFICATION_RESEND_COUNT);
+  return Math.min(
+    IMAP_VERIFICATION_RESEND_COUNT_MAX,
+    Math.max(IMAP_VERIFICATION_RESEND_COUNT_MIN, Number.isFinite(numeric) ? Math.floor(numeric) : fallbackValue)
+  );
+}
+
+function getImapConfigForState(state = {}) {
+  return {
+    host: String(state?.imapHost || DEFAULT_IMAP_HOST).trim() || DEFAULT_IMAP_HOST,
+    port: normalizeImapPort(state?.imapPort),
+    username: String(state?.imapUsername || '').trim(),
+    password: String(state?.imapPassword || ''),
+    mailbox: normalizeImapMailbox(state?.imapMailbox),
+  };
+}
+
 function shouldUseCustomMailHelper(state = {}) {
-  return isCustomMailProvider(state)
-    && normalizeCustomMailReceiveMode(state?.customMailReceiveMode) === CUSTOM_MAIL_RECEIVE_MODE_HELPER;
+  return String(state?.mailProvider || '').trim().toLowerCase() === 'imap'
+    || (isCustomMailProvider(state)
+      && normalizeCustomMailReceiveMode(state?.customMailReceiveMode) === CUSTOM_MAIL_RECEIVE_MODE_HELPER);
 }
 
 function normalizeCloudflareTempEmailLookupMode(value = '') {
@@ -3682,6 +3765,21 @@ function normalizePersistentSettingValue(key, value) {
       return normalizeCustomMailReceiveMode(value);
     case 'customMailHelperBaseUrl':
       return normalizeCustomMailHelperBaseUrl(value);
+    case 'imapHelperBaseUrl':
+      return normalizeCustomMailHelperBaseUrl(value);
+    case 'imapHost':
+      return String(value || '').trim() || DEFAULT_IMAP_HOST;
+    case 'imapPort':
+      return normalizeImapPort(value);
+    case 'imapUsername':
+    case 'imapPassword':
+      return String(value || '').trim();
+    case 'imapMailbox':
+      return normalizeImapMailbox(value);
+    case 'imapCodeWaitSeconds':
+      return normalizeImapCodeWaitSeconds(value);
+    case 'imapVerificationResendCount':
+      return normalizeImapVerificationResendCount(value);
     case 'emailGenerator':
       return normalizeEmailGenerator(value);
     case 'duckDdgToken':
@@ -3868,8 +3966,14 @@ function normalizePersistentSettingValue(key, value) {
       return String(value || '');
     case 'smsbowerServiceCode':
       return normalizeSmsBowerServiceCode(value);
+    case 'smsbowerCountryMode':
+      return normalizeSmsBowerCountryMode(value);
     case 'smsbowerCountryOrder':
       return normalizeSmsBowerCountryOrder(value);
+    case 'smsbowerFixedCountryId':
+      return Math.max(0, Math.floor(Number(value) || 0));
+    case 'smsbowerFixedCountryLabel':
+      return String(value || '').trim();
     case 'smsbowerProviderIds':
       return normalizeSmsBowerProviderIds(value);
     case 'smsbowerRandomMode':
@@ -3912,6 +4016,15 @@ function buildPersistentSettingsPayload(input = {}, options = {}) {
     if (legacyVerificationResendCount !== undefined) {
       normalizedInput.verificationResendCount = legacyVerificationResendCount;
     }
+  }
+  if (
+    normalizedInput.smsbowerCountryMode === undefined
+    && normalizedInput.smsbowerFixedCountryId !== undefined
+  ) {
+    normalizedInput.smsbowerCountryMode = normalizeSmsBowerCountryMode(
+      '',
+      normalizedInput.smsbowerFixedCountryId
+    );
   }
 
   const isPlainObjectForSettingsSchema = typeof isPlainObjectValue === 'function'
@@ -4174,6 +4287,14 @@ function buildSettingsStatePatchFromFlatUpdates(updates = {}) {
   assignIfUpdated('mailProvider', ['services', 'email', 'provider']);
   assignIfUpdated('customMailReceiveMode', ['services', 'email', 'customReceiveMode']);
   assignIfUpdated('customMailHelperBaseUrl', ['services', 'email', 'customHelperBaseUrl']);
+  assignIfUpdated('imapHelperBaseUrl', ['services', 'email', 'imapHelperBaseUrl']);
+  assignIfUpdated('imapHost', ['services', 'email', 'imapHost']);
+  assignIfUpdated('imapPort', ['services', 'email', 'imapPort']);
+  assignIfUpdated('imapUsername', ['services', 'email', 'imapUsername']);
+  assignIfUpdated('imapPassword', ['services', 'email', 'imapPassword']);
+  assignIfUpdated('imapMailbox', ['services', 'email', 'imapMailbox']);
+  assignIfUpdated('imapCodeWaitSeconds', ['services', 'email', 'imapCodeWaitSeconds']);
+  assignIfUpdated('imapVerificationResendCount', ['services', 'email', 'imapVerificationResendCount']);
   assignIfUpdated('ipProxyEnabled', ['services', 'proxy', 'enabled']);
   assignIfUpdated('ipProxyService', ['services', 'proxy', 'provider']);
   assignIfUpdated('ipProxyMode', ['services', 'proxy', 'mode']);
@@ -6083,17 +6204,22 @@ function buildCustomMailLocalEndpoint(baseUrl, path) {
 }
 
 function getCustomMailHelperBaseUrlForState(state = {}) {
-  return normalizeCustomMailHelperBaseUrl(state?.customMailHelperBaseUrl);
+  return normalizeCustomMailHelperBaseUrl(
+    String(state?.mailProvider || '').trim().toLowerCase() === 'imap'
+      ? state?.imapHelperBaseUrl
+      : state?.customMailHelperBaseUrl
+  );
 }
 
 async function requestCustomMailLocalCode(state = {}, pollPayload = {}) {
   const requestTimeoutMs = HOTMAIL_LOCAL_HELPER_TIMEOUT_MS;
+  const helperBaseUrl = getCustomMailHelperBaseUrlForState(state);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(new Error('timeout')), requestTimeoutMs);
 
   let response;
   try {
-    response = await fetch(buildCustomMailLocalEndpoint(getCustomMailHelperBaseUrlForState(state), '/code'), {
+    response = await fetch(buildCustomMailLocalEndpoint(helperBaseUrl, '/code'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -6108,12 +6234,21 @@ async function requestCustomMailLocalCode(state = {}, pollPayload = {}) {
         codePatterns: pollPayload.codePatterns || [],
         excludeCodes: pollPayload.excludeCodes || [],
         filterAfterTimestamp: Number(pollPayload.filterAfterTimestamp || 0) || 0,
+        ...(String(state?.mailProvider || '').trim().toLowerCase() === 'imap'
+          ? { imap: getImapConfigForState(state) }
+          : {}),
       }),
       signal: controller.signal,
     });
   } catch (err) {
     if (err?.name === 'AbortError') {
       throw new Error(`自定义邮箱本地助手请求超时（>${Math.round(requestTimeoutMs / 1000)} 秒）`);
+    }
+    if (
+      String(state?.mailProvider || '').trim().toLowerCase() === IMAP_MAIL_PROVIDER
+      && /failed to fetch|networkerror|load failed|connection refused|network request failed/i.test(String(err?.message || err || ''))
+    ) {
+      throw new Error(`IMAP 本地 helper 未启动或地址不可达（${helperBaseUrl}）。请先启动 start-custom-mail-helper.command（Windows 使用 .bat）。`);
     }
     throw new Error(`自定义邮箱本地助手请求失败：${err.message}`);
   } finally {
@@ -6145,8 +6280,13 @@ async function pollCustomMailVerificationCode(step, state, pollPayload = {}) {
     throw new Error(`步骤 ${step}：自定义邮箱当前为手动确认模式，未启用本地助手自动收码。`);
   }
 
-  const maxAttempts = Math.max(1, Math.floor(Number(pollPayload.maxAttempts) || 5));
   const intervalMs = Math.max(1000, Number(pollPayload.intervalMs) || 3000);
+  const configuredMaxAttempts = Math.max(1, Math.floor(Number(pollPayload.maxAttempts) || 5));
+  const isImap = String(state?.mailProvider || '').trim().toLowerCase() === IMAP_MAIL_PROVIDER;
+  const imapMinAttempts = isImap
+    ? Math.ceil(normalizeImapCodeWaitSeconds(state?.imapCodeWaitSeconds) * 1000 / intervalMs) + 1
+    : 1;
+  const maxAttempts = Math.max(configuredMaxAttempts, imapMinAttempts);
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -14479,6 +14619,7 @@ const flowMailPollingService = self.MultiPageBackgroundFlowMailPolling?.createFl
   getTabId,
   handleMail2925LimitReachedError,
   HOTMAIL_PROVIDER,
+  IMAP_MAIL_PROVIDER,
   isMail2925LimitReachedError,
   isStopError,
   isTabAlive,
@@ -14517,6 +14658,7 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   getState,
   getTabId,
   HOTMAIL_PROVIDER,
+  IMAP_MAIL_PROVIDER,
   isMail2925LimitReachedError,
   isRetryableContentScriptTransportError,
   isStopError,
@@ -15481,12 +15623,18 @@ async function executeStep3(state) {
 
 function getMailConfig(state) {
   const provider = state.mailProvider || 'qq';
+  const imapMailProviderId = typeof IMAP_MAIL_PROVIDER === 'string'
+    ? IMAP_MAIL_PROVIDER
+    : 'imap';
   const yydsMailProvider = typeof YYDS_MAIL_PROVIDER === 'string'
     ? YYDS_MAIL_PROVIDER
     : 'yyds-mail';
   const smsbowerMailProviderId = typeof SMSBOWER_MAIL_PROVIDER === 'string'
     ? SMSBOWER_MAIL_PROVIDER
     : 'smsbower-mail';
+  if (provider === imapMailProviderId) {
+    return { provider: imapMailProviderId, label: 'IMAP 邮箱（本地 helper）' };
+  }
   if (provider === 'custom') {
     return { provider: 'custom', label: '自定义邮箱' };
   }

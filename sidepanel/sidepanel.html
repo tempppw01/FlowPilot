@@ -479,6 +479,7 @@
         <div class="data-inline">
           <select id="select-mail-provider" class="data-select">
             <option value="custom">自定义邮箱</option>
+            <option value="imap">IMAP 邮箱（163 / 自定义）</option>
             <option value="hotmail-api">Hotmail（账号池）</option>
             <option value="luckmail-api">LuckMail（API 购邮）</option>
             <option value="yyds-mail">YYDS Mail</option>
@@ -513,6 +514,56 @@
         <span class="data-label">自定义号池</span>
         <textarea id="input-custom-mail-provider-pool" class="data-textarea"
           placeholder="每行一个注册邮箱，例如&#10;alias001@example.com&#10;alias002@example.com"></textarea>
+      </div>
+      <div id="imap-mail-settings" style="display:none;">
+        <div class="data-row">
+          <span class="data-label">IMAP 预设</span>
+          <select id="select-imap-preset" class="data-select">
+            <option value="163">163 邮箱</option>
+            <option value="126">126 邮箱</option>
+            <option value="qq">QQ 邮箱</option>
+            <option value="custom">自定义服务器</option>
+          </select>
+        </div>
+        <div class="data-row">
+          <span class="data-label">IMAP 服务器</span>
+          <div class="data-inline">
+            <input id="input-imap-host" class="data-input mono" placeholder="imap.163.com" />
+            <input id="input-imap-port" class="data-input mono" type="number" min="1" max="65535" placeholder="993" />
+          </div>
+        </div>
+        <div class="data-row">
+          <span class="data-label">邮箱账号</span>
+          <input id="input-imap-username" class="data-input" autocomplete="username" placeholder="name@example.com" />
+        </div>
+        <div class="data-row">
+          <span class="data-label">IMAP 授权码</span>
+          <div class="input-with-icon">
+            <input id="input-imap-password" type="password" class="data-input data-input-with-icon" autocomplete="current-password" placeholder="邮箱客户端授权码" />
+            <button id="btn-toggle-imap-password" class="input-icon-btn" type="button" data-password-toggle="input-imap-password" data-show-label="显示 IMAP 授权码" data-hide-label="隐藏 IMAP 授权码" aria-label="显示 IMAP 授权码" title="显示 IMAP 授权码"></button>
+          </div>
+        </div>
+        <div class="data-row">
+          <span class="data-label">邮箱夹</span>
+          <input id="input-imap-mailbox" class="data-input mono" placeholder="INBOX" />
+        </div>
+        <div class="data-row">
+          <span class="data-label">收码策略</span>
+          <div class="data-inline">
+            <input id="input-imap-code-wait-seconds" class="data-input auto-delay-input" type="number" value="60" min="60" max="600" step="1" title="每轮至少等待这么久再判断未收到验证码" />
+            <span class="data-unit">秒</span>
+            <input id="input-imap-verification-resend-count" class="data-input auto-delay-input" type="number" value="2" min="0" max="10" step="1" title="每轮超时后随机等待 3-8 秒，再点击重新发送验证码的次数" />
+            <span class="data-unit">次超时重发</span>
+          </div>
+        </div>
+        <div class="data-row">
+          <span class="data-label">本地 helper</span>
+          <div class="data-inline">
+            <input id="input-imap-helper-base-url" class="data-input mono" placeholder="http://127.0.0.1:17374" />
+            <button id="btn-test-imap-connection" class="btn btn-outline btn-sm data-inline-btn" type="button">测试连接</button>
+            <span id="display-imap-test-status" class="data-value hero-sms-country-note">请先双击项目中的 start-custom-mail-helper.command（Windows 使用 .bat）启动本机 helper。</span>
+          </div>
+        </div>
       </div>
       <div class="data-row" id="row-mail-2925-mode" style="display:none;">
         <span class="data-label">2925 模式</span>
@@ -1754,6 +1805,27 @@
                   </div>
                 </div>
                 <span class="data-value hero-sms-country-note">默认保留美国 187，其余候选仅展示低于 0.14 的项，按点击顺序生效。</span>
+              </div>
+            </div>
+            <div class="data-row" id="row-smsbower-catalog" style="display:none;">
+              <span class="data-label">上游目录</span>
+              <div class="data-inline hero-sms-country-stack">
+                <button id="btn-smsbower-refresh-catalog" class="btn btn-outline btn-sm data-inline-btn" type="button">拉取上游 ID / 价格</button>
+                <span class="data-value hero-sms-country-note">按当前 API Key 与服务代码读取可用国家、线路和最低价格。</span>
+              </div>
+            </div>
+            <div class="data-row" id="row-smsbower-country-mode" style="display:none;">
+              <span class="data-label">国家模式</span>
+              <select id="select-smsbower-country-mode" class="data-select">
+                <option value="priority">国家优先级</option>
+                <option value="fixed">固定国家 ID</option>
+              </select>
+            </div>
+            <div class="data-row" id="row-smsbower-fixed-country" style="display:none;">
+              <span class="data-label">固定国家 ID</span>
+              <div class="data-inline hero-sms-country-stack">
+                <input id="input-smsbower-fixed-country-id" type="number" min="1" step="1" class="data-input mono" placeholder="例如 187" />
+                <span id="display-smsbower-fixed-country" class="data-value hero-sms-country-note">固定模式下只向这个 country ID 买号。</span>
               </div>
             </div>
             <div class="data-row" id="row-smsbower-country-order-actions" style="display:none;">

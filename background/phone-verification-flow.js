@@ -3316,11 +3316,15 @@
           if (normalizedActivation.provider === PHONE_SMS_PROVIDER_SMSBOWER) {
             await persistSmsBowerProviderIdTimeoutSkip(state, normalizedActivation);
             await addLog(
-              `步骤 9：SMSBower 号码 ${normalizedActivation.phoneNumber} 在 ${waitSeconds} 秒内未收到短信，将返回步骤 7 刷新 OAuth 并获取新号码。`,
+              `步骤 9：SMSBower 号码 ${normalizedActivation.phoneNumber} 在 ${waitSeconds} 秒内未收到短信，将返回手机号输入页并获取新号码。`,
               'warn'
             );
             await clearPhoneRuntimeCountdown();
-            throw buildPhoneRestartStep7Error(normalizedActivation.phoneNumber);
+            return {
+              code: '',
+              replaceNumber: true,
+              reason: `sms_timeout_after_${windowIndex}_windows`,
+            };
           }
 
           if (windowIndex < timeoutWindows) {

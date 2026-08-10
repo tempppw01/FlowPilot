@@ -23,6 +23,7 @@
       getState,
       getTabId,
       HOTMAIL_PROVIDER,
+      IMAP_MAIL_PROVIDER = 'imap',
       isMail2925LimitReachedError,
       isStopError,
       LUCKMAIL_PROVIDER,
@@ -36,6 +37,7 @@
       pollLuckmailVerificationCode,
       pollSmsBowerMailVerificationCode,
       pollYydsMailVerificationCode,
+      random = Math.random,
       sendToContentScript,
       sendToContentScriptResilient,
       sendToMailContentScriptResilient,
@@ -99,6 +101,32 @@
 
     function getVerificationCodeLabel(step) {
       return step === 4 ? '注册' : '登录';
+    }
+
+    function buildImapPollPayload(state = {}, payload = {}) {
+      const intervalMs = Math.max(1000, Number(payload.intervalMs) || 3000);
+      const waitSeconds = Math.min(600, Math.max(60, Math.floor(Number(state?.imapCodeWaitSeconds) || 60)));
+      return {
+        ...payload,
+        intervalMs,
+        maxAttempts: Math.max(
+          1,
+          Math.floor(Number(payload.maxAttempts) || 1),
+          Math.ceil(waitSeconds * 1000 / intervalMs) + 1
+        ),
+      };
+    }
+
+    function isImapNoCodeError(error) {
+      return /暂未返回匹配验证码|未返回新的匹配验证码|未获取到验证码|邮箱轮询结束.*未获取到验证码/i.test(
+        String(error?.message || error || '')
+      );
+    }
+
+    function getRandomImapResendDelaySeconds() {
+      const value = Number(random());
+      const normalized = Number.isFinite(value) ? Math.min(0.999999, Math.max(0, value)) : 0;
+      return 3 + Math.floor(normalized * 6);
     }
 
     function isIcloudMail(mail) {
@@ -1047,6 +1075,63 @@
       throw lastError || new Error(`步骤 ${step}：无法获取新的${getVerificationCodeLabel(step)}验证码。`);
     }
 
+    async function pollImapVerificationCodeWithResend(step, state, pollOverrides = {}) {
+      const {
+        maxResendRequests: _ignoredMaxResendRequests,
+        onResendRequestedAt,
+        ...cleanPollOverrides
+      } = pollOverrides;
+      const maxResendRequests = resolveMaxResendRequests(pollOverrides);
+      let filterAfterTimestamp = cleanPollOverrides.filterAfterTimestamp;
+      let lastResendAt = Number(cleanPollOverrides.lastResendAt) || 0;
+      let lastError = null;
+
+      for (let round = 0; round <= maxResendRequests; round += 1) {
+        throwIfStopped();
+        const payload = buildImapPollPayload(state, {
+          ...getVerificationPollPayload(step, state),
+          ...cleanPollOverrides,
+          filterAfterTimestamp,
+        });
+        try {
+          const timedPoll = await applyMailPollingTimeBudget(step, payload, {
+            ...cleanPollOverrides,
+            disableTimeBudgetCap: true,
+          }, `轮询${getVerificationCodeLabel(step)}验证码 IMAP 邮箱`);
+          const result = await pollCustomMailVerificationCode(step, state, timedPoll.payload);
+          return {
+            ...result,
+            lastResendAt,
+            remainingResendRequests: Math.max(0, maxResendRequests - round),
+          };
+        } catch (error) {
+          if (isStopError(error) || !isImapNoCodeError(error)) {
+            throw error;
+          }
+          lastError = error;
+          if (round >= maxResendRequests) {
+            break;
+          }
+
+          const delaySeconds = getRandomImapResendDelaySeconds();
+          await addLog(
+            `步骤 ${step}：IMAP 等待窗口内未收到验证码，随机等待 ${delaySeconds} 秒后点击重新发送（${round + 1}/${maxResendRequests}）...`,
+            'warn'
+          );
+          await sleepWithStop(delaySeconds * 1000);
+          lastResendAt = await requestVerificationCodeResend(step, cleanPollOverrides);
+          if (typeof onResendRequestedAt === 'function') {
+            const nextFilterAfterTimestamp = await onResendRequestedAt(lastResendAt);
+            if (nextFilterAfterTimestamp !== undefined) {
+              filterAfterTimestamp = nextFilterAfterTimestamp;
+            }
+          }
+        }
+      }
+
+      throw lastError || new Error(`步骤 ${step}：IMAP 邮箱未返回新的${getVerificationCodeLabel(step)}验证码。`);
+    }
+
     async function pollFreshVerificationCode(step, state, mail, pollOverrides = {}) {
       const {
         onResendRequestedAt,
@@ -1091,7 +1176,18 @@
         }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
         return pollCloudMailVerificationCode(step, state, timedPoll.payload);
       }
-      if (mail.provider === CUSTOM_MAIL_PROVIDER && typeof pollCustomMailVerificationCode === 'function') {
+      if (
+        (mail.provider === CUSTOM_MAIL_PROVIDER || mail.provider === IMAP_MAIL_PROVIDER)
+        && typeof pollCustomMailVerificationCode === 'function'
+      ) {
+        if (mail.provider === IMAP_MAIL_PROVIDER) {
+          return pollImapVerificationCodeWithResend(step, state, {
+            ...pollOverrides,
+            maxResendRequests: pollOverrides.maxResendRequests !== undefined
+              ? pollOverrides.maxResendRequests
+              : state?.imapVerificationResendCount,
+          });
+        }
         const timedPoll = await applyMailPollingTimeBudget(step, {
           ...getVerificationPollPayload(step, state),
           ...cleanPollOverrides,
@@ -1412,7 +1508,9 @@
           options.maxResendRequests,
           getLegacyVerificationResendCountDefault(step, { requestFreshCodeFirst })
         )
-        : getConfiguredVerificationResendCount(step, state, { requestFreshCodeFirst });
+        : (mail.provider === IMAP_MAIL_PROVIDER
+          ? normalizeVerificationResendCount(state?.imapVerificationResendCount, 2)
+          : getConfiguredVerificationResendCount(step, state, { requestFreshCodeFirst }));
       const maxSubmitAttempts = mail.provider === LUCKMAIL_PROVIDER ? 3 : 15;
       const resendIntervalMs = Math.max(0, Number(options.resendIntervalMs) || 0);
       const externalOnResendRequestedAt = typeof options.onResendRequestedAt === 'function'

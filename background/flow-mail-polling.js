@@ -76,6 +76,7 @@
       getTabId = async () => null,
       handleMail2925LimitReachedError = null,
       HOTMAIL_PROVIDER = 'hotmail-api',
+      IMAP_MAIL_PROVIDER = 'imap',
       isMail2925LimitReachedError = null,
       isStopError = null,
       isTabAlive = async () => false,
@@ -114,6 +115,10 @@
       }],
       [normalizeProviderId(CUSTOM_MAIL_PROVIDER), {
         label: '自定义邮箱本地助手',
+        poll: pollCustomMailVerificationCode,
+      }],
+      [normalizeProviderId(IMAP_MAIL_PROVIDER), {
+        label: 'IMAP 邮箱本地助手',
         poll: pollCustomMailVerificationCode,
       }],
       [normalizeProviderId(YYDS_MAIL_PROVIDER), {

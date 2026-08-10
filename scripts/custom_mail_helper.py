@@ -8,6 +8,7 @@ import secrets
 import sqlite3
 import ssl
 import string
+import threading
 import traceback
 from datetime import datetime, timezone
 from email.header import decode_header
@@ -45,6 +46,9 @@ IMAP_PASS = os.environ.get("FLOWPILOT_CUSTOM_IMAP_PASS", "")
 IMAP_MAILBOX = os.environ.get("FLOWPILOT_CUSTOM_IMAP_MAILBOX", "INBOX")
 REQUEST_TIMEOUT_SECONDS = int(os.environ.get("FLOWPILOT_CUSTOM_IMAP_TIMEOUT", "45"))
 DEFAULT_TOP = 20
+NETEASE_IMAP_HOST_SUFFIXES = (".163.com", ".126.com")
+NETEASE_IMAP_CLIENT_ID = '("name" "FlowPilot" "version" "2.9" "vendor" "FlowPilot")'
+NETEASE_IMAP_ID_LOCK = threading.Lock()
 RANDOM_EMAIL_DB_PATH = os.environ.get(
     "FLOWPILOT_RANDOM_EMAIL_DB_PATH",
     os.path.join(PROJECT_ROOT, "data", "custom-mail-helper.sqlite3"),
@@ -251,17 +255,74 @@ def normalize_message(message_id, raw_bytes):
     }
 
 
-def fetch_recent_messages(top=DEFAULT_TOP):
-    if not IMAP_USER or not IMAP_PASS:
-        raise RuntimeError("Missing FLOWPILOT_CUSTOM_IMAP_USER/FLOWPILOT_CUSTOM_IMAP_PASS")
+def resolve_imap_config(payload=None):
+    payload = payload or {}
+    supplied = payload.get("imap") if isinstance(payload, dict) else None
+    supplied = supplied if isinstance(supplied, dict) else {}
+    host = str(supplied.get("host") or IMAP_HOST).strip()
+    port = int(supplied.get("port") or IMAP_PORT)
+    user = str(supplied.get("username") or IMAP_USER).strip()
+    password = str(supplied.get("password") or IMAP_PASS)
+    mailbox = str(supplied.get("mailbox") or IMAP_MAILBOX).strip() or "INBOX"
+    if not host or not user or not password:
+        raise RuntimeError("Missing IMAP host, username, or authorization password")
+    if port < 1 or port > 65535:
+        raise RuntimeError("IMAP port must be between 1 and 65535")
+    return {"host": host, "port": port, "username": user, "password": password, "mailbox": mailbox}
+
+
+def is_netease_imap_host(host):
+    normalized_host = str(host or "").strip().lower().rstrip(".")
+    return normalized_host.endswith(NETEASE_IMAP_HOST_SUFFIXES)
+
+
+def send_netease_imap_client_id(client, host):
+    """Send the optional client identity expected by NetEase IMAP servers."""
+    if not is_netease_imap_host(host):
+        return None
+
+    with NETEASE_IMAP_ID_LOCK:
+        previous_command = imaplib.Commands.get("ID")
+        imaplib.Commands["ID"] = ("AUTH", "SELECTED")
+        try:
+            return client._simple_command("ID", NETEASE_IMAP_CLIENT_ID)
+        except Exception:
+            # ID is optional; keep the original SELECT error if the server rejects it.
+            return None
+        finally:
+            if previous_command is None:
+                imaplib.Commands.pop("ID", None)
+            else:
+                imaplib.Commands["ID"] = previous_command
+
+
+def format_imap_response(data):
+    if not data:
+        return ""
+    values = []
+    for item in data if isinstance(data, (list, tuple)) else [data]:
+        if isinstance(item, bytes):
+            values.append(item.decode("utf-8", errors="replace"))
+        elif item:
+            values.append(str(item))
+    return "; ".join(value.strip() for value in values if value.strip())
+
+
+def fetch_recent_messages(top=DEFAULT_TOP, payload=None):
+    config = resolve_imap_config(payload)
 
     context = ssl.create_default_context()
-    client = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, ssl_context=context, timeout=REQUEST_TIMEOUT_SECONDS)
+    client = imaplib.IMAP4_SSL(config["host"], config["port"], ssl_context=context, timeout=REQUEST_TIMEOUT_SECONDS)
     try:
-        client.login(IMAP_USER, IMAP_PASS)
-        status, _ = client.select(IMAP_MAILBOX)
+        client.login(config["username"], config["password"])
+        send_netease_imap_client_id(client, config["host"])
+        status, data = client.select(config["mailbox"])
         if status != "OK":
-            raise RuntimeError(f"Mailbox not found: {IMAP_MAILBOX}")
+            detail = format_imap_response(data) or status
+            raise RuntimeError(
+                f"无法打开 IMAP 邮箱夹 {config['mailbox']}（服务器返回：{detail}）。"
+                "请确认 IMAP 已开启、授权码正确；163/126 请保持邮箱夹为 INBOX。"
+            )
         status, data = client.search(None, "ALL")
         if status != "OK" or not data or not data[0]:
             return []
@@ -279,7 +340,9 @@ def fetch_recent_messages(top=DEFAULT_TOP):
                     raw_bytes = item[1]
                     break
             if raw_bytes:
-                messages.append(normalize_message(message_id.decode("utf-8", errors="ignore"), raw_bytes))
+                message = normalize_message(message_id.decode("utf-8", errors="ignore"), raw_bytes)
+                message["mailbox"] = config["mailbox"]
+                messages.append(message)
         messages.sort(key=lambda item: int(item.get("receivedTimestamp") or 0), reverse=True)
         return messages
     finally:
@@ -383,11 +446,11 @@ class CustomMailHelperHandler(BaseHTTPRequestHandler):
         try:
             payload = read_json_payload(self)
             if self.path == "/messages":
-                messages = fetch_recent_messages(payload.get("top") or DEFAULT_TOP)
+                messages = fetch_recent_messages(payload.get("top") or DEFAULT_TOP, payload)
                 json_response(self, 200, {"ok": True, "messages": messages})
                 return
             if self.path == "/code":
-                messages = fetch_recent_messages(payload.get("top") or DEFAULT_TOP)
+                messages = fetch_recent_messages(payload.get("top") or DEFAULT_TOP, payload)
                 selected = select_latest_code(messages, payload)
                 json_response(self, 200, {
                     "ok": True,
@@ -395,6 +458,11 @@ class CustomMailHelperHandler(BaseHTTPRequestHandler):
                     "message": selected["message"],
                     "usedTimeFallback": selected["usedTimeFallback"],
                 })
+                return
+            if self.path == "/test":
+                config = resolve_imap_config(payload)
+                messages = fetch_recent_messages(1, payload)
+                json_response(self, 200, {"ok": True, "mailbox": config["mailbox"], "messageCount": len(messages)})
                 return
             if self.path == "/health":
                 json_response(self, 200, {"ok": True})

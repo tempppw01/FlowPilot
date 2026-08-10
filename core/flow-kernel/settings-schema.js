@@ -219,6 +219,8 @@
             provider: '163',
             customReceiveMode: 'manual',
             customHelperBaseUrl: 'http://127.0.0.1:17374',
+            imapCodeWaitSeconds: 60,
+            imapVerificationResendCount: 2,
           },
           proxy: {
             enabled: false,
@@ -711,6 +713,16 @@
               ?? input?.customMailHelperBaseUrl
               ?? defaults.services.email.customHelperBaseUrl
             ),
+            imapCodeWaitSeconds: Math.min(600, Math.max(60, Math.floor(Number(
+              nested?.services?.email?.imapCodeWaitSeconds
+              ?? input?.imapCodeWaitSeconds
+              ?? defaults.services.email.imapCodeWaitSeconds
+            ) || defaults.services.email.imapCodeWaitSeconds))),
+            imapVerificationResendCount: Math.min(10, Math.max(0, Math.floor(Number(
+              nested?.services?.email?.imapVerificationResendCount
+              ?? input?.imapVerificationResendCount
+              ?? defaults.services.email.imapVerificationResendCount
+            ) || 0))),
           },
           proxy: {
             enabled: Boolean(
@@ -858,6 +870,8 @@
       next.mailProvider = normalizedState.services.email.provider;
       next.customMailReceiveMode = normalizedState.services.email.customReceiveMode;
       next.customMailHelperBaseUrl = normalizedState.services.email.customHelperBaseUrl;
+      next.imapCodeWaitSeconds = normalizedState.services.email.imapCodeWaitSeconds;
+      next.imapVerificationResendCount = normalizedState.services.email.imapVerificationResendCount;
       next.ipProxyEnabled = normalizedState.services.proxy.enabled;
       next.ipProxyService = normalizedState.services.proxy.provider;
       next.ipProxyMode = normalizedState.services.proxy.mode;

@@ -120,6 +120,45 @@ test('verification flow routes custom mail provider to local helper poller', asy
   assert.equal(pollCalls[0].payload.targetEmail, 'target@example.com');
 });
 
+test('verification flow routes IMAP provider to local helper poller', async () => {
+  const source = fs.readFileSync('background/verification-flow.js', 'utf8');
+  const globalScope = {};
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundVerificationFlow;`)(globalScope);
+  const pollCalls = [];
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async () => {},
+    buildVerificationPollPayload: () => ({ maxAttempts: 1, intervalMs: 1, targetEmail: 'alias@icloud.com' }),
+    CUSTOM_MAIL_PROVIDER: 'custom',
+    IMAP_MAIL_PROVIDER: 'imap',
+    getState: async () => ({}),
+    getTabId: async () => 1,
+    isStopError: () => false,
+    pollCustomMailVerificationCode: async (step, state, payload) => {
+      pollCalls.push({ step, state, payload });
+      return { ok: true, code: '246810', emailTimestamp: 3, mailId: 'imap-msg-1' };
+    },
+    sendToContentScript: async () => ({}),
+    sendToMailContentScriptResilient: async () => {
+      throw new Error('IMAP must not use a browser mail content script');
+    },
+    setState: async () => {},
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  const result = await helpers.pollFreshVerificationCode(
+    4,
+    { mailProvider: 'imap', email: 'alias@icloud.com' },
+    { provider: 'imap', label: 'IMAP 邮箱（本地 helper）' },
+    { disableTimeBudgetCap: true }
+  );
+
+  assert.equal(result.code, '246810');
+  assert.equal(pollCalls.length, 1);
+  assert.equal(pollCalls[0].step, 4);
+  assert.equal(pollCalls[0].payload.targetEmail, 'alias@icloud.com');
+});
+
 test('background custom mail poller rejects manual mode before calling local helper', async () => {
   const source = fs.readFileSync('background.js', 'utf8');
   function extractFunction(name) {

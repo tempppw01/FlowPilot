@@ -127,6 +127,37 @@ test('flow mail polling service dispatches custom helper when custom provider is
   assert.equal(customCall.payload.targetEmail, 'custom@example.com');
 });
 
+test('flow mail polling service dispatches IMAP through the local helper', async () => {
+  const api = loadFlowMailPollingApi();
+  let imapCall = null;
+  const service = api.createFlowMailPollingService({
+    addLog: async () => {},
+    buildVerificationPollPayloadForNode: (nodeId, state, overrides) => ({
+      nodeId,
+      step: 4,
+      targetEmail: state.email,
+      ...overrides,
+    }),
+    getMailConfig: () => ({ provider: 'imap', label: 'IMAP 邮箱（本地 helper）' }),
+    IMAP_MAIL_PROVIDER: 'imap',
+    pollCustomMailVerificationCode: async (step, state, payload) => {
+      imapCall = { step, state, payload };
+      return { code: '112233', emailTimestamp: 123 };
+    },
+  });
+
+  const result = await service.pollFlowVerificationCode({
+    flowId: 'grok',
+    nodeId: 'fetch-signup-code',
+    state: { activeFlowId: 'grok', mailProvider: 'imap', email: 'user@163.com' },
+    step: 4,
+  });
+
+  assert.equal(result.code, '112233');
+  assert.equal(imapCall.step, 4);
+  assert.equal(imapCall.payload.targetEmail, 'user@163.com');
+});
+
 test('flow mail polling service rejects custom manual mode before helper polling', async () => {
   const api = loadFlowMailPollingApi();
   let customCallCount = 0;

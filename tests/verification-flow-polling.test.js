@@ -2490,3 +2490,57 @@ test('verification flow derives iCloud polling response timeout from the configu
     true
   );
 });
+
+test('verification flow waits at least 60 seconds for IMAP and randomly delays before resend', async () => {
+  const events = [];
+  const pollPayloads = [];
+  let pollCalls = 0;
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async (message) => events.push(['log', message]),
+    chrome: { tabs: { update: async () => {} } },
+    completeNodeFromBackground: async () => {},
+    getHotmailVerificationPollConfig: () => ({}),
+    getHotmailVerificationRequestTimestamp: () => 0,
+    getState: async () => ({ mailProvider: 'imap' }),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    IMAP_MAIL_PROVIDER: 'imap',
+    isStopError: () => false,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+    MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+    pollCustomMailVerificationCode: async (_step, _state, payload) => {
+      pollCalls += 1;
+      pollPayloads.push(payload);
+      if (pollCalls === 1) {
+        throw new Error('步骤 4：自定义邮箱本地助手暂未返回匹配验证码（21/21）。');
+      }
+      return { code: '654321', emailTimestamp: 123 };
+    },
+    random: () => 0.5,
+    sendToContentScript: async (_source, message) => {
+      events.push(['message', message.type]);
+      return { resent: true };
+    },
+    setState: async () => {},
+    sleepWithStop: async (ms) => events.push(['sleep', ms]),
+    throwIfStopped: () => {},
+    VERIFICATION_POLL_MAX_ROUNDS: 5,
+  });
+
+  const result = await helpers.pollFreshVerificationCode(
+    4,
+    { mailProvider: 'imap', imapCodeWaitSeconds: 30, email: 'user@163.com' },
+    { provider: 'imap', label: 'IMAP 邮箱（本地 helper）' },
+    { maxResendRequests: 1 }
+  );
+
+  assert.equal(result.code, '654321');
+  assert.equal(pollPayloads[0].intervalMs, 3000);
+  assert.equal(pollPayloads[0].maxAttempts, 21);
+  assert.deepStrictEqual(events.filter(([type]) => type !== 'log'), [
+    ['sleep', 6000],
+    ['message', 'RESEND_VERIFICATION_CODE'],
+  ]);
+  assert.equal(events.some(([, message]) => String(message).includes('随机等待 6 秒')), true);
+});

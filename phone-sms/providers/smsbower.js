@@ -11,6 +11,8 @@
   const DEFAULT_PROVIDER_IDS = '3170,2495';
   const LEGACY_DEFAULT_PROVIDER_IDS = '3170';
   const DEFAULT_MAX_PRICE = '0.12';
+  const COUNTRY_MODE_PRIORITY = 'priority';
+  const COUNTRY_MODE_FIXED = 'fixed';
   const MAX_PRICE_CAP = 0.12;
   const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
   const DEFAULT_ACQUIRE_RETRY_ROUNDS = 3;
@@ -136,7 +138,19 @@
     if (Number.isFinite(fallbackParsed) && fallbackParsed > 0) {
       return fallbackParsed;
     }
+    if (fallbackParsed === 0) {
+      return 0;
+    }
     return DEFAULT_COUNTRY_ID;
+  }
+
+  function resolveFixedCountryId(state = {}) {
+    const configuredId = normalizeOptionalSmsBowerCountryId(state?.smsbowerFixedCountryId);
+    const rawMode = String(state?.smsbowerCountryMode || '').trim().toLowerCase();
+    const mode = rawMode === COUNTRY_MODE_FIXED || rawMode === COUNTRY_MODE_PRIORITY
+      ? rawMode
+      : (configuredId ? COUNTRY_MODE_FIXED : COUNTRY_MODE_PRIORITY);
+    return mode === COUNTRY_MODE_FIXED ? configuredId : 0;
   }
 
   function normalizeOptionalSmsBowerCountryId(value) {
@@ -349,11 +363,16 @@
   }
 
   function resolveConfig(state = {}, deps = {}) {
+    const fixedCountryId = resolveFixedCountryId(state);
+    const configuredProviderIds = normalizeSmsBowerProviderIds(state?.smsbowerProviderIds, DEFAULT_PROVIDER_IDS);
     return {
       apiKey: String(state?.smsbowerApiKey || '').trim(),
       baseUrl: state?.smsbowerBaseUrl || DEFAULT_BASE_URL,
       serviceCode: normalizeSmsBowerServiceCode(state?.smsbowerServiceCode, DEFAULT_SERVICE_CODE),
-      providerIds: normalizeSmsBowerProviderIds(state?.smsbowerProviderIds, DEFAULT_PROVIDER_IDS),
+      // The legacy USA default must not constrain an unrelated fixed country.
+      providerIds: fixedCountryId && fixedCountryId !== DEFAULT_COUNTRY_ID && configuredProviderIds === DEFAULT_PROVIDER_IDS
+        ? ''
+        : configuredProviderIds,
       fetchImpl: deps.fetchImpl || (typeof fetch === 'function' ? fetch.bind(globalThis) : null),
       requestTimeoutMs: deps.requestTimeoutMs || DEFAULT_REQUEST_TIMEOUT_MS,
     };
@@ -416,6 +435,16 @@
   }
 
   function resolveCountryCandidates(state = {}) {
+    const fixedCountryId = resolveFixedCountryId(state);
+    if (String(state?.smsbowerCountryMode || '').trim().toLowerCase() === COUNTRY_MODE_FIXED && !fixedCountryId) {
+      throw new Error('SMSBower 已选择固定国家模式，请先填写有效的固定国家 ID。');
+    }
+    if (fixedCountryId) {
+      return [{
+        id: fixedCountryId,
+        label: normalizeSmsBowerCountryLabel(state?.smsbowerFixedCountryLabel, `Country #${fixedCountryId}`),
+      }];
+    }
     const candidates = normalizeSmsBowerCountryOrder(state?.smsbowerCountryOrder);
     if (candidates.length) {
       return candidates.map((entry) => {
@@ -1023,6 +1052,75 @@
     };
   }
 
+  function collectSmsBowerCountryNames(payload, names = {}) {
+    if (!payload || typeof payload !== 'object') {
+      return names;
+    }
+    if (Array.isArray(payload)) {
+      payload.forEach((value) => collectSmsBowerCountryNames(value, names));
+      return names;
+    }
+    Object.entries(payload).forEach(([key, value]) => {
+      const countryId = normalizeSmsBowerCountryId(
+        value && typeof value === 'object'
+          ? (value.id ?? value.countryId ?? value.country_id ?? key)
+          : key,
+        0
+      );
+      if (countryId) {
+        const label = typeof value === 'string'
+          ? value
+          : String(value?.chn || value?.name || value?.title || value?.country || value?.eng || value?.rus || '').trim();
+        if (label) {
+          names[countryId] = label;
+        }
+      }
+      if (value && typeof value === 'object') {
+        collectSmsBowerCountryNames(value, names);
+      }
+    });
+    return names;
+  }
+
+  async function fetchCountryCatalog(state = {}, deps = {}) {
+    const config = resolveConfig(state, deps);
+    let countryPayload = null;
+    try {
+      countryPayload = (await fetchPricePayloadWithFallback(config, {}, ['getCountries', 'getCountriesV2'])).payload;
+    } catch {
+      // Some upstreams do not expose a country endpoint; prices still carry usable IDs.
+    }
+    const { action, payload } = await fetchPricePayloadWithFallback(config, {
+      service: config.serviceCode,
+    }, ['getPricesV3', 'getPricesV2', 'getPrices']);
+    const countryNames = collectSmsBowerCountryNames(countryPayload);
+    const grouped = new Map();
+    dedupeSmsBowerPriceEntries(collectSmsBowerPriceEntries(payload, {
+      serviceCode: config.serviceCode,
+    })).forEach((entry) => {
+      const countryId = normalizeSmsBowerCountryId(entry.countryId, 0);
+      if (!countryId) return;
+      const current = grouped.get(countryId) || {
+        id: countryId,
+        label: countryNames[countryId] || `Country #${countryId}`,
+        providerIds: [],
+        price: null,
+        count: 0,
+      };
+      if (entry.providerId && !current.providerIds.includes(entry.providerId)) current.providerIds.push(entry.providerId);
+      if (current.price === null || entry.price < current.price) current.price = entry.price;
+      if (Number.isFinite(entry.count)) current.count += entry.count;
+      grouped.set(countryId, current);
+    });
+    return {
+      action,
+      countries: Array.from(grouped.values())
+        .map((entry) => ({ ...entry, providerIds: entry.providerIds.join(',') }))
+        .sort((left, right) => (left.price ?? Number.MAX_SAFE_INTEGER) - (right.price ?? Number.MAX_SAFE_INTEGER)),
+      raw: payload,
+    };
+  }
+
   async function requestActivation(state = {}, options = {}, deps = {}) {
     const config = resolveConfig(state, deps);
     const configuredCountryCandidates = resolveCountryCandidates(state);
@@ -1060,7 +1158,9 @@
     if (priceRange.invalidRange) {
       throw new Error(`SMSBower 价格区间无效：最低购买价 ${priceRange.minPriceLimit} 高于价格上限 ${priceRange.maxPriceLimit}。`);
     }
-    const autoProviderIds = getProviderIdsForCountryOrder(countryCandidates) || DEFAULT_PROVIDER_IDS;
+    const fixedCountryId = resolveFixedCountryId(state);
+    const autoProviderIds = getProviderIdsForCountryOrder(countryCandidates)
+      || (fixedCountryId ? '' : DEFAULT_PROVIDER_IDS);
     const useManualProviderIds = !hasOnlyAutoSmsBowerProviderIds(config.providerIds, autoProviderIds);
     const resolvedProviderIds = useManualProviderIds
       ? config.providerIds
@@ -1370,6 +1470,7 @@
       fetchBalance: (state) => fetchBalance(state, providerDeps),
       fetchPrices: (state, countryConfig) => fetchPrices(state, countryConfig, providerDeps),
       fetchPriceRange: (state, countryConfig) => fetchPriceRange(state, countryConfig, providerDeps),
+      fetchCountryCatalog: (state) => fetchCountryCatalog(state, providerDeps),
       resolvePriceRange,
       formatPriceRangeText,
       describePayload,
@@ -1393,6 +1494,7 @@
     normalizeCountryKey,
     normalizeSmsBowerServiceCode,
     normalizeSmsBowerProviderIds,
+    fetchCountryCatalog,
     normalizeSmsBowerPrice,
     normalizeActivation,
     resolveActivationCountry,

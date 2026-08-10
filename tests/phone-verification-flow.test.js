@@ -4486,7 +4486,7 @@ test('phone verification helper supplements poll rounds to cover the full wait w
   );
 });
 
-test('phone verification helper restarts OAuth instead of resending when SMSBower code does not arrive within the wait window', async () => {
+test('phone verification helper returns to the phone page and replaces SMSBower number when code does not arrive', async () => {
   const requests = [];
   const messages = [];
   let currentState = {
@@ -4517,15 +4517,20 @@ test('phone verification helper restarts OAuth instead of resending when SMSBowe
         const action = parsedUrl.searchParams.get('action');
 
         if (action === 'getNumber') {
+          const numberIndex = requests.filter((requestUrl) => requestUrl.searchParams.get('action') === 'getNumber').length;
           return {
             ok: true,
-            text: async () => 'ACCESS_NUMBER:900001:668686858708',
+            text: async () => numberIndex === 1
+              ? 'ACCESS_NUMBER:900001:668686858708'
+              : 'ACCESS_NUMBER:900002:668686858709',
           };
         }
         if (action === 'getStatus') {
           return {
             ok: true,
-            text: async () => 'STATUS_WAIT_CODE',
+            text: async () => parsedUrl.searchParams.get('id') === '900001'
+              ? 'STATUS_WAIT_CODE'
+              : 'STATUS_OK:123456',
           };
         }
         if (action === 'setStatus') {
@@ -4546,8 +4551,22 @@ test('phone verification helper restarts OAuth instead of resending when SMSBowe
             url: 'https://auth.openai.com/phone-verification',
           };
         }
+        if (message.type === 'RETURN_TO_ADD_PHONE') {
+          return {
+            addPhonePage: true,
+            phoneVerificationPage: false,
+            url: 'https://auth.openai.com/add-phone',
+          };
+        }
+        if (message.type === 'SUBMIT_PHONE_VERIFICATION_CODE') {
+          return {
+            success: true,
+            consentReady: true,
+            url: 'https://auth.openai.com/authorize',
+          };
+        }
         if (message.type === 'RESEND_PHONE_VERIFICATION_CODE') {
-          throw new Error('SMSBower timeout should restart OAuth before page resend.');
+          throw new Error('SMSBower timeout should replace the number before page resend.');
         }
         throw new Error(`Unexpected content-script message: ${message.type}`);
       },
@@ -4560,17 +4579,16 @@ test('phone verification helper restarts OAuth instead of resending when SMSBowe
       throwIfStopped: () => {},
     });
 
-    await assert.rejects(
-      helpers.completePhoneVerificationFlow(1, {
-        addPhonePage: true,
-        phoneVerificationPage: false,
-        url: 'https://auth.openai.com/add-phone',
-      }),
-      /PHONE_RESTART_STEP7::.*步骤 7/
-    );
+    const result = await helpers.completePhoneVerificationFlow(1, {
+      addPhonePage: true,
+      phoneVerificationPage: false,
+      url: 'https://auth.openai.com/add-phone',
+    });
 
+    assert.equal(result.success, true);
+    assert.equal(messages.includes('RETURN_TO_ADD_PHONE'), true);
     assert.equal(messages.includes('RESEND_PHONE_VERIFICATION_CODE'), false);
-    assert.equal(messages.filter((type) => type === 'SUBMIT_PHONE_NUMBER').length, 1);
+    assert.equal(messages.filter((type) => type === 'SUBMIT_PHONE_NUMBER').length, 2);
     assert.equal(
       requests.some((requestUrl) => requestUrl.searchParams.get('action') === 'setStatus'
         && requestUrl.searchParams.get('id') === '900001'
@@ -4583,7 +4601,7 @@ test('phone verification helper restarts OAuth instead of resending when SMSBowe
   }
 });
 
-test('phone verification helper advances SMSBower provider ID after timeout across step 7 restart', async () => {
+test('phone verification helper advances SMSBower provider ID after timeout in the same flow', async () => {
   const requests = [];
   const messages = [];
   let currentState = {
@@ -4655,6 +4673,13 @@ test('phone verification helper advances SMSBower provider ID after timeout acro
             url: 'https://auth.openai.com/phone-verification',
           };
         }
+        if (message.type === 'RETURN_TO_ADD_PHONE') {
+          return {
+            addPhonePage: true,
+            phoneVerificationPage: false,
+            url: 'https://auth.openai.com/add-phone',
+          };
+        }
         if (message.type === 'SUBMIT_PHONE_VERIFICATION_CODE') {
           return {
             success: true,
@@ -4676,21 +4701,6 @@ test('phone verification helper advances SMSBower provider ID after timeout acro
       throwIfStopped: () => {},
     });
 
-    await assert.rejects(
-      helpers.completePhoneVerificationFlow(1, {
-        addPhonePage: true,
-        phoneVerificationPage: false,
-        url: 'https://auth.openai.com/add-phone',
-      }),
-      /PHONE_RESTART_STEP7::/
-    );
-
-    assert.deepStrictEqual(currentState.smsbowerTimedOutProviderIdsByCountry, {
-      52: ['2266'],
-    });
-    assert.equal(currentState.currentPhoneActivation, null);
-
-    fakeNow = 0;
     const result = await helpers.completePhoneVerificationFlow(1, {
       addPhonePage: true,
       phoneVerificationPage: false,
@@ -4707,6 +4717,7 @@ test('phone verification helper advances SMSBower provider ID after timeout acro
       .map((requestUrl) => requestUrl.searchParams.get('providerIds'));
     assert.deepStrictEqual(getNumberProviderIds, ['2266', '3193']);
     assert.equal(messages.filter((type) => type === 'SUBMIT_PHONE_NUMBER').length, 2);
+    assert.equal(messages.includes('RETURN_TO_ADD_PHONE'), true);
     assert.equal(messages.includes('RESEND_PHONE_VERIFICATION_CODE'), false);
     assert.deepStrictEqual(currentState.smsbowerTimedOutProviderIdsByCountry, {});
   } finally {

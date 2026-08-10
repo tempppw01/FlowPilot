@@ -535,3 +535,98 @@ test('SMSBower provider parses balance and V3 provider price tiers', async () =>
   assert.equal(range.minPrice, 0.118);
   assert.equal(range.maxPrice, 0.12);
 });
+
+test('SMSBower fixed country mode only requests the configured country id', async () => {
+  const requests = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    fetchImpl: async (url) => {
+      requests.push(new URL(url));
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return 'ACCESS_NUMBER:fixed-1:+999123456789';
+        },
+      };
+    },
+  });
+
+  const state = {
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [187, 52],
+    smsbowerFixedCountryId: 999,
+    smsbowerFixedCountryLabel: 'Fixed country',
+    smsbowerProviderIds: '3170,2495',
+  };
+  assert.deepStrictEqual(provider.resolveCountryCandidates(state), [
+    { id: 999, label: 'Fixed country' },
+  ]);
+
+  const activation = await provider.requestActivation(state);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].searchParams.get('country'), '999');
+  assert.equal(requests[0].searchParams.has('providerIds'), false);
+  assert.equal(activation.countryId, 999);
+});
+
+test('SMSBower fixed country mode rejects an empty country id instead of falling back', () => {
+  const module = loadModule();
+  const provider = module.createProvider();
+
+  assert.throws(
+    () => provider.resolveCountryCandidates({
+      smsbowerCountryMode: 'fixed',
+      smsbowerFixedCountryId: 0,
+      smsbowerCountryOrder: [187, 52],
+    }),
+    /请先填写有效的固定国家 ID/
+  );
+});
+
+test('SMSBower provider loads country names, provider ids and minimum prices from upstream', async () => {
+  const requests = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    fetchImpl: async (url) => {
+      const parsedUrl = new URL(url);
+      requests.push(parsedUrl);
+      const action = parsedUrl.searchParams.get('action');
+      const payload = action === 'getCountries'
+        ? {
+          187: { chn: '美国', eng: 'USA' },
+          52: { chn: '泰国', eng: 'Thailand' },
+        }
+        : {
+          187: { dr: {
+            3170: { count: 3, price: 0.12, provider_id: 3170 },
+            2495: { count: 4, price: 0.118, provider_id: 2495 },
+          } },
+          52: { dr: {
+            2266: { count: 5, price: 0.054, provider_id: 2266 },
+          } },
+        };
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify(payload);
+        },
+      };
+    },
+  });
+
+  const catalog = await provider.fetchCountryCatalog({
+    smsbowerApiKey: 'key-1',
+    smsbowerServiceCode: 'dr',
+  });
+
+  assert.deepStrictEqual(requests.map((request) => request.searchParams.get('action')), [
+    'getCountries',
+    'getPricesV3',
+  ]);
+  assert.deepStrictEqual(catalog.countries, [
+    { id: 52, label: '泰国', providerIds: '2266', price: 0.054, count: 5 },
+    { id: 187, label: '美国', providerIds: '2495,3170', price: 0.118, count: 7 },
+  ]);
+});

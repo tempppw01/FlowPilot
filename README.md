@@ -72,6 +72,7 @@
 - 支持注册验证码、登录验证码与绑定邮箱验证码处理。
 - `2925` 支持多账号池、自动登录、自动切号、24 小时冷却。
 - `Hotmail` 支持远程服务模式和本地 helper 模式。
+- `IMAP` 支持 163、126、QQ 和自定义服务器；首次使用时，macOS 双击 `start-custom-mail-helper.command`，Windows 双击 `start-custom-mail-helper.bat` 启动本地 helper，再在侧栏点击“测试连接”。
 - `自定义邮箱池` 和 `自定义邮箱服务号池` 都可以和自动运行轮数联动。
 
 ## 快速开始
