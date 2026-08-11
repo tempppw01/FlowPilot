@@ -9398,6 +9398,108 @@ test('phone verification helper retries with a new number after preferred activa
   );
 });
 
+test('SMSBower OAuth phone verification retains the five-minute timeout state', async () => {
+  const requests = [];
+  const logs = [];
+  let currentState = {
+    phoneSmsProvider: 'smsbower',
+    smsbowerApiKey: 'demo-key',
+    smsbowerCountryOrder: [22],
+    smsbowerProviderIds: '3193,2266',
+    smsbowerMaxPrice: '0.12',
+    oauthFlowDeadlineAt: Date.now() - 1000,
+    oauthFlowDeadlineSourceUrl: 'https://auth.openai.com/oauth/authorize',
+    phoneVerificationReplacementLimit: 1,
+    phoneCodeWaitSeconds: 15,
+    phoneCodeTimeoutWindows: 1,
+    phoneCodePollIntervalSeconds: 1,
+    phoneCodePollMaxRounds: 1,
+    currentPhoneActivation: {
+      provider: 'smsbower',
+      activationId: 'old-activation',
+      phoneNumber: '+919000000001',
+      countryId: 22,
+      countryLabel: 'India',
+      selectedPrice: '0.054',
+      providerIds: '2266',
+      successfulUses: 0,
+      maxUses: 1,
+    },
+  };
+  const helpers = api.createPhoneVerificationHelpers({
+    addLog: async (message) => logs.push(message),
+    ensureStep8SignupPageReady: async () => {},
+    fetchImpl: async (url) => {
+      const parsedUrl = new URL(url);
+      requests.push(parsedUrl);
+      const action = parsedUrl.searchParams.get('action');
+      const id = parsedUrl.searchParams.get('id');
+      if (action === 'getStatus' && id === 'old-activation') {
+        return { ok: true, text: async () => 'STATUS_WAIT_CODE' };
+      }
+      if (action === 'setStatus') {
+        return { ok: true, text: async () => 'ACCESS_READY' };
+      }
+      if (action === 'getNumber') {
+        return { ok: true, text: async () => 'ACCESS_NUMBER:new-activation:+919000000002' };
+      }
+      if (action === 'getStatus' && id === 'new-activation') {
+        return { ok: true, text: async () => 'STATUS_OK:654321' };
+      }
+      throw new Error(`Unexpected SMSBower action: ${action} @ id ${id || 'n/a'}`);
+    },
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => defaultTimeoutMs,
+    getState: async () => ({ ...currentState }),
+    sendToContentScriptResilient: async (_source, message) => {
+      if (message.type === 'RETURN_TO_ADD_PHONE') {
+        return {
+          addPhonePage: true,
+          phoneVerificationPage: false,
+          url: 'https://auth.openai.com/add-phone',
+        };
+      }
+      if (message.type === 'SUBMIT_PHONE_NUMBER') {
+        return {
+          phoneVerificationPage: true,
+          url: 'https://auth.openai.com/phone-verification',
+        };
+      }
+      if (message.type === 'SUBMIT_PHONE_VERIFICATION_CODE') {
+        return {
+          success: true,
+          consentReady: true,
+          url: 'https://auth.openai.com/authorize',
+        };
+      }
+      throw new Error(`Unexpected content-script message: ${message.type}`);
+    },
+    setState: async (updates) => {
+      currentState = { ...currentState, ...updates };
+    },
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  const result = await helpers.completePhoneVerificationFlow(1, {
+    addPhonePage: false,
+    phoneVerificationPage: true,
+    url: 'https://auth.openai.com/phone-verification',
+  });
+
+  assert.deepStrictEqual(result, {
+    success: true,
+    consentReady: true,
+    url: 'https://auth.openai.com/authorize',
+  });
+  assert.ok(Number(currentState.oauthFlowDeadlineAt) <= Date.now());
+  assert.equal(
+    requests.some((request) => request.searchParams.get('action') === 'getNumber'),
+    true,
+    'the configured timeout path should replace the expired SMSBower number once'
+  );
+  assert.equal(logs.some((message) => /允许超过 5 分钟持续换号/.test(message)), false);
+});
+
 test('phone verification helper logs no-supply diagnostics with consecutive streak when all providers fail to acquire number', async () => {
   const logs = [];
   const requests = [];

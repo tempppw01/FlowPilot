@@ -14,12 +14,15 @@ test('side panel exposes IMAP helper settings and connection test', () => {
   assert.match(html, /id="input-imap-code-wait-seconds"[^>]*min="60"/);
   assert.match(html, /id="input-imap-verification-resend-count"/);
   assert.match(html, /id="btn-test-imap-connection"/);
+  assert.match(html, /id="btn-save-imap-settings"/);
   assert.match(html, /start-custom-mail-helper\.command/);
   assert.match(source, /imapHelperBaseUrl:/);
   assert.match(source, /imapPassword:/);
   assert.match(source, /imapCodeWaitSeconds:/);
   assert.match(source, /imapVerificationResendCount:/);
   assert.match(source, /btnTestImapConnection\?\.addEventListener\('click'/);
+  assert.match(source, /btnSaveImapSettings\?\.addEventListener\('click'/);
+  assert.match(source, /btnMailLogin\.style\.display = useImap \? 'none' : ''/);
   assert.match(source, /new URL\('\/test'/);
   assert.match(source, /无法连接本机 helper/);
   assert.match(helperSource, /send_netease_imap_client_id/);

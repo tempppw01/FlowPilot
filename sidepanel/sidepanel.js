@@ -260,6 +260,7 @@ const inputImapCodeWaitSeconds = document.getElementById('input-imap-code-wait-s
 const inputImapVerificationResendCount = document.getElementById('input-imap-verification-resend-count');
 const inputImapHelperBaseUrl = document.getElementById('input-imap-helper-base-url');
 const btnTestImapConnection = document.getElementById('btn-test-imap-connection');
+const btnSaveImapSettings = document.getElementById('btn-save-imap-settings');
 const displayImapTestStatus = document.getElementById('display-imap-test-status');
 const rowMail2925Mode = document.getElementById('row-mail-2925-mode');
 const rowMail2925PoolSettings = document.getElementById('row-mail2925-pool-settings');
@@ -765,15 +766,16 @@ const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_COUNTRY_MODE_PRIORITY = 'priority';
 const SMSBOWER_COUNTRY_MODE_FIXED = 'fixed';
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
+  { id: 22, label: '印度', englishLabel: 'India', price: '0.054', providerIds: '3193,2266' },
+  { id: 52, label: '泰国', englishLabel: 'Thailand', price: '0.054', providerIds: '2266,3193,3237' },
+  { id: 73, label: '巴西', englishLabel: 'Brazil', price: '0.032', providerIds: '3416,3415,3413,3365,3252,3215,2404' },
   { id: 48, label: '荷兰', englishLabel: 'Netherlands', price: '0.006', providerIds: '2442' },
   { id: 78, label: '法国', englishLabel: 'France', price: '0.014', providerIds: '3237' },
   { id: 6, label: '印度尼西亚', englishLabel: 'Indonesia', price: '0.008', providerIds: '3237,3408,2266' },
   { id: 33, label: '哥伦比亚', englishLabel: 'Colombia', price: '0.034', providerIds: '3243,3253,3288,3160' },
   { id: 16, label: '英国', englishLabel: 'United Kingdom', price: '0.027', providerIds: '3237' },
-  { id: 151, label: '智利', englishLabel: 'Chile', price: '0.027', providerIds: '3234,3109,3235' },
+  { id: 151, label: '智利', englishLabel: 'Chile', price: '0.052', providerIds: '3350,3109,3235,3419' },
   { id: 31, label: '南非', englishLabel: 'South Africa', price: '0.043', providerIds: '2812,2266,2217,2649' },
-  { id: 73, label: '巴西', englishLabel: 'Brazil', price: '0.032', providerIds: '3416,3415,3413,3365,3252,3215,2404' },
-  { id: 52, label: '泰国', englishLabel: 'Thailand', price: '0.054', providerIds: '2266,3193,3237' },
   { id: 95, label: '阿联酋', englishLabel: 'UAE', price: '0.054', providerIds: '2266' },
   { id: 85, label: '摩尔多瓦', englishLabel: 'Moldova', price: '0.054', providerIds: '2266' },
   { id: 19, label: '尼日利亚', englishLabel: 'Nigeria', price: '0.054', providerIds: '2266,3193' },
@@ -818,8 +820,10 @@ const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
   2812: 31,
   2649: 31,
   3234: 151,
+  3350: 151,
   3109: 151,
   3235: 151,
+  3419: 151,
   3160: 10,
   2404: 73,
   3229: 73,
@@ -15103,6 +15107,9 @@ function updateMailProviderUI() {
     : null;
   const uiCopy = getCurrentRegistrationEmailUiCopy();
   updateMailLoginButtonState();
+  if (btnMailLogin?.style) {
+    btnMailLogin.style.display = useImap ? 'none' : '';
+  }
   if (rowMail2925Mode) {
     rowMail2925Mode.style.display = use2925 ? '' : 'none';
   }
@@ -17935,6 +17942,20 @@ btnTestImapConnection?.addEventListener('click', async () => {
   } finally {
     btnTestImapConnection.disabled = false;
     btnTestImapConnection.textContent = defaultLabel;
+  }
+});
+
+btnSaveImapSettings?.addEventListener('click', async () => {
+  const defaultLabel = btnSaveImapSettings.textContent || '保存配置';
+  btnSaveImapSettings.disabled = true;
+  btnSaveImapSettings.textContent = '保存中';
+  try {
+    await saveSettings({ force: true, source: 'imap-manual' });
+  } catch {
+    // saveSettings already reports the failure in the side panel.
+  } finally {
+    btnSaveImapSettings.disabled = false;
+    btnSaveImapSettings.textContent = defaultLabel;
   }
 });
 

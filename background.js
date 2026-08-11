@@ -713,6 +713,9 @@ const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_COUNTRY_MODE_PRIORITY = 'priority';
 const SMSBOWER_COUNTRY_MODE_FIXED = 'fixed';
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([
+  22,
+  52,
+  73,
   48,
   78,
   6,
@@ -720,8 +723,6 @@ const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([
   16,
   151,
   31,
-  73,
-  52,
   95,
   85,
   19,
@@ -744,15 +745,16 @@ const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([
   187,
 ]);
 const SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID = Object.freeze({
+  22: '3193,2266',
+  52: '2266,3193,3237',
+  73: '3416,3415,3413,3365,3252,3215,2404',
   48: '2442',
   78: '3237',
   6: '3237,3408,2266',
   33: '3243,3253,3288,3160',
   16: '3237',
-  151: '3234,3109,3235',
+  151: '3350,3109,3235,3419',
   31: '2812,2266,2217,2649',
-  73: '3416,3415,3413,3365,3252,3215,2404',
-  52: '2266,3193,3237',
   95: '2266',
   85: '2266',
   19: '2266,3193',
@@ -792,8 +794,10 @@ const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
   2812: 31,
   2649: 31,
   3234: 151,
+  3350: 151,
   3109: 151,
   3235: 151,
+  3419: 151,
   3160: 10,
   2404: 73,
   3229: 73,
@@ -1613,8 +1617,7 @@ const SETTINGS_SCHEMA_VIEW_KEYS = Object.freeze([
 const SETTINGS_SCHEMA_VIEW_KEY_SET = new Set(SETTINGS_SCHEMA_VIEW_KEYS);
 const SETTINGS_EXPORT_SCHEMA_VERSION = 1;
 const SETTINGS_EXPORT_FILENAME_PREFIX = 'multipage-settings';
-const STEP6_REGISTRATION_SUCCESS_WAIT_MIN_MS = 30000;
-const STEP6_REGISTRATION_SUCCESS_WAIT_MAX_MS = 40000;
+const STEP6_REGISTRATION_SUCCESS_WAIT_MS = 3000;
 
 const DEFAULT_STATE = {
   flowId: DEFAULT_ACTIVE_FLOW_ID,
@@ -14843,8 +14846,7 @@ const step6Executor = self.MultiPageBackgroundStep6?.createStep6Executor({
   chrome,
   completeNodeFromBackground,
   getErrorMessage,
-  registrationSuccessWaitMinMs: STEP6_REGISTRATION_SUCCESS_WAIT_MIN_MS,
-  registrationSuccessWaitMaxMs: STEP6_REGISTRATION_SUCCESS_WAIT_MAX_MS,
+  registrationSuccessWaitMs: STEP6_REGISTRATION_SUCCESS_WAIT_MS,
   sleepWithStop,
 });
 const step7Executor = self.MultiPageBackgroundStep7?.createStep7Executor({

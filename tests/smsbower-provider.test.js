@@ -29,27 +29,99 @@ test('SMSBower provider requests the lowest-price country order by default', asy
   });
 
   const parsedUrl = new URL(requests[0].url);
-  const defaultCountryOrder = [48, 78, 6, 33, 16, 151, 31, 73, 52, 95, 85, 19, 10, 269, 160, 5560, 1099, 708, 976, 2058, 3118, 18397, 43, 53, 54, 39, 46, 215, 187];
+  const defaultCountryOrder = [22, 52, 73, 48, 78, 6, 33, 16, 151, 31, 95, 85, 19, 10, 269, 160, 5560, 1099, 708, 976, 2058, 3118, 18397, 43, 53, 54, 39, 46, 215, 187];
   assert.deepStrictEqual(provider.resolveCountryCandidates({}).map((entry) => entry.id), defaultCountryOrder);
   assert.equal(parsedUrl.hostname, 'smsbower.page');
   assert.equal(parsedUrl.searchParams.get('action'), 'getNumber');
   assert.equal(parsedUrl.searchParams.get('api_key'), 'key-1');
   assert.equal(parsedUrl.searchParams.get('service'), 'dr');
-  assert.equal(parsedUrl.searchParams.get('country'), '48');
-  assert.equal(parsedUrl.searchParams.get('providerIds'), '2442');
-  assert.equal(parsedUrl.searchParams.get('maxPrice'), '0.12');
+  assert.equal(parsedUrl.searchParams.get('country'), '22');
+  assert.equal(parsedUrl.searchParams.get('providerIds'), '2266');
+  assert.equal(parsedUrl.searchParams.get('maxPrice'), '0.0999');
   assert.deepStrictEqual(activation, {
     activationId: '176292',
     phoneNumber: '+628123456789',
     provider: 'smsbower',
     serviceCode: 'dr',
-    countryId: 48,
-    countryLabel: 'Netherlands',
-    selectedPrice: '0.12',
-    providerIds: '2442',
+    countryId: 22,
+    countryLabel: 'India',
+    selectedPrice: '0.0999',
+    providerIds: '2266',
     successfulUses: 0,
     maxUses: 1,
   });
+});
+
+test('SMSBower keeps India purchases strictly below ten cents', async () => {
+  const requests = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    fetchImpl: async (url) => {
+      requests.push(new URL(url));
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return 'ACCESS_NUMBER:176295:+919876543210';
+        },
+      };
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [22],
+    smsbowerMaxPrice: '0.12',
+  });
+
+  assert.equal(requests[0].searchParams.get('country'), '22');
+  assert.equal(requests[0].searchParams.get('providerIds'), '2266');
+  assert.equal(requests[0].searchParams.get('maxPrice'), '0.0999');
+  assert.equal(activation.countryId, 22);
+  assert.equal(activation.providerIds, '2266');
+});
+
+test('SMSBower catalog excludes India and Chile lines priced at or above ten cents', async () => {
+  const module = loadModule();
+  const provider = module.createProvider({
+    fetchImpl: async (url) => {
+      const action = new URL(url).searchParams.get('action');
+      const payload = action === 'getCountries'
+        ? {
+          22: { chn: '印度', eng: 'India' },
+          151: { chn: '智利', eng: 'Chile' },
+        }
+        : {
+          22: { dr: {
+            2260: { count: 10, price: 0.316, provider_id: 2260 },
+            3193: { count: 10, price: 0.067, provider_id: 3193 },
+            2266: { count: 10, price: 0.054, provider_id: 2266 },
+          } },
+          151: { dr: {
+            3350: { count: 10, price: 0.08, provider_id: 3350 },
+            3419: { count: 10, price: 0.052, provider_id: 3419 },
+            3001: { count: 10, price: 0.178, provider_id: 3001 },
+          } },
+        };
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify(payload);
+        },
+      };
+    },
+  });
+
+  const catalog = await provider.fetchCountryCatalog({
+    smsbowerApiKey: 'key-1',
+    smsbowerServiceCode: 'dr',
+  });
+
+  assert.deepStrictEqual(catalog.countries, [
+    { id: 151, label: '智利', providerIds: '3419,3350', price: 0.052, count: 20 },
+    { id: 22, label: '印度', providerIds: '2266,3193', price: 0.054, count: 20 },
+  ]);
 });
 
 test('SMSBower provider logs Brazil failures with country and providerId context before falling back to USA', async () => {
@@ -336,12 +408,12 @@ test('SMSBower random mode uses the full non-USA default pool instead of the sav
 
   const activation = await provider.requestActivation(state);
 
-  assert.equal(requests[0].searchParams.get('country'), '48');
-  assert.equal(requests[0].searchParams.get('providerIds'), '2442');
+  assert.equal(requests[0].searchParams.get('country'), '22');
+  assert.equal(requests[0].searchParams.get('providerIds'), '2266');
   assert.notEqual(requests[0].searchParams.get('country'), '187');
   assert.notEqual(requests[0].searchParams.get('country'), '52');
-  assert.equal(activation.countryId, 48);
-  assert.equal(activation.countryLabel, 'Netherlands');
+  assert.equal(activation.countryId, 22);
+  assert.equal(activation.countryLabel, 'India');
 });
 
 test('SMSBower random mode keeps Gold provider IDs before Silver and unknown lines', async () => {
@@ -370,11 +442,11 @@ test('SMSBower random mode keeps Gold provider IDs before Silver and unknown lin
     smsbowerRandomMode: true,
   });
 
-  assert.equal(requests[0].searchParams.get('country'), '33');
-  assert.match(requests[0].searchParams.get('providerIds'), /^(3243|3253)$/);
-  assert.notEqual(requests[0].searchParams.get('providerIds'), '3288');
-  assert.equal(activation.countryId, 33);
-  assert.match(activation.providerIds, /^(3243|3253)$/);
+  assert.equal(requests[0].searchParams.get('country'), '48');
+  assert.equal(requests[0].searchParams.get('providerIds'), '2442');
+  assert.equal(activation.countryId, 48);
+  assert.equal(activation.countryLabel, 'Netherlands');
+  assert.equal(activation.providerIds, '2442');
 });
 
 test('SMSBower random mode weights countries and provider IDs with recent successful code records', async () => {
@@ -409,10 +481,10 @@ test('SMSBower random mode weights countries and provider IDs with recent succes
   });
 
   assert.equal(requests[0].searchParams.get('country'), '33');
-  assert.equal(requests[0].searchParams.get('providerIds'), '3253');
+  assert.match(requests[0].searchParams.get('providerIds'), /^(3243|3253)$/);
   assert.equal(activation.countryId, 33);
   assert.equal(activation.countryLabel, 'Colombia');
-  assert.equal(activation.providerIds, '3253');
+  assert.match(activation.providerIds, /^(3243|3253)$/);
 });
 
 test('SMSBower provider tries the next provider ID in the same country when a line has no numbers', async () => {

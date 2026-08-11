@@ -196,6 +196,46 @@ test('settings schema normalizes view input into canonical nested namespaces', (
   });
 });
 
+test('settings schema preserves IMAP credentials and connection settings in the read view', () => {
+  const { settingsSchema } = loadApis();
+  const schema = settingsSchema.createSettingsSchema();
+
+  const normalized = schema.normalizeSettingsState({
+    mailProvider: 'imap',
+    imapHelperBaseUrl: 'http://127.0.0.1:17374/',
+    imapHost: ' imap.example.com ',
+    imapPort: '993',
+    imapUsername: ' user@example.com ',
+    imapPassword: 'app-password with spaces',
+    imapMailbox: ' INBOX ',
+    imapCodeWaitSeconds: 120,
+    imapVerificationResendCount: 4,
+  });
+  const view = schema.buildSettingsView(normalized);
+
+  assert.deepEqual(normalized.services.email, {
+    provider: 'imap',
+    customReceiveMode: 'manual',
+    customHelperBaseUrl: 'http://127.0.0.1:17374',
+    imapHelperBaseUrl: 'http://127.0.0.1:17374',
+    imapHost: 'imap.example.com',
+    imapPort: 993,
+    imapUsername: 'user@example.com',
+    imapPassword: 'app-password with spaces',
+    imapMailbox: 'INBOX',
+    imapCodeWaitSeconds: 120,
+    imapVerificationResendCount: 4,
+  });
+  assert.equal(view.imapHelperBaseUrl, 'http://127.0.0.1:17374');
+  assert.equal(view.imapHost, 'imap.example.com');
+  assert.equal(view.imapPort, 993);
+  assert.equal(view.imapUsername, 'user@example.com');
+  assert.equal(view.imapPassword, 'app-password with spaces');
+  assert.equal(view.imapMailbox, 'INBOX');
+  assert.equal(view.imapCodeWaitSeconds, 120);
+  assert.equal(view.imapVerificationResendCount, 4);
+});
+
 test('settings schema retires legacy GPC and Plus Auto configurations', () => {
   const { settingsSchema } = loadApis();
   const schema = settingsSchema.createSettingsSchema();

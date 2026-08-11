@@ -564,6 +564,13 @@
             <span id="display-imap-test-status" class="data-value hero-sms-country-note">请先双击项目中的 start-custom-mail-helper.command（Windows 使用 .bat）启动本机 helper。</span>
           </div>
         </div>
+        <div class="data-row">
+          <span class="data-label">配置操作</span>
+          <div class="data-inline">
+            <button id="btn-save-imap-settings" class="btn btn-primary btn-sm data-inline-btn" type="button">保存配置</button>
+            <span class="data-value hero-sms-country-note">保存后注册流程会使用当前 IMAP 配置。</span>
+          </div>
+        </div>
       </div>
       <div class="data-row" id="row-mail-2925-mode" style="display:none;">
         <span class="data-label">2925 模式</span>
@@ -1804,7 +1811,7 @@
                     <div id="smsbower-country-order-menu" class="hero-sms-country-menu-dropdown" role="listbox" aria-multiselectable="true" hidden></div>
                   </div>
                 </div>
-                <span class="data-value hero-sms-country-note">默认保留美国 187，其余候选仅展示低于 0.14 的项，按点击顺序生效。</span>
+                <span class="data-value hero-sms-country-note">默认顺序从印度、泰国、巴西开始；印度和智利只展示低于 0.10 美元的线路。</span>
               </div>
             </div>
             <div class="data-row" id="row-smsbower-catalog" style="display:none;">

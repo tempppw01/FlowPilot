@@ -47,7 +47,7 @@ IMAP_MAILBOX = os.environ.get("FLOWPILOT_CUSTOM_IMAP_MAILBOX", "INBOX")
 REQUEST_TIMEOUT_SECONDS = int(os.environ.get("FLOWPILOT_CUSTOM_IMAP_TIMEOUT", "45"))
 DEFAULT_TOP = 20
 NETEASE_IMAP_HOST_SUFFIXES = (".163.com", ".126.com")
-NETEASE_IMAP_CLIENT_ID = '("name" "FlowPilot" "version" "2.9" "vendor" "FlowPilot")'
+NETEASE_IMAP_CLIENT_ID = '("name" "FlowPilot" "version" "3.0" "vendor" "FlowPilot")'
 NETEASE_IMAP_ID_LOCK = threading.Lock()
 RANDOM_EMAIL_DB_PATH = os.environ.get(
     "FLOWPILOT_RANDOM_EMAIL_DB_PATH",

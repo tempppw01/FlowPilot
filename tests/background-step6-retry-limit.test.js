@@ -20,7 +20,6 @@ test('step 6 waits for registration success and completes from background', asyn
     completeNodeFromBackground: async (step) => {
       events.completedSteps.push(step);
     },
-    random: () => 0.5,
     sleepWithStop: async (ms) => {
       events.waits.push(ms);
     },
@@ -28,9 +27,9 @@ test('step 6 waits for registration success and completes from background', asyn
 
   await executor.executeStep6();
 
-  assert.deepStrictEqual(events.waits, [35000]);
+  assert.deepStrictEqual(events.waits, [3000]);
   assert.deepStrictEqual(events.completedSteps, ['wait-registration-success']);
-  assert.ok(events.logs.some(({ message }) => /等待 35 秒/.test(message)));
+  assert.ok(events.logs.some(({ message }) => /等待 3 秒/.test(message)));
 });
 
 test('step 6 only clears cookies when cleanup switch is enabled', async () => {

@@ -20,7 +20,28 @@
   const DEFAULT_POLL_TIMEOUT_MS = 180000;
   const DEFAULT_POLL_INTERVAL_MS = 5000;
   const PHONE_CODE_TIMEOUT_ERROR_PREFIX = 'PHONE_CODE_TIMEOUT::';
+  const COUNTRY_MAX_PRICE_LIMITS = Object.freeze({
+    22: 0.0999,
+    151: 0.0999,
+  });
   const DEFAULT_COUNTRY_CANDIDATES = Object.freeze([
+    { id: 22, label: 'India', providerIds: '3193,2266', providerLines: [
+      { id: '3193', rank: 'silver', price: 0.067 },
+      { id: '2266', rank: 'gold', price: 0.054 },
+    ] },
+    { id: 52, label: 'Thailand', providerIds: '2266,3193,3237', providerLines: [
+      { id: '2266', rank: 'silver', price: 0.054 },
+      { id: '3193', rank: 'silver', price: 0.067 },
+    ] },
+    { id: 73, label: 'Brazil', providerIds: '3416,3415,3413,3365,3252,3215,2404', providerLines: [
+      { id: '3416', rank: 'gold', price: 0.032 },
+      { id: '3415', rank: 'gold', price: 0.046 },
+      { id: '3413', rank: 'gold', price: 0.048 },
+      { id: '3365', rank: 'gold', price: 0.051 },
+      { id: '3252', rank: 'gold', price: 0.052 },
+      { id: '3215', rank: 'gold', price: 0.054 },
+      { id: '2404', rank: 'gold', price: 0.067 },
+    ] },
     { id: 48, label: 'Netherlands', providerIds: '2442', providerLines: [{ id: '2442', rank: 'gold', price: 0.006 }] },
     { id: 78, label: 'France', providerIds: '3237', providerLines: [{ id: '3237', rank: 'gold', price: 0.014 }] },
     { id: 6, label: 'Indonesia', providerIds: '3237,3408,2266', providerLines: [
@@ -35,24 +56,16 @@
       { id: '3160', rank: 'bronze', price: 0.054 },
     ] },
     { id: 16, label: 'United Kingdom', providerIds: '3237' },
-    { id: 151, label: 'Chile', providerIds: '3234,3109,3235' },
+    { id: 151, label: 'Chile', providerIds: '3350,3109,3235,3419', providerLines: [
+      { id: '3350', rank: 'bronze', price: 0.08 },
+      { id: '3109', rank: 'gold', price: 0.07 },
+      { id: '3235', rank: 'silver', price: 0.067 },
+      { id: '3419', rank: 'gold', price: 0.052 },
+    ] },
     { id: 31, label: 'South Africa', providerIds: '2812,2266,2217,2649', providerLines: [
       { id: '2812', rank: 'silver', price: 0.043 },
       { id: '2266', rank: 'silver', price: 0.054 },
       { id: '2217', rank: 'silver', price: 0.06 },
-    ] },
-    { id: 73, label: 'Brazil', providerIds: '3416,3415,3413,3365,3252,3215,2404', providerLines: [
-      { id: '3416', rank: 'gold', price: 0.032 },
-      { id: '3415', rank: 'gold', price: 0.046 },
-      { id: '3413', rank: 'gold', price: 0.048 },
-      { id: '3365', rank: 'gold', price: 0.051 },
-      { id: '3252', rank: 'gold', price: 0.052 },
-      { id: '3215', rank: 'gold', price: 0.054 },
-      { id: '2404', rank: 'gold', price: 0.067 },
-    ] },
-    { id: 52, label: 'Thailand', providerIds: '2266,3193,3237', providerLines: [
-      { id: '2266', rank: 'silver', price: 0.054 },
-      { id: '3193', rank: 'silver', price: 0.067 },
     ] },
     { id: 95, label: 'UAE', providerIds: '2266', providerLines: [{ id: '2266', rank: 'gold', price: 0.054 }] },
     { id: 85, label: 'Moldova', providerIds: '2266', providerLines: [{ id: '2266', rank: 'gold', price: 0.054 }] },
@@ -222,6 +235,19 @@
     const maxPriceText = normalizeSmsBowerPrice(value || DEFAULT_MAX_PRICE);
     const maxPrice = maxPriceText ? Number(maxPriceText) : MAX_PRICE_CAP;
     return normalizeSmsBowerPrice(Math.min(maxPrice, MAX_PRICE_CAP)) || DEFAULT_MAX_PRICE;
+  }
+
+  function getCountryMaxPriceLimit(countryId) {
+    const normalizedCountryId = normalizeSmsBowerCountryId(countryId, 0);
+    const limit = Number(COUNTRY_MAX_PRICE_LIMITS[normalizedCountryId]);
+    return Number.isFinite(limit) && limit > 0 ? limit : null;
+  }
+
+  function getEffectiveMaxPrice(countryId, configuredMaxPrice = DEFAULT_MAX_PRICE) {
+    const configured = Number(getCappedSmsBowerMaxPrice(configuredMaxPrice));
+    const countryLimit = getCountryMaxPriceLimit(countryId);
+    const effective = countryLimit === null ? configured : Math.min(configured, countryLimit);
+    return normalizeSmsBowerPrice(effective) || DEFAULT_MAX_PRICE;
   }
 
   function normalizeSmsBowerCountryOrder(value = []) {
@@ -1100,6 +1126,8 @@
     })).forEach((entry) => {
       const countryId = normalizeSmsBowerCountryId(entry.countryId, 0);
       if (!countryId) return;
+      const countryMaxPrice = getCountryMaxPriceLimit(countryId);
+      if (countryMaxPrice !== null && entry.price >= countryMaxPrice) return;
       const current = grouped.get(countryId) || {
         id: countryId,
         label: countryNames[countryId] || `Country #${countryId}`,
@@ -1167,7 +1195,7 @@
       : autoProviderIds;
     const maxAcquireRounds = Math.max(1, Math.min(10, Math.floor(Number(state?.smsbowerActivationRetryRounds) || DEFAULT_ACQUIRE_RETRY_ROUNDS)));
     const retryDelayMs = Math.max(500, Math.min(30000, Math.floor(Number(state?.smsbowerActivationRetryDelayMs) || DEFAULT_ACQUIRE_RETRY_DELAY_MS)));
-    const maxPrice = getCappedSmsBowerMaxPrice(state?.smsbowerMaxPrice || DEFAULT_MAX_PRICE);
+    const configuredMaxPrice = getCappedSmsBowerMaxPrice(state?.smsbowerMaxPrice || DEFAULT_MAX_PRICE);
     let finalNoNumbersByCountry = [];
     let finalLastError = null;
 
@@ -1208,6 +1236,7 @@
             if (providerIdAttempt) {
               query.providerIds = providerIdAttempt;
             }
+            const maxPrice = getEffectiveMaxPrice(countryId, configuredMaxPrice);
             if (maxPrice) {
               query.maxPrice = maxPrice;
             }

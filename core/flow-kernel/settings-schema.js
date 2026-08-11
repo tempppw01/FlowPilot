@@ -219,6 +219,12 @@
             provider: '163',
             customReceiveMode: 'manual',
             customHelperBaseUrl: 'http://127.0.0.1:17374',
+            imapHelperBaseUrl: 'http://127.0.0.1:17374',
+            imapHost: 'imap.163.com',
+            imapPort: 993,
+            imapUsername: '',
+            imapPassword: '',
+            imapMailbox: 'INBOX',
             imapCodeWaitSeconds: 60,
             imapVerificationResendCount: 2,
           },
@@ -713,6 +719,36 @@
               ?? input?.customMailHelperBaseUrl
               ?? defaults.services.email.customHelperBaseUrl
             ),
+            imapHelperBaseUrl: normalizeCustomMailHelperBaseUrl(
+              nested?.services?.email?.imapHelperBaseUrl
+              ?? input?.imapHelperBaseUrl
+              ?? defaults.services.email.imapHelperBaseUrl
+            ),
+            imapHost: String(
+              nested?.services?.email?.imapHost
+              ?? input?.imapHost
+              ?? defaults.services.email.imapHost
+            ).trim() || defaults.services.email.imapHost,
+            imapPort: Math.min(65535, Math.max(1, Math.floor(Number(
+              nested?.services?.email?.imapPort
+              ?? input?.imapPort
+              ?? defaults.services.email.imapPort
+            ) || defaults.services.email.imapPort))),
+            imapUsername: String(
+              nested?.services?.email?.imapUsername
+              ?? input?.imapUsername
+              ?? defaults.services.email.imapUsername
+            ).trim(),
+            imapPassword: String(
+              nested?.services?.email?.imapPassword
+              ?? input?.imapPassword
+              ?? defaults.services.email.imapPassword
+            ),
+            imapMailbox: String(
+              nested?.services?.email?.imapMailbox
+              ?? input?.imapMailbox
+              ?? defaults.services.email.imapMailbox
+            ).trim() || defaults.services.email.imapMailbox,
             imapCodeWaitSeconds: Math.min(600, Math.max(60, Math.floor(Number(
               nested?.services?.email?.imapCodeWaitSeconds
               ?? input?.imapCodeWaitSeconds
@@ -870,6 +906,12 @@
       next.mailProvider = normalizedState.services.email.provider;
       next.customMailReceiveMode = normalizedState.services.email.customReceiveMode;
       next.customMailHelperBaseUrl = normalizedState.services.email.customHelperBaseUrl;
+      next.imapHelperBaseUrl = normalizedState.services.email.imapHelperBaseUrl;
+      next.imapHost = normalizedState.services.email.imapHost;
+      next.imapPort = normalizedState.services.email.imapPort;
+      next.imapUsername = normalizedState.services.email.imapUsername;
+      next.imapPassword = normalizedState.services.email.imapPassword;
+      next.imapMailbox = normalizedState.services.email.imapMailbox;
       next.imapCodeWaitSeconds = normalizedState.services.email.imapCodeWaitSeconds;
       next.imapVerificationResendCount = normalizedState.services.email.imapVerificationResendCount;
       next.ipProxyEnabled = normalizedState.services.proxy.enabled;
