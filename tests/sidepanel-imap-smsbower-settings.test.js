@@ -52,6 +52,8 @@ test('side panel exposes SMSBower random, priority, and fixed country modes', ()
   assert.match(source, /function setSmsBowerCountryMode\(/);
   assert.match(source, /https:\/\/smsbower\.app\/cn\/api\?page=client/);
   assert.match(source, /function renderSmsBowerProviderMenu\(\)/);
+  assert.match(source, /function getSmsBowerProviderMenuCountryIds\(\)/);
+  assert.match(source, /selectSmsBowerCountryMode\?\.value === SMSBOWER_COUNTRY_MODE_FIXED/);
   assert.match(source, /function countryCodeToFlag\(/);
   assert.match(html, /data-smsbower-country-mode="random"/);
   assert.match(html, /data-smsbower-country-mode="priority"/);

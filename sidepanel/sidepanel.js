@@ -692,6 +692,7 @@ let smsbowerCountryMenuSearchKeyword = '';
 const smsbowerCountrySearchTextById = new Map();
 let smsbowerProviderIdsAutoValue = '3170';
 let smsbowerRandomModeEnabled = false;
+let smsbowerProviderMenuModeKey = '';
 const phonePreferredActivationOptionMap = new Map();
 let phoneRuntimeCountdownTimer = null;
 let phoneRuntimeCountdownEndsAt = 0;
@@ -9307,7 +9308,7 @@ function renderSmsBowerProviderMenu() {
   searchWrap.appendChild(searchInput);
   smsbowerProviderMenu.appendChild(searchWrap);
   const selected = new Set(normalizeSmsBowerProviderIdsValue(inputSmsBowerProviderIds?.value || '').split(',').filter(Boolean));
-  const countries = smsbowerCountryOrderSelection.length ? smsbowerCountryOrderSelection : [getSmsBowerFixedCountryId() || 187];
+  const countries = getSmsBowerProviderMenuCountryIds();
   const lines = new Map();
   countries.forEach((countryId) => getSmsBowerCountryLinesById(countryId).forEach((line) => {
     const existing = lines.get(line.providerId);
@@ -9345,6 +9346,16 @@ function renderSmsBowerProviderMenu() {
     const keyword = String(searchInput.value || '').trim().toLowerCase();
     Array.from(list.children).forEach((item) => { item.hidden = keyword && !item.dataset.searchText.includes(keyword); });
   });
+}
+
+function getSmsBowerProviderMenuCountryIds() {
+  if (selectSmsBowerCountryMode?.value === SMSBOWER_COUNTRY_MODE_FIXED) {
+    const fixedCountryId = getSmsBowerFixedCountryId();
+    return fixedCountryId ? [fixedCountryId] : [];
+  }
+  return smsbowerCountryOrderSelection.length
+    ? [...smsbowerCountryOrderSelection]
+    : [187];
 }
 
 function getSmsBowerFixedCountryId() {
@@ -9403,8 +9414,18 @@ function updateSmsBowerCountryModeUI() {
       ? `固定模式下只向 ${getSmsBowerCountryLabelById(fixedCountryId)}（${fixedCountryId}）买号。`
       : '请填写一个上游 country ID；固定模式下只会向该国家买号。';
   }
+  const providerMenuModeKey = fixedMode
+    ? `fixed:${fixedCountryId}`
+    : (randomMode ? 'random' : 'priority');
+  if (providerMenuModeKey !== smsbowerProviderMenuModeKey) {
+    smsbowerProviderMenuModeKey = providerMenuModeKey;
+    if (fixedMode && fixedCountryId) {
+      syncSmsBowerProviderIdsFromCountrySelection([fixedCountryId], { force: true });
+    }
+  }
   updateSmsBowerFixedCountryMenuSummary();
   updateSmsBowerProviderMenuSummary();
+  if (typeof renderSmsBowerProviderMenu === 'function') renderSmsBowerProviderMenu();
 }
 
 async function refreshSmsBowerCountryCatalog() {
