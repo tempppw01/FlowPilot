@@ -555,6 +555,9 @@ const btnSmsBowerCountryOrderRandom = document.getElementById('btn-smsbower-coun
 const btnSmsBowerCountryOrderClear = document.getElementById('btn-smsbower-country-order-clear');
 const btnSmsBowerRefreshCatalog = document.getElementById('btn-smsbower-refresh-catalog');
 const selectSmsBowerCountryMode = document.getElementById('select-smsbower-country-mode');
+const btnSmsBowerCountryModeRandom = document.getElementById('btn-smsbower-country-mode-random');
+const btnSmsBowerCountryModePriority = document.getElementById('btn-smsbower-country-mode-priority');
+const btnSmsBowerCountryModeFixed = document.getElementById('btn-smsbower-country-mode-fixed');
 const inputSmsBowerFixedCountryId = document.getElementById('input-smsbower-fixed-country-id');
 const displaySmsBowerFixedCountry = document.getElementById('display-smsbower-fixed-country');
 const displaySmsBowerCountryOrder = document.getElementById('display-smsbower-country-order');
@@ -8839,6 +8842,7 @@ function setSmsBowerRandomMode(enabled, options = {}) {
   }));
   updateSmsBowerCountryOrderSummary(selectedCountries);
   updateSmsBowerCountryOrderMenuSummary(selectedCountries);
+  updateSmsBowerCountryModeUI();
   if (options.persist) {
     markSettingsDirty(true);
     saveSettings({ silent: true }).catch(() => { });
@@ -9175,12 +9179,45 @@ function getSmsBowerFixedCountryId() {
   ) || 0));
 }
 
+function setSmsBowerCountryMode(mode = SMSBOWER_COUNTRY_MODE_PRIORITY, options = {}) {
+  const normalizedMode = String(mode || '').trim().toLowerCase();
+  if (normalizedMode === 'random') {
+    if (selectSmsBowerCountryMode) {
+      selectSmsBowerCountryMode.value = SMSBOWER_COUNTRY_MODE_PRIORITY;
+    }
+    setSmsBowerRandomMode(true, { persist: false });
+  } else {
+    const nextMode = normalizedMode === SMSBOWER_COUNTRY_MODE_FIXED
+      ? SMSBOWER_COUNTRY_MODE_FIXED
+      : SMSBOWER_COUNTRY_MODE_PRIORITY;
+    if (selectSmsBowerCountryMode) {
+      selectSmsBowerCountryMode.value = nextMode;
+    }
+    setSmsBowerRandomMode(false, { persist: false });
+  }
+  updateSmsBowerCountryModeUI();
+  if (options.persist) {
+    markSettingsDirty(true);
+    saveSettings({ silent: true }).catch(() => { });
+  }
+}
+
 function updateSmsBowerCountryModeUI() {
   const fixedCountryId = getSmsBowerFixedCountryId();
   const fixedMode = selectSmsBowerCountryMode?.value === 'fixed';
-  if (rowSmsBowerCountryOrder) rowSmsBowerCountryOrder.style.display = fixedMode ? 'none' : '';
-  if (rowSmsBowerCountryOrderActions) rowSmsBowerCountryOrderActions.style.display = fixedMode ? 'none' : '';
+  const randomMode = Boolean(smsbowerRandomModeEnabled);
+  if (rowSmsBowerCountryOrder) rowSmsBowerCountryOrder.style.display = fixedMode || randomMode ? 'none' : '';
+  if (rowSmsBowerCountryOrderActions) rowSmsBowerCountryOrderActions.style.display = fixedMode || randomMode ? 'none' : '';
   if (rowSmsBowerFixedCountry) rowSmsBowerFixedCountry.style.display = fixedMode ? '' : 'none';
+  [
+    [btnSmsBowerCountryModeRandom, randomMode],
+    [btnSmsBowerCountryModePriority, !randomMode && !fixedMode],
+    [btnSmsBowerCountryModeFixed, fixedMode],
+  ].forEach(([button, active]) => {
+    if (!button) return;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
   if (displaySmsBowerFixedCountry) {
     displaySmsBowerFixedCountry.textContent = fixedCountryId
       ? `固定模式下只向 ${getSmsBowerCountryLabelById(fixedCountryId)}（${fixedCountryId}）买号。`
@@ -19686,10 +19723,23 @@ btnSmsBowerRefreshCatalog?.addEventListener('click', async () => {
     btnSmsBowerRefreshCatalog.textContent = defaultLabel;
   }
 });
+btnSmsBowerCountryModeRandom?.addEventListener('click', (event) => {
+  event.preventDefault();
+  randomizeSmsBowerCountryOrder();
+});
+btnSmsBowerCountryModePriority?.addEventListener('click', (event) => {
+  event.preventDefault();
+  setSmsBowerCountryMode(SMSBOWER_COUNTRY_MODE_PRIORITY, { persist: true });
+  updateHeroSmsPlatformDisplay();
+});
+btnSmsBowerCountryModeFixed?.addEventListener('click', (event) => {
+  event.preventDefault();
+  setSmsBowerCountryMode(SMSBOWER_COUNTRY_MODE_FIXED, { persist: true });
+  updateHeroSmsPlatformDisplay();
+});
 selectSmsBowerCountryMode?.addEventListener('change', () => {
-  updateSmsBowerCountryModeUI();
-  markSettingsDirty(true);
-  saveSettings({ silent: true }).catch(() => { });
+  setSmsBowerCountryMode(selectSmsBowerCountryMode.value, { persist: true });
+  updateHeroSmsPlatformDisplay();
 });
 inputSmsBowerFixedCountryId?.addEventListener('input', () => {
   updateSmsBowerCountryModeUI();

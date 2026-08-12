@@ -197,7 +197,10 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /id="btn-smsbower-country-order-menu"/);
   assert.match(html, /id="row-smsbower-country-order-actions"/);
   assert.match(html, /id="display-smsbower-country-order"/);
-  assert.match(html, /id="btn-smsbower-country-order-random"/);
+  assert.match(html, /id="btn-smsbower-country-mode-random"/);
+  assert.match(html, /id="btn-smsbower-country-mode-priority"/);
+  assert.match(html, /id="btn-smsbower-country-mode-fixed"/);
+  assert.doesNotMatch(html, /id="btn-smsbower-country-order-random"/);
   assert.match(html, /id="btn-smsbower-country-order-clear"/);
   assert.match(html, /3170/);
   assert.doesNotMatch(html, /id="input-smsbower-country-order"/);
@@ -241,7 +244,9 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /DEFAULT_SMSBOWER_MAX_PRICE = '0\.12'/);
   assert.match(sidepanelSource, /loadSmsBowerCountries\(\{ silent: true \}\)/);
   assert.match(sidepanelSource, /btn-smsbower-country-order-menu/);
-  assert.match(sidepanelSource, /btn-smsbower-country-order-random/);
+  assert.match(sidepanelSource, /btn-smsbower-country-mode-random/);
+  assert.match(sidepanelSource, /btn-smsbower-country-mode-priority/);
+  assert.match(sidepanelSource, /btn-smsbower-country-mode-fixed/);
   assert.match(sidepanelSource, /btn-smsbower-country-order-clear/);
   assert.match(sidepanelSource, /smsbowerCountryOrderSelection\.length/);
   assert.match(sidepanelSource, /getSmsBowerCountryLabelById\(countryId\)/);
@@ -262,6 +267,7 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /smsbowerRandomMode:\s*Boolean\(smsbowerRandomModeEnabled\)/);
   assert.match(sidepanelSource, /setSmsBowerRandomMode\(true/);
   assert.match(sidepanelSource, /setSmsBowerRandomMode\(false/);
+  assert.match(sidepanelSource, /function setSmsBowerCountryMode\(/);
   assert.doesNotMatch(sidepanelSource, /let\s+smsbowerProviderIdsAutoValue\s*=\s*DEFAULT_SMSBOWER_PROVIDER_IDS/);
   assert.doesNotMatch(sidepanelSource, /inputSmsBowerProviderIds\.value = normalizeSmsBowerProviderIdsValue\(state\?\.smsbowerProviderIds \|\| DEFAULT_SMSBOWER_PROVIDER_IDS\);/);
   assert.doesNotMatch(sidepanelSource, /0\.251/);

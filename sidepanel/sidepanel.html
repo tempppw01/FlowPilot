@@ -1823,10 +1823,17 @@
             </div>
             <div class="data-row" id="row-smsbower-country-mode" style="display:none;">
               <span class="data-label">国家模式</span>
-              <select id="select-smsbower-country-mode" class="data-select">
-                <option value="priority">国家优先级</option>
-                <option value="fixed">固定国家 ID</option>
-              </select>
+              <div class="data-inline">
+                <select id="select-smsbower-country-mode" class="data-select" hidden aria-hidden="true" tabindex="-1">
+                  <option value="priority">按顺序</option>
+                  <option value="fixed">固定国家</option>
+                </select>
+                <div id="smsbower-country-mode-group" class="choice-group" role="group" aria-label="SMSBower 国家模式">
+                  <button id="btn-smsbower-country-mode-random" type="button" class="choice-btn" data-smsbower-country-mode="random">随机</button>
+                  <button id="btn-smsbower-country-mode-priority" type="button" class="choice-btn" data-smsbower-country-mode="priority">按顺序</button>
+                  <button id="btn-smsbower-country-mode-fixed" type="button" class="choice-btn" data-smsbower-country-mode="fixed">固定</button>
+                </div>
+              </div>
             </div>
             <div class="data-row" id="row-smsbower-fixed-country" style="display:none;">
               <span class="data-label">固定国家 ID</span>
@@ -1839,7 +1846,6 @@
               <span class="data-label">顺序管理</span>
               <div class="data-inline hero-sms-country-stack">
                 <span id="display-smsbower-country-order" class="data-value data-value-fill mono country-order-list">未设置</span>
-                <button id="btn-smsbower-country-order-random" class="btn btn-outline btn-xs data-inline-btn" type="button">随机模式</button>
                 <button id="btn-smsbower-country-order-clear" class="btn btn-ghost btn-xs data-inline-btn" type="button">重置</button>
               </div>
             </div>
