@@ -34,6 +34,9 @@ test('side panel exposes SMSBower random, priority, and fixed country modes', ()
   const source = fs.readFileSync('sidepanel/sidepanel.js', 'utf8');
 
   assert.match(html, /id="btn-smsbower-refresh-catalog"/);
+  assert.match(html, /id="btn-smsbower-api-docs"/);
+  assert.match(html, /id="btn-smsbower-fixed-country-menu"/);
+  assert.match(html, /id="btn-smsbower-provider-menu"/);
   assert.match(html, /id="select-smsbower-country-mode"/);
   assert.match(html, /id="btn-smsbower-country-mode-random"/);
   assert.match(html, /id="btn-smsbower-country-mode-priority"/);
@@ -47,6 +50,9 @@ test('side panel exposes SMSBower random, priority, and fixed country modes', ()
   assert.match(source, /message\.payload\.smsbowerCountryMode/);
   assert.match(source, /function updateSmsBowerCountryModeUI\(\)/);
   assert.match(source, /function setSmsBowerCountryMode\(/);
+  assert.match(source, /https:\/\/smsbower\.app\/cn\/api\?page=client/);
+  assert.match(source, /function renderSmsBowerProviderMenu\(\)/);
+  assert.match(source, /function countryCodeToFlag\(/);
   assert.match(html, /data-smsbower-country-mode="random"/);
   assert.match(html, /data-smsbower-country-mode="priority"/);
   assert.match(html, /data-smsbower-country-mode="fixed"/);

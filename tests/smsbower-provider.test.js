@@ -119,8 +119,14 @@ test('SMSBower catalog excludes India and Chile lines priced at or above ten cen
   });
 
   assert.deepStrictEqual(catalog.countries, [
-    { id: 151, label: '智利', providerIds: '3419,3350', price: 0.052, count: 20 },
-    { id: 22, label: '印度', providerIds: '2266,3193', price: 0.054, count: 20 },
+    { id: 151, label: '智利', providerIds: '3419,3350', lines: [
+      { providerId: '3419', price: 0.052, count: 10 },
+      { providerId: '3350', price: 0.08, count: 10 },
+    ], price: 0.052, count: 20 },
+    { id: 22, label: '印度', providerIds: '2266,3193', lines: [
+      { providerId: '2266', price: 0.054, count: 10 },
+      { providerId: '3193', price: 0.067, count: 10 },
+    ], price: 0.054, count: 20 },
   ]);
 });
 
@@ -698,7 +704,12 @@ test('SMSBower provider loads country names, provider ids and minimum prices fro
     'getPricesV3',
   ]);
   assert.deepStrictEqual(catalog.countries, [
-    { id: 52, label: '泰国', providerIds: '2266', price: 0.054, count: 5 },
-    { id: 187, label: '美国', providerIds: '2495,3170', price: 0.118, count: 7 },
+    { id: 52, label: '泰国', providerIds: '2266', lines: [
+      { providerId: '2266', price: 0.054, count: 5 },
+    ], price: 0.054, count: 5 },
+    { id: 187, label: '美国', providerIds: '2495,3170', lines: [
+      { providerId: '2495', price: 0.118, count: 4 },
+      { providerId: '3170', price: 0.12, count: 3 },
+    ], price: 0.118, count: 7 },
   ]);
 });

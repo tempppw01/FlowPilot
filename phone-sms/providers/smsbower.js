@@ -1132,10 +1132,24 @@
         id: countryId,
         label: countryNames[countryId] || `Country #${countryId}`,
         providerIds: [],
+        lines: [],
         price: null,
         count: 0,
       };
       if (entry.providerId && !current.providerIds.includes(entry.providerId)) current.providerIds.push(entry.providerId);
+      if (entry.providerId) {
+        const existingLine = current.lines.find((line) => line.providerId === entry.providerId);
+        if (existingLine) {
+          existingLine.price = Math.min(existingLine.price, entry.price);
+          existingLine.count = Math.max(existingLine.count, Number(entry.count) || 0);
+        } else {
+          current.lines.push({
+            providerId: entry.providerId,
+            price: entry.price,
+            count: Number.isFinite(entry.count) ? entry.count : 0,
+          });
+        }
+      }
       if (current.price === null || entry.price < current.price) current.price = entry.price;
       if (Number.isFinite(entry.count)) current.count += entry.count;
       grouped.set(countryId, current);
@@ -1143,7 +1157,11 @@
     return {
       action,
       countries: Array.from(grouped.values())
-        .map((entry) => ({ ...entry, providerIds: entry.providerIds.join(',') }))
+        .map((entry) => ({
+          ...entry,
+          providerIds: entry.providerIds.join(','),
+          lines: entry.lines.sort((left, right) => (left.price - right.price) || left.providerId.localeCompare(right.providerId)),
+        }))
         .sort((left, right) => (left.price ?? Number.MAX_SAFE_INTEGER) - (right.price ?? Number.MAX_SAFE_INTEGER)),
       raw: payload,
     };

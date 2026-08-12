@@ -1818,6 +1818,7 @@
               <span class="data-label">上游目录</span>
               <div class="data-inline hero-sms-country-stack">
                 <button id="btn-smsbower-refresh-catalog" class="btn btn-outline btn-sm data-inline-btn" type="button">拉取上游 ID / 价格</button>
+                <button id="btn-smsbower-api-docs" class="btn btn-ghost btn-sm data-inline-btn" type="button">API 文档</button>
                 <span class="data-value hero-sms-country-note">按当前 API Key 与服务代码读取可用国家、线路和最低价格。</span>
               </div>
             </div>
@@ -1838,7 +1839,11 @@
             <div class="data-row" id="row-smsbower-fixed-country" style="display:none;">
               <span class="data-label">固定国家 ID</span>
               <div class="data-inline hero-sms-country-stack">
-                <input id="input-smsbower-fixed-country-id" type="number" min="1" step="1" class="data-input mono" placeholder="例如 187" />
+                <div id="smsbower-fixed-country-menu-shell" class="hero-sms-country-menu">
+                  <button id="btn-smsbower-fixed-country-menu" class="btn btn-outline btn-sm hero-sms-country-menu-btn" type="button" aria-haspopup="listbox" aria-expanded="false">请选择国家</button>
+                  <div id="smsbower-fixed-country-menu" class="hero-sms-country-menu-dropdown" role="listbox" hidden></div>
+                </div>
+                <input id="input-smsbower-fixed-country-id" type="number" min="1" step="1" class="data-input mono" placeholder="例如 187" hidden aria-hidden="true" />
                 <span id="display-smsbower-fixed-country" class="data-value hero-sms-country-note">固定模式下只向这个 country ID 买号。</span>
               </div>
             </div>
@@ -1852,8 +1857,11 @@
             <div class="data-row" id="row-smsbower-provider-ids" style="display:none;">
               <span class="data-label">线路 ID</span>
               <div class="data-inline hero-sms-country-stack">
-                <input type="text" id="input-smsbower-provider-ids" class="data-input mono"
-                  placeholder="3170" />
+                <div id="smsbower-provider-menu-shell" class="hero-sms-country-menu">
+                  <button id="btn-smsbower-provider-menu" class="btn btn-outline btn-sm hero-sms-country-menu-btn" type="button" aria-haspopup="listbox" aria-expanded="false">自动按国家选择线路</button>
+                  <div id="smsbower-provider-menu" class="hero-sms-country-menu-dropdown" role="listbox" aria-multiselectable="true" hidden></div>
+                </div>
+                <input type="text" id="input-smsbower-provider-ids" class="data-input mono" placeholder="3170" hidden aria-hidden="true" />
                 <span class="data-value hero-sms-country-note">默认随国家自动切换到对应线路，USA 仍默认 3170。</span>
               </div>
             </div>
