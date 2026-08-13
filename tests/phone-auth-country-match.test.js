@@ -208,6 +208,14 @@ test('phone auth matches english HeroSMS country labels against localized add-ph
   }
 });
 
+test('phone auth fast path skips the global human-operation delay for phone submission actions', async () => {
+  const fastPathSource = source;
+  assert.match(fastPathSource, /phone-country-select[^}]*skipOperationDelay: true/);
+  assert.match(fastPathSource, /phone-number[^}]*skipOperationDelay: true/);
+  assert.match(fastPathSource, /phone-number-hidden-sync[^}]*skipOperationDelay: true/);
+  assert.match(fastPathSource, /phone-number-submit[^}]*skipOperationDelay: true/);
+});
+
 test('phone auth keeps explicit international number and auto-selects country by dial code when label lookup fails', async () => {
   const originalDocument = global.document;
   const originalEvent = global.Event;

@@ -360,16 +360,16 @@
       }
       const selectedOption = getSelectedCountryOption();
       if (selectedOption && isSameCountryOption(selectedOption, targetOption)) {
-        await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'select', label: 'phone-country-select' }, async () => {
+        await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'select', label: 'phone-country-select', skipOperationDelay: true }, async () => {
           dispatchInputEvents(select);
         });
         return true;
       }
-      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'select', label: 'phone-country-select' }, async () => {
+      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'select', label: 'phone-country-select', skipOperationDelay: true }, async () => {
         select.value = String(targetOption.value || '');
         dispatchInputEvents(select);
       });
-      await sleep(250);
+      await sleep(100);
       const nextSelectedOption = getSelectedCountryOption();
       return Boolean(nextSelectedOption && isSameCountryOption(nextSelectedOption, targetOption));
     }
@@ -435,10 +435,10 @@
       if (!label) {
         return currentChannel === 'sms';
       }
-      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'click', label: 'channel-select-sms' }, async () => {
+      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'click', label: 'channel-select-sms', skipOperationDelay: true }, async () => {
         simulateClick(label);
       });
-      await sleep(250);
+      await sleep(100);
       return getSelectedChannel() === 'sms';
     }
 
@@ -523,7 +523,7 @@
       if (!isActionEnabled(smsEntry.element)) {
         return { selected: false, reason: 'sms_disabled', channelText: smsEntry.text };
       }
-      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'click', label: 'phone-delivery-sms' }, async () => {
+      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'click', label: 'phone-delivery-sms', skipOperationDelay: true }, async () => {
         simulateClick(smsEntry.element);
       });
       return { selected: true, channelText: smsEntry.text };
@@ -957,22 +957,22 @@
         throw new Error('Add-phone page is missing the submit button.');
       }
 
-      await humanPause(250, 700);
-      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'fill', label: 'phone-number' }, async () => {
+      await humanPause(100, 220);
+      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'fill', label: 'phone-number', skipOperationDelay: true }, async () => {
         fillInput(phoneInput, nationalPhoneNumber);
       });
       if (hiddenPhoneNumberInput) {
-        await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'hidden-sync', label: 'phone-number-hidden-sync' }, async () => {
+        await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'hidden-sync', label: 'phone-number-hidden-sync', skipOperationDelay: true }, async () => {
           hiddenPhoneNumberInput.value = phoneNumber;
           dispatchInputEvents(hiddenPhoneNumberInput);
         });
       }
-      await sleep(250);
+      await sleep(100);
       const deliveryMethodResult = await selectSmsPhoneDeliveryMethodIfAvailable();
       if (deliveryMethodResult.selected) {
-        await sleep(150);
+        await sleep(80);
       }
-      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'submit', label: 'phone-number-submit' }, async () => {
+      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'submit', label: 'phone-number-submit', skipOperationDelay: true }, async () => {
         simulateClick(submitButton);
       });
       return waitForPhoneVerificationReady();
