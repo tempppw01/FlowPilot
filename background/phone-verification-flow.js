@@ -1567,7 +1567,27 @@
 
     function isAuthContentScriptUnreachableError(error) {
       const message = String(error?.message || error || '').trim();
-      return /Receiving end does not exist|Could not establish connection|Frame with ID \d+ is showing error page|等待认证页状态检查超时/i.test(message);
+      return /Receiving end does not exist|Could not establish connection|Frame with ID \d+ is showing error page|Content script .* did not respond|Try refreshing the tab and retry|等待认证页状态检查超时/i.test(message);
+    }
+
+    // Order cleanup may happen after polling changed persisted settings.
+    // Prefer the latest runtime state while keeping the caller snapshot as fallback.
+    async function readLatestPhoneRuntimeState(state = {}) {
+      if (typeof getState !== 'function') {
+        return state || {};
+      }
+      try {
+        const latestState = await getState();
+        if (!latestState || typeof latestState !== 'object') {
+          return state || {};
+        }
+        return {
+          ...(state || {}),
+          ...latestState,
+        };
+      } catch (_) {
+        return state || {};
+      }
     }
 
     function buildPhoneRestartStep7Error(phoneNumber = '') {
@@ -1650,6 +1670,7 @@
       'smsbowerServiceCode',
       'smsbowerCountryOrder',
       'smsbowerProviderIds',
+      'smsbowerProviderIdsManual',
       'smsbowerMinPrice',
       'smsbowerMaxPrice',
       'phoneVerificationReplacementLimit',
@@ -1912,7 +1933,8 @@
     }
 
     async function completePhoneActivation(state = {}, activation) {
-      if (shouldSkipTerminalStatusForFreeReuse(state, activation)) {
+      const latestState = await readLatestPhoneRuntimeState(state);
+      if (shouldSkipTerminalStatusForFreeReuse(latestState, activation)) {
         const normalizedActivation = normalizeActivation(activation);
         const identifier = normalizedActivation?.phoneNumber || normalizedActivation?.activationId || 'current activation';
         await addLog(
@@ -1925,7 +1947,7 @@
       if (!normalizedActivation) {
         return;
       }
-      const scopedState = scopeStateToActivationProvider(state, normalizedActivation);
+      const scopedState = scopeStateToActivationProvider(latestState, normalizedActivation);
       const provider = getActivationProviderAdapterForState(scopedState, normalizedActivation);
       if (typeof provider?.finishActivation !== 'function') {
         throw new Error(`${getPhoneSmsProviderLabel(getActivationProviderId(normalizedActivation, state))} 不支持完成接码订单。`);
@@ -1937,7 +1959,8 @@
     async function cancelPhoneActivation(state = {}, activation) {
       try {
         const normalizedActivation = normalizeActivation(activation);
-        if (shouldSkipTerminalStatusForFreeReuse(state, activation)) {
+        const latestState = await readLatestPhoneRuntimeState(state);
+        if (shouldSkipTerminalStatusForFreeReuse(latestState, activation)) {
           const identifier = normalizedActivation?.phoneNumber || normalizedActivation?.activationId || 'current activation';
           await addLog(
             `步骤 9：白嫖复用模式仅请求短信，跳过 ${identifier} 的接码取消状态。`,
@@ -1948,7 +1971,7 @@
         if (!normalizedActivation) {
           return;
         }
-        const scopedState = scopeStateToActivationProvider(state, normalizedActivation);
+        const scopedState = scopeStateToActivationProvider(latestState, normalizedActivation);
         const provider = getActivationProviderAdapterForState(scopedState, normalizedActivation);
         if (typeof provider?.cancelActivation === 'function') {
           await provider.cancelActivation(scopedState, normalizedActivation);
@@ -2032,8 +2055,9 @@
 
     async function banPhoneActivation(state = {}, activation) {
       try {
-        if (shouldSkipTerminalStatusForFreeReuse(state, activation)) {
-          const normalizedActivation = normalizeActivation(activation);
+        const normalizedActivation = normalizeActivation(activation);
+        const latestState = await readLatestPhoneRuntimeState(state);
+        if (shouldSkipTerminalStatusForFreeReuse(latestState, activation)) {
           const identifier = normalizedActivation?.phoneNumber || normalizedActivation?.activationId || 'current activation';
           await addLog(
             `步骤 9：白嫖复用模式仅请求短信，跳过 ${identifier} 的接码封禁状态。`,
@@ -2041,11 +2065,10 @@
           );
           return;
         }
-        const normalizedActivation = normalizeActivation(activation);
         if (!normalizedActivation) {
           return;
         }
-        const scopedState = scopeStateToActivationProvider(state, normalizedActivation);
+        const scopedState = scopeStateToActivationProvider(latestState, normalizedActivation);
         const provider = getActivationProviderAdapterForState(scopedState, normalizedActivation);
         if (typeof provider?.banActivation === 'function') {
           await provider.banActivation(scopedState, normalizedActivation);
@@ -3591,9 +3614,12 @@
     }
 
     async function cancelSignupPhoneActivation(state = {}, activation = null) {
-      const normalizedActivation = normalizeActivation(activation || state?.signupPhoneActivation);
+      const latestState = await readLatestPhoneRuntimeState(state);
+      const normalizedActivation = normalizeActivation(activation)
+        || normalizeActivation(latestState?.signupPhoneActivation)
+        || normalizeActivation(state?.signupPhoneActivation);
       if (normalizedActivation) {
-        await cancelPhoneActivation(state, normalizedActivation);
+        await cancelPhoneActivation(latestState, normalizedActivation);
       }
       await clearSignupPhoneRuntimeState();
     }
@@ -3986,7 +4012,13 @@
       let state = await getState();
       let activation = normalizeActivation(state[PHONE_ACTIVATION_STATE_KEY]);
       let pageState = initialPageState || await readPhonePageState(tabId);
-      let shouldCancelActivation = false;
+      // SMSBower orders are paid and do not support reuse. If the flow is
+      // resumed with a persisted order, it must still be released on failure.
+      let shouldCancelActivation = Boolean(
+        activation
+        && activation.provider === PHONE_SMS_PROVIDER_SMSBOWER
+        && !isFreeAutoReuseActivation(activation)
+      );
       let remainingResendRequests = Math.max(0, Number(state.verificationResendCount) || 0);
       const maxNumberReplacementAttempts = normalizePhoneReplacementLimit(
         state.phoneVerificationReplacementLimit
@@ -4352,6 +4384,7 @@
         if (!normalizedActivation) {
           return { handled: false, nextActivation: null };
         }
+        state = await readLatestPhoneRuntimeState(state);
         const scopedState = scopeStateToActivationProvider(state, normalizedActivation);
         const provider = getActivationProviderAdapterForState(scopedState, normalizedActivation);
         if (!provider || typeof provider.rotateActivation !== 'function') {

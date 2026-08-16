@@ -774,7 +774,7 @@ const SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID = Object.freeze({
   39: '2738,3237',
   46: '2738',
   215: '3370',
-  187: '3170,2495',
+  187: '3193',
 });
 const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
   2738: 46,
@@ -812,8 +812,9 @@ const SMSBOWER_COUNTRY_ID_BY_LEGACY_PROVIDER_ID = Object.freeze({
   2495: 187,
   3170: 187,
 });
-const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170,2495';
+const DEFAULT_SMSBOWER_PROVIDER_IDS = '3193';
 const LEGACY_DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
+const LEGACY_USA_DEFAULT_SMSBOWER_PROVIDER_IDS = '3170,2495';
 const DEFAULT_SMSBOWER_MAX_PRICE = '0.12';
 const DEFAULT_HERO_SMS_REUSE_ENABLED = true;
 const HERO_SMS_ACQUIRE_PRIORITY_COUNTRY = 'country';
@@ -1548,6 +1549,7 @@ const PERSISTED_SETTING_DEFAULTS = {
   smsbowerFixedCountryId: 0,
   smsbowerFixedCountryLabel: '',
   smsbowerProviderIds: DEFAULT_SMSBOWER_PROVIDER_IDS,
+  smsbowerProviderIdsManual: false,
   smsbowerMinPrice: '',
   smsbowerMaxPrice: DEFAULT_SMSBOWER_MAX_PRICE,
   smsbowerRandomMode: false,
@@ -3979,6 +3981,8 @@ function normalizePersistentSettingValue(key, value) {
       return String(value || '').trim();
     case 'smsbowerProviderIds':
       return normalizeSmsBowerProviderIds(value);
+    case 'smsbowerProviderIdsManual':
+      return Boolean(value);
     case 'smsbowerRandomMode':
       return Boolean(value);
     case 'smsbowerMinPrice':
@@ -4106,15 +4110,16 @@ function buildPersistentSettingsPayload(input = {}, options = {}) {
   ) {
     const autoProviderIds = getSmsBowerProviderIdsForCountryOrder(payload.smsbowerCountryOrder || []);
     const normalizedProviderIds = normalizeSmsBowerProviderIds(payload.smsbowerProviderIds);
-    if (
+    if (!payload.smsbowerProviderIdsManual && (
       autoProviderIds
       && (
         !normalizedProviderIds
         || normalizedProviderIds === DEFAULT_SMSBOWER_PROVIDER_IDS
         || normalizedProviderIds === LEGACY_DEFAULT_SMSBOWER_PROVIDER_IDS
+        || normalizedProviderIds === LEGACY_USA_DEFAULT_SMSBOWER_PROVIDER_IDS
         || normalizedProviderIds === autoProviderIds
       )
-    ) {
+    )) {
       payload.smsbowerProviderIds = autoProviderIds;
     }
   }

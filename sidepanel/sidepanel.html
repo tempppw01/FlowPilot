@@ -1819,7 +1819,7 @@
               <div class="data-inline hero-sms-country-stack">
                 <button id="btn-smsbower-refresh-catalog" class="btn btn-outline btn-sm data-inline-btn" type="button">拉取上游 ID / 价格</button>
                 <button id="btn-smsbower-api-docs" class="btn btn-ghost btn-sm data-inline-btn" type="button">API 文档</button>
-                <span class="data-value hero-sms-country-note">按当前 API Key 与服务代码读取可用国家、线路和最低价格。</span>
+                <span class="data-value hero-sms-country-note">按当前 API Key 与服务代码读取可用国家、线路和最低价格；拉取后每个已选国家默认只保留最低价线路。</span>
               </div>
             </div>
             <div class="data-row" id="row-smsbower-country-mode" style="display:none;">
@@ -1861,8 +1861,8 @@
                   <button id="btn-smsbower-provider-menu" class="btn btn-outline btn-sm hero-sms-country-menu-btn" type="button" aria-haspopup="listbox" aria-expanded="false">自动按国家选择线路</button>
                   <div id="smsbower-provider-menu" class="hero-sms-country-menu-dropdown" role="listbox" aria-multiselectable="true" hidden></div>
                 </div>
-                <input type="text" id="input-smsbower-provider-ids" class="data-input mono" placeholder="3170" hidden aria-hidden="true" />
-                <span class="data-value hero-sms-country-note">默认随国家自动切换到对应线路，USA 仍默认 3170。</span>
+                <input type="text" id="input-smsbower-provider-ids" class="data-input mono" placeholder="3193" hidden aria-hidden="true" />
+                <span class="data-value hero-sms-country-note">默认随国家自动切换对应线路，USA 仅使用 3193。</span>
               </div>
             </div>
             <div class="data-row" id="row-smsbower-price-range" style="display:none;">

@@ -202,7 +202,7 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /id="btn-smsbower-country-mode-fixed"/);
   assert.doesNotMatch(html, /id="btn-smsbower-country-order-random"/);
   assert.match(html, /id="btn-smsbower-country-order-clear"/);
-  assert.match(html, /3170/);
+  assert.match(html, /3193/);
   assert.doesNotMatch(html, /id="input-smsbower-country-order"/);
   assert.match(html, /id="row-smsbower-provider-ids"/);
   assert.match(html, /id="input-smsbower-provider-ids"/);
@@ -218,7 +218,7 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /id:\s*187/);
   assert.match(sidepanelSource, /label:\s*'美国'/);
   assert.match(sidepanelSource, /englishLabel:\s*'USA'/);
-  assert.match(sidepanelSource, /price:\s*'0\.118'/);
+  assert.match(sidepanelSource, /price:\s*'0\.064'/);
   assert.doesNotMatch(sidepanelSource, /label:\s*'菲律宾'/);
   assert.match(sidepanelSource, /id:\s*48[\s\S]*providerIds:\s*'2442'/);
   assert.match(sidepanelSource, /id:\s*78[\s\S]*providerIds:\s*'3237'/);
@@ -240,7 +240,7 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /id:\s*54[\s\S]*providerIds:\s*'3193'/);
   assert.match(sidepanelSource, /providerIds:\s*'2738'/);
   assert.match(sidepanelSource, /id:\s*52[\s\S]*providerIds:\s*'2266,3193,3237'/);
-  assert.match(sidepanelSource, /id:\s*187[\s\S]*providerIds:\s*'3170,2495'/);
+  assert.match(sidepanelSource, /id:\s*187[\s\S]*providerIds:\s*'3193'/);
   assert.match(sidepanelSource, /DEFAULT_SMSBOWER_MAX_PRICE = '0\.12'/);
   assert.match(sidepanelSource, /loadSmsBowerCountries\(\{ silent: true \}\)/);
   assert.match(sidepanelSource, /btn-smsbower-country-order-menu/);
@@ -251,13 +251,13 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /smsbowerCountryOrderSelection\.length/);
   assert.match(sidepanelSource, /getSmsBowerCountryLabelById\(countryId\)/);
   assert.match(sidepanelSource, /getSmsBowerCountrySearchTextById\(countryId\)/);
-  assert.match(sidepanelSource, /providerIds: '3170,2495'/);
+  assert.match(sidepanelSource, /providerIds: '3193'/);
   assert.match(sidepanelSource, /getSmsBowerProviderIdsForCountryOrder\(smsBowerCountryOrderForProviderIds\)/);
   assert.match(sidepanelSource, /syncSmsBowerProviderIdsFromCountrySelection\(smsbowerCountryOrderSelection,/);
   assert.match(sidepanelSource, /function buildRandomSmsBowerCountryOrder\(randomFn = Math\.random\)/);
   assert.match(sidepanelSource, /async function buildSmsBowerPricePreviewLines/);
   assert.match(sidepanelSource, /action', 'getPricesV3'/);
-  assert.match(sidepanelSource, /id !== 187/);
+  assert.doesNotMatch(sidepanelSource, /id !== 187/);
   assert.match(sidepanelSource, /randomCandidateCount/);
   assert.match(sidepanelSource, /applySmsBowerCountrySelection\(randomOrder,/);
   assert.match(sidepanelSource, /SMSBower 已启用随机国家队列/);
@@ -294,7 +294,7 @@ return {
   assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, '荷兰 / 法国 / 印度尼西亚 (3/29)');
   api.setRandomModeForTest(true);
   api.updateSmsBowerCountryOrderMenuSummary([48, 78, 6]);
-  assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, '随机模式 (28/29)');
+  assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, '随机模式 (29/29)');
 
   const randomApi = new Function(`
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = [{ id: 6 }, { id: 52 }, { id: 187 }];
@@ -302,23 +302,24 @@ function normalizeSmsBowerCountryIdValue(value) { return Number(value) || 0; }
 ${extractFunction('buildRandomSmsBowerCountryOrder')}
 return { buildRandomSmsBowerCountryOrder };
 `)();
-  assert.deepStrictEqual(randomApi.buildRandomSmsBowerCountryOrder(() => 0), [52, 6]);
-  assert.deepStrictEqual(randomApi.buildRandomSmsBowerCountryOrder(() => 0.99), [6, 52]);
-  assert.equal(randomApi.buildRandomSmsBowerCountryOrder(() => 0.5).includes(187), false);
+  assert.deepStrictEqual(randomApi.buildRandomSmsBowerCountryOrder(() => 0), [52, 187, 6]);
+  assert.deepStrictEqual(randomApi.buildRandomSmsBowerCountryOrder(() => 0.99), [6, 52, 187]);
+  assert.equal(randomApi.buildRandomSmsBowerCountryOrder(() => 0.5).includes(187), true);
 });
 
 test('SMSBower country selection auto-syncs the provider IDs field unless it has been manually overridden', () => {
   const api = new Function(`
-let smsbowerProviderIdsAutoValue = '3170,2495';
+let smsbowerProviderIdsAutoValue = '3193';
 const inputSmsBowerProviderIds = { value: '3170' };
-const DEFAULT_SMSBOWER_PROVIDER_IDS = '3170,2495';
+const DEFAULT_SMSBOWER_PROVIDER_IDS = '3193';
 const LEGACY_DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
+const LEGACY_USA_DEFAULT_SMSBOWER_PROVIDER_IDS = '3170,2495';
 function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value : []; }
 function normalizeSmsBowerCountryIdValue(value) { return Number(value); }
 function normalizeSmsBowerProviderIdsValue(value = '') { return String(value || '').trim().replace(/[^0-9,]+/g, ''); }
 function getSmsBowerCountryItemById(id) {
   return ({
-    187: { providerIds: '3170,2495' },
+    187: { providerIds: '3193' },
     48: { providerIds: '2442' },
     6: { providerIds: '3237,3408,2266' },
     33: { providerIds: '3243,3253,3288,3160' },
@@ -346,6 +347,84 @@ return { inputSmsBowerProviderIds, syncSmsBowerProviderIdsFromCountrySelection }
   api.inputSmsBowerProviderIds.value = '8888';
   api.syncSmsBowerProviderIdsFromCountrySelection([33]);
   assert.equal(api.inputSmsBowerProviderIds.value, '8888');
+});
+
+test('SMSBower catalog refresh auto-selects the cheapest available line per country', () => {
+  const api = new Function(`
+function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value : []; }
+function normalizeSmsBowerCountryIdValue(value) { return Number(value) || 0; }
+function normalizeSmsBowerProviderIdsValue(value = '') { return String(value || '').trim().replace(/[^0-9,]+/g, ''); }
+function getSmsBowerCountryItemById(id) {
+  return ({
+    22: { providerIds: '3193,2266', lines: [
+      { providerId: '3193', price: 0.067, count: 10 },
+      { providerId: '2266', price: 0.054, count: 8 },
+    ] },
+    187: { providerIds: '3193,3449', lines: [
+      { providerId: '3193', price: 0.064, count: 25314 },
+      { providerId: '3449', price: 0.126, count: 1246 },
+    ] },
+  }[id] || null);
+}
+${extractFunction('getSmsBowerCountryLinesById')}
+${extractFunction('getSmsBowerDefaultProviderIdsByCountryId')}
+${extractFunction('getSmsBowerCheapestProviderIdForCountry')}
+${extractFunction('getSmsBowerProviderIdsForCountryOrder')}
+return { getSmsBowerProviderIdsForCountryOrder };
+`)();
+
+  assert.equal(api.getSmsBowerProviderIdsForCountryOrder([187], { cheapestOnly: true }), '3193');
+  assert.equal(api.getSmsBowerProviderIdsForCountryOrder([22], { cheapestOnly: true }), '2266');
+});
+
+test('SMSBower provider line toggles preserve the newly selected line', () => {
+  const api = new Function(`
+function normalizeSmsBowerProviderIdsValue(value = '') {
+  return String(value || '').split(/[,\\s]+/).filter((entry) => /^\\d+$/.test(entry)).join(',') || '3193';
+}
+${extractFunction('toggleSmsBowerProviderSelection')}
+return { toggleSmsBowerProviderSelection };
+`)();
+
+  let selected = '3237';
+  selected = api.toggleSmsBowerProviderSelection(selected, '3193', '3193');
+  assert.equal(selected, '3237,3193');
+  selected = api.toggleSmsBowerProviderSelection(selected, '3237', '3193');
+  assert.equal(selected, '3193');
+});
+
+test('SMSBower manual provider selection survives forced auto-sync and stale state restore', () => {
+  const api = new Function(`
+let smsbowerProviderIdsManualOverride = false;
+let smsbowerProviderIdsManualValue = '';
+let smsbowerProviderIdsAutoValue = '3237';
+const inputSmsBowerProviderIds = { value: '3237' };
+const DEFAULT_SMSBOWER_PROVIDER_IDS = '3193';
+const LEGACY_DEFAULT_SMSBOWER_PROVIDER_IDS = '3170';
+const LEGACY_USA_DEFAULT_SMSBOWER_PROVIDER_IDS = '3170,2495';
+function normalizeSmsBowerProviderIdsValue(value = '') {
+  return String(value || '').split(/[,\\s]+/).filter((entry) => /^\\d+$/.test(entry)).join(',') || '3193';
+}
+function getSmsBowerProviderIdsForCountryOrder() { return '3237'; }
+${extractFunction('syncSmsBowerProviderIdsFromCountrySelection')}
+${extractFunction('setSmsBowerProviderIdsManualValue')}
+${extractFunction('preserveSmsBowerProviderIdsManualValue')}
+return {
+  inputSmsBowerProviderIds,
+  syncSmsBowerProviderIdsFromCountrySelection,
+  setSmsBowerProviderIdsManualValue,
+  preserveSmsBowerProviderIdsManualValue,
+};
+`)();
+
+  api.setSmsBowerProviderIdsManualValue('3193');
+  api.inputSmsBowerProviderIds.value = '3237';
+  api.syncSmsBowerProviderIdsFromCountrySelection([6], { force: true });
+  assert.equal(api.inputSmsBowerProviderIds.value, '3193');
+
+  api.inputSmsBowerProviderIds.value = '3237';
+  assert.equal(api.preserveSmsBowerProviderIdsManualValue(), true);
+  assert.equal(api.inputSmsBowerProviderIds.value, '3193');
 });
 
 test('sidepanel loads live SMS country lists silently during startup', () => {

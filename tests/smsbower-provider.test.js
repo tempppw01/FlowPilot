@@ -172,10 +172,10 @@ test('SMSBower provider logs Brazil failures with country and providerId context
   assert.equal(requests[1].searchParams.get('providerIds'), '3415');
   assert.equal(requests[2].searchParams.get('providerIds'), '3413');
   assert.equal(requests[7].searchParams.get('country'), '187');
-  assert.equal(requests[7].searchParams.get('providerIds'), '3170');
+  assert.equal(requests[7].searchParams.get('providerIds'), '3193');
   assert.equal(activation.countryId, 187);
   assert.equal(activation.countryLabel, 'USA');
-  assert.equal(activation.providerIds, '3170');
+  assert.equal(activation.providerIds, '3193');
   assert.equal(
     logs.some((entry) => (
       entry.level === 'warn'
@@ -386,11 +386,12 @@ test('SMSBower provider continues through a randomized non-USA country queue whe
   assert.equal(activation.providerIds, '3237');
 });
 
-test('SMSBower random mode uses the full non-USA default pool instead of the saved country subset', async () => {
+test('SMSBower random mode uses the full default pool, including USA, instead of the saved country subset', async () => {
   const requests = [];
+  const randomValues = [0.999999, 0];
   const module = loadModule();
   const provider = module.createProvider({
-    randomFn: () => 0,
+    randomFn: () => randomValues.shift() ?? 0,
     fetchImpl: async (url) => {
       const parsedUrl = new URL(url);
       requests.push(parsedUrl);
@@ -407,19 +408,18 @@ test('SMSBower random mode uses the full non-USA default pool instead of the sav
 
   const state = {
     smsbowerApiKey: 'key-1',
-    smsbowerCountryOrder: [52, 187],
+    smsbowerCountryOrder: [52],
     smsbowerProviderIds: '3170',
     smsbowerRandomMode: true,
   };
 
   const activation = await provider.requestActivation(state);
 
-  assert.equal(requests[0].searchParams.get('country'), '22');
-  assert.equal(requests[0].searchParams.get('providerIds'), '2266');
-  assert.notEqual(requests[0].searchParams.get('country'), '187');
-  assert.notEqual(requests[0].searchParams.get('country'), '52');
-  assert.equal(activation.countryId, 22);
-  assert.equal(activation.countryLabel, 'India');
+  assert.equal(requests[0].searchParams.get('country'), '187');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3193');
+  assert.equal(activation.countryId, 187);
+  assert.equal(activation.countryLabel, 'USA');
+  assert.equal(activation.providerIds, '3193');
 });
 
 test('SMSBower random mode keeps Gold provider IDs before Silver and unknown lines', async () => {
@@ -453,6 +453,102 @@ test('SMSBower random mode keeps Gold provider IDs before Silver and unknown lin
   assert.equal(activation.countryId, 48);
   assert.equal(activation.countryLabel, 'Netherlands');
   assert.equal(activation.providerIds, '2442');
+});
+
+test('SMSBower fixed USA mode starts with the 3193 Gold line', async () => {
+  const requests = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    fetchImpl: async (url) => {
+      requests.push(new URL(url));
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return 'ACCESS_NUMBER:176300:+14075550123';
+        },
+      };
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [187],
+    smsbowerProviderIds: '3170,2495',
+  });
+
+  assert.equal(requests[0].searchParams.get('country'), '187');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3193');
+  assert.equal(activation.countryId, 187);
+  assert.equal(activation.countryLabel, 'USA');
+  assert.equal(activation.providerIds, '3193');
+});
+
+test('SMSBower fixed USA mode never falls back to other provider IDs when 3193 has no numbers', async () => {
+  const requests = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    fetchImpl: async (url) => {
+      requests.push(new URL(url));
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return 'NO_NUMBERS';
+        },
+      };
+    },
+  });
+
+  await assert.rejects(
+    provider.requestActivation({
+      smsbowerApiKey: 'key-1',
+      smsbowerCountryMode: 'fixed',
+      smsbowerFixedCountryId: 187,
+      smsbowerCountryOrder: [187],
+      smsbowerProviderIds: '3193,2377,2266,2217,3160,3243,3253,3288',
+      smsbowerActivationRetryRounds: 1,
+    }),
+    /均无可用号码/
+  );
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].searchParams.get('country'), '187');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3193');
+});
+
+test('SMSBower retries a USA line when every candidate line was temporarily skipped', async () => {
+  const requests = [];
+  const logs = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    addLog: async (message) => logs.push(message),
+    fetchImpl: async (url) => {
+      requests.push(new URL(url));
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return 'ACCESS_NUMBER:176304:+14075550124';
+        },
+      };
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [187],
+    smsbowerProviderIds: '3193',
+  }, {
+    blockedProviderIds: ['187:3193'],
+  });
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].searchParams.get('country'), '187');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3193');
+  assert.equal(activation.activationId, '176304');
+  assert.equal(activation.providerIds, '3193');
+  assert.match(logs.join('\n'), /所有候选线路均达到临时失败跳过阈值/);
 });
 
 test('SMSBower random mode weights countries and provider IDs with recent successful code records', async () => {
@@ -533,6 +629,38 @@ test('SMSBower provider tries the next provider ID in the same country when a li
   assert.equal(activation.selectedPrice, '0.12');
 });
 
+test('SMSBower manual provider selection does not expand into the country auto list', async () => {
+  const requests = [];
+  const module = loadModule();
+  const provider = module.createProvider({
+    fetchImpl: async (url) => {
+      requests.push(new URL(url));
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return 'NO_NUMBERS';
+        },
+      };
+    },
+  });
+
+  await assert.rejects(
+    provider.requestActivation({
+      smsbowerApiKey: 'key-1',
+      smsbowerCountryOrder: [52],
+      smsbowerProviderIds: '3193',
+      smsbowerProviderIdsManual: true,
+      smsbowerActivationRetryRounds: 1,
+    }),
+    /均无可用号码/
+  );
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].searchParams.get('country'), '52');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3193');
+});
+
 test('SMSBower provider cancels activation with status 8', async () => {
   const requests = [];
   const module = loadModule();
@@ -577,8 +705,7 @@ test('SMSBower provider parses balance and V3 provider price tiers', async () =>
           return JSON.stringify({
             187: {
               dr: {
-                3170: { count: 8123, price: 0.12, provider_id: 3170 },
-                2495: { count: 8924, price: 0.118, provider_id: 2495 },
+                3193: { count: 25314, price: 0.064, provider_id: 3193 },
               },
             },
           });
@@ -606,12 +733,11 @@ test('SMSBower provider parses balance and V3 provider price tiers', async () =>
     price: entry.price,
     count: entry.count,
   })), [
-    { providerId: '2495', price: 0.118, count: 8924 },
-    { providerId: '3170', price: 0.12, count: 8123 },
+    { providerId: '3193', price: 0.064, count: 25314 },
   ]);
-  assert.deepStrictEqual(range.prices, [0.118, 0.12]);
-  assert.equal(range.minPrice, 0.118);
-  assert.equal(range.maxPrice, 0.12);
+  assert.deepStrictEqual(range.prices, [0.064]);
+  assert.equal(range.minPrice, 0.064);
+  assert.equal(range.maxPrice, 0.064);
 });
 
 test('SMSBower fixed country mode only requests the configured country id', async () => {
@@ -635,7 +761,7 @@ test('SMSBower fixed country mode only requests the configured country id', asyn
     smsbowerCountryOrder: [187, 52],
     smsbowerFixedCountryId: 999,
     smsbowerFixedCountryLabel: 'Fixed country',
-    smsbowerProviderIds: '3170,2495',
+    smsbowerProviderIds: '3193',
   };
   assert.deepStrictEqual(provider.resolveCountryCandidates(state), [
     { id: 999, label: 'Fixed country' },
@@ -677,8 +803,7 @@ test('SMSBower provider loads country names, provider ids and minimum prices fro
         }
         : {
           187: { dr: {
-            3170: { count: 3, price: 0.12, provider_id: 3170 },
-            2495: { count: 4, price: 0.118, provider_id: 2495 },
+            3193: { count: 25314, price: 0.064, provider_id: 3193 },
           } },
           52: { dr: {
             2266: { count: 5, price: 0.054, provider_id: 2266 },
@@ -707,9 +832,8 @@ test('SMSBower provider loads country names, provider ids and minimum prices fro
     { id: 52, label: '泰国', providerIds: '2266', lines: [
       { providerId: '2266', price: 0.054, count: 5 },
     ], price: 0.054, count: 5 },
-    { id: 187, label: '美国', providerIds: '2495,3170', lines: [
-      { providerId: '2495', price: 0.118, count: 4 },
-      { providerId: '3170', price: 0.12, count: 3 },
-    ], price: 0.118, count: 7 },
+    { id: 187, label: '美国', providerIds: '3193', lines: [
+      { providerId: '3193', price: 0.064, count: 25314 },
+    ], price: 0.064, count: 25314 },
   ]);
 });

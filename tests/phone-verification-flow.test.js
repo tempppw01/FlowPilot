@@ -9497,6 +9497,12 @@ test('SMSBower OAuth phone verification retains the five-minute timeout state', 
     true,
     'the configured timeout path should replace the expired SMSBower number once'
   );
+  const oldActivationCancel = requests.find((request) => (
+    request.searchParams.get('action') === 'setStatus'
+    && request.searchParams.get('id') === 'old-activation'
+  ));
+  assert.ok(oldActivationCancel, 'the timed-out persisted SMSBower order should be released');
+  assert.equal(oldActivationCancel.searchParams.get('status'), '8');
   assert.equal(logs.some((message) => /允许超过 5 分钟持续换号/.test(message)), false);
 });
 

@@ -8,8 +8,9 @@
   const DEFAULT_SERVICE_LABEL = 'OpenAI';
   const DEFAULT_COUNTRY_ID = 187;
   const DEFAULT_COUNTRY_LABEL = 'USA';
-  const DEFAULT_PROVIDER_IDS = '3170,2495';
+  const DEFAULT_PROVIDER_IDS = '3193';
   const LEGACY_DEFAULT_PROVIDER_IDS = '3170';
+  const LEGACY_USA_DEFAULT_PROVIDER_IDS = '3170,2495';
   const DEFAULT_MAX_PRICE = '0.12';
   const COUNTRY_MODE_PRIORITY = 'priority';
   const COUNTRY_MODE_FIXED = 'fixed';
@@ -92,9 +93,8 @@
     { id: 39, label: 'Argentina', providerIds: '2738,3237', providerLines: [{ id: '2738', rank: 'silver', price: 0.067 }] },
     { id: 46, label: 'Sweden', providerIds: '2738' },
     { id: 215, label: 'Kosovo', providerIds: '3370', providerLines: [{ id: '3370', rank: 'bronze', price: 0.084 }] },
-    { id: 187, label: 'USA', providerIds: '3170,2495', providerLines: [
-      { id: '3170', rank: 'gold', price: 0.12 },
-      { id: '2495', rank: 'silver', price: 0.118 },
+    { id: 187, label: 'USA', providerIds: '3193', providerLines: [
+      { id: '3193', rank: 'gold', price: 0.064 },
     ] },
   ]);
   const DEFAULT_COUNTRY_LABELS_BY_ID = new Map(DEFAULT_COUNTRY_CANDIDATES.map((entry) => [entry.id, entry.label]));
@@ -391,12 +391,17 @@
   function resolveConfig(state = {}, deps = {}) {
     const fixedCountryId = resolveFixedCountryId(state);
     const configuredProviderIds = normalizeSmsBowerProviderIds(state?.smsbowerProviderIds, DEFAULT_PROVIDER_IDS);
+    const isFixedUsa = fixedCountryId === DEFAULT_COUNTRY_ID;
     return {
       apiKey: String(state?.smsbowerApiKey || '').trim(),
       baseUrl: state?.smsbowerBaseUrl || DEFAULT_BASE_URL,
       serviceCode: normalizeSmsBowerServiceCode(state?.smsbowerServiceCode, DEFAULT_SERVICE_CODE),
       // The legacy USA default must not constrain an unrelated fixed country.
-      providerIds: fixedCountryId && fixedCountryId !== DEFAULT_COUNTRY_ID && configuredProviderIds === DEFAULT_PROVIDER_IDS
+      providerIds: isFixedUsa
+        ? DEFAULT_PROVIDER_IDS
+        : fixedCountryId
+        && fixedCountryId !== DEFAULT_COUNTRY_ID
+        && [DEFAULT_PROVIDER_IDS, LEGACY_USA_DEFAULT_PROVIDER_IDS].includes(configuredProviderIds)
         ? ''
         : configuredProviderIds,
       fetchImpl: deps.fetchImpl || (typeof fetch === 'function' ? fetch.bind(globalThis) : null),
@@ -659,7 +664,7 @@
     if (!configured) {
       return true;
     }
-    if (configured === DEFAULT_PROVIDER_IDS || configured === LEGACY_DEFAULT_PROVIDER_IDS) {
+    if ([DEFAULT_PROVIDER_IDS, LEGACY_DEFAULT_PROVIDER_IDS, LEGACY_USA_DEFAULT_PROVIDER_IDS].includes(configured)) {
       return true;
     }
     const autoSet = new Set(normalizeSmsBowerProviderIds(autoProviderIds, '').split(',').filter(Boolean));
@@ -833,14 +838,7 @@
   }
 
   function resolveSmsBowerRandomCountryCandidates(countryCandidates = [], randomFn = Math.random, successWeights = {}) {
-    const nonUsCandidates = countryCandidates.filter(
-      (entry) => normalizeSmsBowerCountryId(entry?.id, 0) !== DEFAULT_COUNTRY_ID
-    );
-    const candidates = nonUsCandidates.length
-      ? nonUsCandidates
-      : DEFAULT_COUNTRY_CANDIDATES.filter(
-        (entry) => normalizeSmsBowerCountryId(entry?.id, 0) !== DEFAULT_COUNTRY_ID
-      );
+    const candidates = countryCandidates.length ? countryCandidates : DEFAULT_COUNTRY_CANDIDATES;
     const normalizedSuccessWeights = normalizeSmsBowerSuccessWeights(successWeights);
     const now = Date.now();
     return weightedShuffleSmsBowerEntries(
@@ -1207,10 +1205,33 @@
     const fixedCountryId = resolveFixedCountryId(state);
     const autoProviderIds = getProviderIdsForCountryOrder(countryCandidates)
       || (fixedCountryId ? '' : DEFAULT_PROVIDER_IDS);
-    const useManualProviderIds = !hasOnlyAutoSmsBowerProviderIds(config.providerIds, autoProviderIds);
+    const useManualProviderIds = Boolean(state?.smsbowerProviderIdsManual)
+      || !hasOnlyAutoSmsBowerProviderIds(config.providerIds, autoProviderIds);
     const resolvedProviderIds = useManualProviderIds
       ? config.providerIds
       : autoProviderIds;
+    const getCountryProviderIdAttempts = (countryConfig) => {
+      const countryId = normalizeSmsBowerCountryId(countryConfig?.id, DEFAULT_COUNTRY_ID);
+      const countryProviderIds = useManualProviderIds
+        ? resolvedProviderIds
+        : (getProviderIdsForCountryId(countryId) || resolvedProviderIds);
+      return splitSmsBowerProviderIds(countryProviderIds);
+    };
+    const hasProviderIdCandidates = countryCandidates.some((countryConfig) => (
+      getCountryProviderIdAttempts(countryConfig).length > 0
+    ));
+    const hasUnblockedProviderIdCandidates = countryCandidates.some((countryConfig) => {
+      const countryId = normalizeSmsBowerCountryId(countryConfig?.id, DEFAULT_COUNTRY_ID);
+      return getCountryProviderIdAttempts(countryConfig)
+        .some((providerId) => !isSmsBowerProviderIdBlocked(blockedProviderIds, countryId, providerId));
+    });
+    const effectiveBlockedProviderIds = new Set(blockedProviderIds);
+    if (hasProviderIdCandidates && !hasUnblockedProviderIdCandidates) {
+      effectiveBlockedProviderIds.clear();
+      if (blockedProviderIds.size && typeof deps.addLog === 'function') {
+        await deps.addLog('步骤 9：SMSBower 所有候选线路均达到临时失败跳过阈值，本轮解除线路跳过并重新尝试。', 'warn');
+      }
+    }
     const maxAcquireRounds = Math.max(1, Math.min(10, Math.floor(Number(state?.smsbowerActivationRetryRounds) || DEFAULT_ACQUIRE_RETRY_ROUNDS)));
     const retryDelayMs = Math.max(500, Math.min(30000, Math.floor(Number(state?.smsbowerActivationRetryDelayMs) || DEFAULT_ACQUIRE_RETRY_DELAY_MS)));
     const configuredMaxPrice = getCappedSmsBowerMaxPrice(state?.smsbowerMaxPrice || DEFAULT_MAX_PRICE);
@@ -1226,13 +1247,10 @@
         deps.throwIfStopped?.();
         const countryId = normalizeSmsBowerCountryId(countryConfig?.id, DEFAULT_COUNTRY_ID);
         const countryLabel = normalizeSmsBowerCountryLabel(countryConfig?.label, `Country #${countryId}`);
-        const countryProviderIds = useManualProviderIds
-          ? resolvedProviderIds
-          : (getProviderIdsForCountryId(countryId) || resolvedProviderIds);
-        const providerIdAttempts = splitSmsBowerProviderIds(countryProviderIds);
+        const providerIdAttempts = getCountryProviderIdAttempts(countryConfig);
         const lineAttempts = orderSmsBowerProviderIdAttempts(
           countryId,
-          providerIdAttempts.filter((providerId) => !isSmsBowerProviderIdBlocked(blockedProviderIds, countryId, providerId)),
+          providerIdAttempts.filter((providerId) => !isSmsBowerProviderIdBlocked(effectiveBlockedProviderIds, countryId, providerId)),
           { randomMode, randomFn, successWeights: state?.smsbowerSuccessWeightsByCountry }
         );
         if (providerIdAttempts.length && !lineAttempts.length) {

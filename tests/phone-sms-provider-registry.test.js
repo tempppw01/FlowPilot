@@ -129,7 +129,7 @@ test('phone sms provider registry can create the real SMSBower provider module',
   assert.equal(provider.defaultProduct, 'OpenAI');
   assert.equal(provider.defaultServiceCode, 'dr');
   assert.equal(provider.defaultCountryId, 187);
-  assert.equal(provider.defaultProviderIds, '3170,2495');
+  assert.equal(provider.defaultProviderIds, '3193');
   assert.equal(provider.defaultMaxPrice, '0.12');
   assert.equal(typeof provider.fetchBalance, 'function');
   assert.equal(typeof provider.fetchPrices, 'function');
