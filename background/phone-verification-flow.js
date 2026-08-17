@@ -1241,9 +1241,28 @@
       }
     }
 
+    function isSmsBowerFixedLineRetryMode(state = {}, activation = {}) {
+      const normalizedActivation = normalizeActivation(activation);
+      if (!normalizedActivation || normalizedActivation.provider !== PHONE_SMS_PROVIDER_SMSBOWER) {
+        return false;
+      }
+      if (String(state?.smsbowerCountryMode || '').trim().toLowerCase() !== 'fixed') {
+        return false;
+      }
+      const fixedCountryId = Math.floor(Number(state?.smsbowerFixedCountryId) || 0);
+      if (fixedCountryId <= 0) {
+        return false;
+      }
+      const activationCountryKey = getProviderActivationCountryKey(state, normalizedActivation);
+      return String(activationCountryKey || '').trim() === String(fixedCountryId);
+    }
+
     async function persistSmsBowerProviderIdTimeoutSkip(state = {}, activation = {}) {
       const normalizedActivation = normalizeActivation(activation);
       if (!normalizedActivation || normalizedActivation.provider !== PHONE_SMS_PROVIDER_SMSBOWER) {
+        return;
+      }
+      if (isSmsBowerFixedLineRetryMode(state, normalizedActivation)) {
         return;
       }
       const countryKey = String(
@@ -4244,6 +4263,21 @@
         if (!normalizedActivation || normalizedActivation.provider !== PHONE_SMS_PROVIDER_SMSBOWER) {
           return;
         }
+        if (isSmsBowerFixedLineRetryMode(state, normalizedActivation)) {
+          const providerIds = normalizeSmsBowerProviderIdList(normalizedActivation.providerIds);
+          if (providerIds.length) {
+            const countryLabel = getProviderCountryLabel(
+              state,
+              PHONE_SMS_PROVIDER_SMSBOWER,
+              normalizedActivation.countryId
+            );
+            await addLog(
+              `步骤 9：SMSBower ${countryLabel} 线路 ${providerIds.join(',')} 因 ${formatStep9Reason(reason || 'sms_timeout')} 未收到短信，固定国家/线路模式将继续重试同一线路。`,
+              'warn'
+            );
+          }
+          return;
+        }
         const activationCountryKey = getProviderActivationCountryKey(state, normalizedActivation);
         const countryKey = normalizeCountryFailureKey(activationCountryKey, normalizedActivation.provider);
         if (!countryKey) {
@@ -4314,6 +4348,10 @@
           state?.phoneSmsProvider || activation?.provider || DEFAULT_PHONE_SMS_PROVIDER
         );
         if (activeProvider !== PHONE_SMS_PROVIDER_SMSBOWER) {
+          return [];
+        }
+        if (String(state?.smsbowerCountryMode || '').trim().toLowerCase() === 'fixed'
+          && Math.floor(Number(state?.smsbowerFixedCountryId) || 0) > 0) {
           return [];
         }
         const blocked = [];
