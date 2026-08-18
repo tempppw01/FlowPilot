@@ -14,6 +14,7 @@
   const DEFAULT_MAX_PRICE = '0.12';
   const COUNTRY_MODE_PRIORITY = 'priority';
   const COUNTRY_MODE_FIXED = 'fixed';
+  const COUNTRY_MODE_RECOMMENDED = 'recommended';
   const MAX_PRICE_CAP = 0.12;
   const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
   const DEFAULT_ACQUIRE_RETRY_ROUNDS = 3;
@@ -102,6 +103,13 @@
     entry.id,
     normalizeSmsBowerProviderIds(entry.providerIds, ''),
   ]));
+  const RECOMMENDED_ROUTE_CANDIDATES = Object.freeze([
+    { id: 187, label: 'USA', recommendedProviderId: '3193' },
+    { id: 151, label: 'Chile', recommendedProviderId: '3451' },
+    { id: 151, label: 'Chile', recommendedProviderId: '3452' },
+    { id: 151, label: 'Chile', recommendedProviderId: '3419' },
+    { id: 5560, label: 'Tanzania', recommendedProviderId: '2268' },
+  ]);
   const DEFAULT_PROVIDER_LINES_BY_COUNTRY_ID = new Map(DEFAULT_COUNTRY_CANDIDATES.map((entry) => [
     entry.id,
     Array.isArray(entry.providerLines) ? entry.providerLines : [],
@@ -160,10 +168,14 @@
   function resolveFixedCountryId(state = {}) {
     const configuredId = normalizeOptionalSmsBowerCountryId(state?.smsbowerFixedCountryId);
     const rawMode = String(state?.smsbowerCountryMode || '').trim().toLowerCase();
-    const mode = rawMode === COUNTRY_MODE_FIXED || rawMode === COUNTRY_MODE_PRIORITY
+    const mode = rawMode === COUNTRY_MODE_FIXED || rawMode === COUNTRY_MODE_PRIORITY || rawMode === COUNTRY_MODE_RECOMMENDED
       ? rawMode
       : (configuredId ? COUNTRY_MODE_FIXED : COUNTRY_MODE_PRIORITY);
     return mode === COUNTRY_MODE_FIXED ? configuredId : 0;
+  }
+
+  function isSmsBowerRecommendedMode(state = {}) {
+    return String(state?.smsbowerCountryMode || '').trim().toLowerCase() === COUNTRY_MODE_RECOMMENDED;
   }
 
   function normalizeOptionalSmsBowerCountryId(value) {
@@ -465,7 +477,14 @@
     }));
   }
 
+  function resolveRecommendedRouteCandidates() {
+    return RECOMMENDED_ROUTE_CANDIDATES.map((entry) => ({ ...entry }));
+  }
+
   function resolveCountryCandidates(state = {}) {
+    if (isSmsBowerRecommendedMode(state)) {
+      return resolveRecommendedRouteCandidates();
+    }
     const fixedCountryId = resolveFixedCountryId(state);
     if (String(state?.smsbowerCountryMode || '').trim().toLowerCase() === COUNTRY_MODE_FIXED && !fixedCountryId) {
       throw new Error('SMSBower 已选择固定国家模式，请先填写有效的固定国家 ID。');
@@ -1169,7 +1188,10 @@
     const config = resolveConfig(state, deps);
     const configuredCountryCandidates = resolveCountryCandidates(state);
     const randomMode = shouldUseSmsBowerRandomMode(state);
-    const allCountryCandidates = randomMode
+    const recommendedMode = isSmsBowerRecommendedMode(state);
+    const allCountryCandidates = recommendedMode
+      ? resolveRecommendedRouteCandidates()
+      : randomMode
       ? resolveDefaultCountryCandidates()
       : configuredCountryCandidates;
     const randomFn = typeof deps.randomFn === 'function' ? deps.randomFn : Math.random;
@@ -1191,7 +1213,9 @@
         await deps.addLog('步骤 9：SMSBower 已选国家均达到临时失败跳过阈值，本轮解除跳过并重新尝试。', 'warn');
       }
     }
-    if (randomMode) {
+    if (recommendedMode) {
+      countryCandidates = shuffleSmsBowerItems(countryCandidates, randomFn);
+    } else if (randomMode) {
       countryCandidates = resolveSmsBowerRandomCountryCandidates(
         countryCandidates,
         randomFn,
@@ -1211,6 +1235,9 @@
       ? config.providerIds
       : autoProviderIds;
     const getCountryProviderIdAttempts = (countryConfig) => {
+      if (recommendedMode && countryConfig?.recommendedProviderId) {
+        return [String(countryConfig.recommendedProviderId).trim()];
+      }
       const countryId = normalizeSmsBowerCountryId(countryConfig?.id, DEFAULT_COUNTRY_ID);
       const countryProviderIds = useManualProviderIds
         ? resolvedProviderIds
@@ -1515,6 +1542,7 @@
       normalizeMaxPrice: normalizeSmsBowerPrice,
       normalizeActivation,
       resolveCountryCandidates,
+      resolveRecommendedRouteCandidates,
       resolveCountryLabel,
       resolveActivationCountry,
       getActivationCountryKey,

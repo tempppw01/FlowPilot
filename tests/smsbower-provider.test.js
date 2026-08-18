@@ -788,6 +788,94 @@ test('SMSBower fixed country mode rejects an empty country id instead of falling
   );
 });
 
+test('SMSBower recommended mode only uses the configured five-line route pool', async () => {
+  const requests = [];
+  const module = loadModule();
+  const allowedRoutes = new Set([
+    '187:3193',
+    '151:3451',
+    '151:3452',
+    '151:3419',
+    '5560:2268',
+  ]);
+  let requestCount = 0;
+  const provider = module.createProvider({
+    randomFn: () => 0,
+    fetchImpl: async (url) => {
+      const request = new URL(url);
+      requests.push(request);
+      requestCount += 1;
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return requestCount === 1
+            ? 'NO_NUMBERS'
+            : 'ACCESS_NUMBER:recommended-1:+56912345678';
+        },
+      };
+    },
+  });
+
+  const state = {
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryMode: 'recommended',
+    smsbowerActivationRetryRounds: 1,
+  };
+  assert.deepStrictEqual(provider.resolveCountryCandidates(state), [
+    { id: 187, label: 'USA', recommendedProviderId: '3193' },
+    { id: 151, label: 'Chile', recommendedProviderId: '3451' },
+    { id: 151, label: 'Chile', recommendedProviderId: '3452' },
+    { id: 151, label: 'Chile', recommendedProviderId: '3419' },
+    { id: 5560, label: 'Tanzania', recommendedProviderId: '2268' },
+  ]);
+
+  const activation = await provider.requestActivation(state);
+
+  assert.equal(requests.length, 2, 'a failed line should move to another recommended line');
+  requests.forEach((request) => {
+    assert.equal(allowedRoutes.has(`${request.searchParams.get('country')}:${request.searchParams.get('providerIds')}`), true);
+  });
+  assert.equal(allowedRoutes.has(`${activation.countryId}:${activation.providerIds}`), true);
+});
+
+test('SMSBower recommended mode cycles through the same route pool after a full failed pass', async () => {
+  const requests = [];
+  const module = loadModule();
+  const allowedRoutes = new Set(['187:3193', '151:3451', '151:3452', '151:3419', '5560:2268']);
+  let requestCount = 0;
+  const provider = module.createProvider({
+    randomFn: () => 0,
+    sleepWithStop: async () => {},
+    fetchImpl: async (url) => {
+      const request = new URL(url);
+      requests.push(request);
+      requestCount += 1;
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return requestCount <= 5
+            ? 'NO_NUMBERS'
+            : 'ACCESS_NUMBER:recommended-2:+255712345678';
+        },
+      };
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryMode: 'recommended',
+    smsbowerActivationRetryRounds: 2,
+  });
+
+  assert.equal(requests.length, 6, 'the next acquire round should start from the recommended pool again');
+  requests.forEach((request) => {
+    assert.equal(allowedRoutes.has(`${request.searchParams.get('country')}:${request.searchParams.get('providerIds')}`), true);
+  });
+  assert.equal(allowedRoutes.has(`${activation.countryId}:${activation.providerIds}`), true);
+});
+
 test('SMSBower provider loads country names, provider ids and minimum prices from upstream', async () => {
   const requests = [];
   const module = loadModule();

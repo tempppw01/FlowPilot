@@ -558,6 +558,7 @@ const btnSmsBowerApiDocs = document.getElementById('btn-smsbower-api-docs');
 const selectSmsBowerCountryMode = document.getElementById('select-smsbower-country-mode');
 const btnSmsBowerCountryModeRandom = document.getElementById('btn-smsbower-country-mode-random');
 const btnSmsBowerCountryModePriority = document.getElementById('btn-smsbower-country-mode-priority');
+const btnSmsBowerCountryModeRecommended = document.getElementById('btn-smsbower-country-mode-recommended');
 const btnSmsBowerCountryModeFixed = document.getElementById('btn-smsbower-country-mode-fixed');
 const inputSmsBowerFixedCountryId = document.getElementById('input-smsbower-fixed-country-id');
 const smsbowerFixedCountryMenuShell = document.getElementById('smsbower-fixed-country-menu-shell');
@@ -779,6 +780,14 @@ const DEFAULT_MADAO_MODE = MADAO_MODE_ROUTING_PLAN;
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_COUNTRY_MODE_PRIORITY = 'priority';
 const SMSBOWER_COUNTRY_MODE_FIXED = 'fixed';
+const SMSBOWER_COUNTRY_MODE_RECOMMENDED = 'recommended';
+const SMSBOWER_RECOMMENDED_ROUTE_ITEMS = Object.freeze([
+  { countryId: 187, countryLabel: '美国', providerId: '3193', price: 0.064 },
+  { countryId: 151, countryLabel: '智利', providerId: '3451', price: 0.052 },
+  { countryId: 151, countryLabel: '智利', providerId: '3452', price: 0.052 },
+  { countryId: 151, countryLabel: '智利', providerId: '3419', price: 0.052 },
+  { countryId: 5560, countryLabel: '坦桑尼亚', providerId: '2268', price: 0.054 },
+]);
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = Object.freeze([
   { id: 22, label: '印度', englishLabel: 'India', price: '0.054', providerIds: '3193,2266' },
   { id: 52, label: '泰国', englishLabel: 'Thailand', price: '0.054', providerIds: '2266,3193,3237' },
@@ -6127,9 +6136,9 @@ function collectSettingsPayload() {
     madaoMaxPrice: maDaoMaxPriceValue,
     smsbowerApiKey: smsBowerApiKeyValue,
     smsbowerServiceCode: smsBowerServiceCodeValue,
-    smsbowerCountryMode: smsBowerFixedCountryMode
+    smsbowerCountryMode: typeof selectSmsBowerCountryMode !== 'undefined' && selectSmsBowerCountryMode?.value === 'fixed'
       ? 'fixed'
-      : 'priority',
+      : (typeof selectSmsBowerCountryMode !== 'undefined' && selectSmsBowerCountryMode?.value === 'recommended' ? 'recommended' : 'priority'),
     smsbowerCountryOrder: smsBowerCountryOrderValue,
     smsbowerFixedCountryId: smsBowerFixedCountryIdValue,
     smsbowerFixedCountryLabel: smsBowerFixedCountryLabelValue,
@@ -7513,7 +7522,11 @@ function normalizeSmsBowerCountryIdValue(value, fallback = DEFAULT_SMSBOWER_COUN
 
 function normalizeSmsBowerCountryModeValue(value = '', fixedCountryId = 0) {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === SMSBOWER_COUNTRY_MODE_FIXED || normalized === SMSBOWER_COUNTRY_MODE_PRIORITY) {
+  if (
+    normalized === SMSBOWER_COUNTRY_MODE_FIXED
+    || normalized === SMSBOWER_COUNTRY_MODE_PRIORITY
+    || normalized === SMSBOWER_COUNTRY_MODE_RECOMMENDED
+  ) {
     return normalized;
   }
   return normalizeSmsBowerCountryIdValue(fixedCountryId, 0)
@@ -8864,18 +8877,23 @@ function updateHeroSmsPlatformDisplay() {
         : getSelectedMaDaoRoutingPlanLabel(),
     };
   } else if (provider === smsBowerProvider) {
+    const recommendedMode = selectSmsBowerCountryMode?.value === SMSBOWER_COUNTRY_MODE_RECOMMENDED;
     const fixedCountryId = typeof getSmsBowerFixedCountryId === 'function'
       ? getSmsBowerFixedCountryId()
       : Math.max(0, Math.floor(Number(latestState?.smsbowerFixedCountryId) || 0));
-    const countryId = fixedCountryId || normalizeSmsBowerCountryOrderValue(
-      smsbowerCountryOrderSelection.length
-        ? smsbowerCountryOrderSelection
-        : ((Array.isArray(latestState?.smsbowerCountryOrder) && latestState.smsbowerCountryOrder.length) ? latestState.smsbowerCountryOrder : DEFAULT_SMSBOWER_COUNTRY_ORDER)
-    )[0] || DEFAULT_SMSBOWER_COUNTRY_ORDER[0];
-    selected = {
-      id: countryId,
-      label: getSmsBowerCountryLabelById(countryId),
-    };
+    if (recommendedMode) {
+      selected = { id: '', label: '推荐线路池' };
+    } else {
+      const countryId = fixedCountryId || normalizeSmsBowerCountryOrderValue(
+        smsbowerCountryOrderSelection.length
+          ? smsbowerCountryOrderSelection
+          : ((Array.isArray(latestState?.smsbowerCountryOrder) && latestState.smsbowerCountryOrder.length) ? latestState.smsbowerCountryOrder : DEFAULT_SMSBOWER_COUNTRY_ORDER)
+      )[0] || DEFAULT_SMSBOWER_COUNTRY_ORDER[0];
+      selected = {
+        id: countryId,
+        label: getSmsBowerCountryLabelById(countryId),
+      };
+    }
   }
   const countryText = selected?.label ? ` / ${selected.label}` : '';
   displayHeroSmsPlatform.textContent = `${getPhoneSmsProviderLabel(provider)} / OpenAI${countryText}`;
@@ -9349,6 +9367,12 @@ function setSmsBowerProviderMenuOpen(open) {
 }
 
 function updateSmsBowerProviderMenuSummary() {
+  if (selectSmsBowerCountryMode?.value === SMSBOWER_COUNTRY_MODE_RECOMMENDED) {
+    if (btnSmsBowerProviderMenu) {
+      btnSmsBowerProviderMenu.textContent = `推荐线路：${SMSBOWER_RECOMMENDED_ROUTE_ITEMS.map((entry) => entry.providerId).join(', ')}`;
+    }
+    return;
+  }
   const ids = normalizeSmsBowerProviderIdsValue(inputSmsBowerProviderIds?.value || '').split(',').filter(Boolean);
   if (btnSmsBowerProviderMenu) {
     btnSmsBowerProviderMenu.textContent = ids.length ? `已选 ${ids.length} 条线路：${ids.join(', ')}` : '自动按国家选择线路';
@@ -9383,13 +9407,20 @@ function renderSmsBowerProviderMenu() {
   searchInput.placeholder = '搜索线路 / 国家 / 价格';
   searchWrap.appendChild(searchInput);
   smsbowerProviderMenu.appendChild(searchWrap);
-  const selected = new Set(normalizeSmsBowerProviderIdsValue(inputSmsBowerProviderIds?.value || '').split(',').filter(Boolean));
-  const countries = getSmsBowerProviderMenuCountryIds();
   const lines = new Map();
-  countries.forEach((countryId) => getSmsBowerCountryLinesById(countryId).forEach((line) => {
-    const existing = lines.get(line.providerId);
-    if (!existing || (Number.isFinite(line.price) && line.price < existing.price)) lines.set(line.providerId, { ...line, countryId });
-  }));
+  const recommendedMode = selectSmsBowerCountryMode?.value === SMSBOWER_COUNTRY_MODE_RECOMMENDED;
+  const selected = new Set(normalizeSmsBowerProviderIdsValue(inputSmsBowerProviderIds?.value || '').split(',').filter(Boolean));
+  if (recommendedMode) {
+    SMSBOWER_RECOMMENDED_ROUTE_ITEMS.forEach((line) => {
+      lines.set(line.providerId, { ...line, countryId: line.countryId });
+    });
+  } else {
+    const countries = getSmsBowerProviderMenuCountryIds();
+    countries.forEach((countryId) => getSmsBowerCountryLinesById(countryId).forEach((line) => {
+      const existing = lines.get(line.providerId);
+      if (!existing || (Number.isFinite(line.price) && line.price < existing.price)) lines.set(line.providerId, { ...line, countryId });
+    }));
+  }
   const list = document.createElement('div');
   list.className = 'hero-sms-country-menu-list';
   Array.from(lines.values()).sort((left, right) => (left.price || 999) - (right.price || 999)).forEach((line) => {
@@ -9427,6 +9458,9 @@ function renderSmsBowerProviderMenu() {
 }
 
 function getSmsBowerProviderMenuCountryIds() {
+  if (selectSmsBowerCountryMode?.value === SMSBOWER_COUNTRY_MODE_RECOMMENDED) {
+    return Array.from(new Set(SMSBOWER_RECOMMENDED_ROUTE_ITEMS.map((entry) => entry.countryId)));
+  }
   if (selectSmsBowerCountryMode?.value === SMSBOWER_COUNTRY_MODE_FIXED) {
     const fixedCountryId = getSmsBowerFixedCountryId();
     return fixedCountryId ? [fixedCountryId] : [];
@@ -9458,7 +9492,9 @@ function setSmsBowerCountryMode(mode = SMSBOWER_COUNTRY_MODE_PRIORITY, options =
   } else {
     const nextMode = normalizedMode === SMSBOWER_COUNTRY_MODE_FIXED
       ? SMSBOWER_COUNTRY_MODE_FIXED
-      : SMSBOWER_COUNTRY_MODE_PRIORITY;
+      : (normalizedMode === SMSBOWER_COUNTRY_MODE_RECOMMENDED
+        ? SMSBOWER_COUNTRY_MODE_RECOMMENDED
+        : SMSBOWER_COUNTRY_MODE_PRIORITY);
     if (selectSmsBowerCountryMode) {
       selectSmsBowerCountryMode.value = nextMode;
     }
@@ -9474,13 +9510,15 @@ function setSmsBowerCountryMode(mode = SMSBOWER_COUNTRY_MODE_PRIORITY, options =
 function updateSmsBowerCountryModeUI() {
   const fixedCountryId = getSmsBowerFixedCountryId();
   const fixedMode = selectSmsBowerCountryMode?.value === 'fixed';
+  const recommendedMode = selectSmsBowerCountryMode?.value === SMSBOWER_COUNTRY_MODE_RECOMMENDED;
   const randomMode = Boolean(smsbowerRandomModeEnabled);
-  if (rowSmsBowerCountryOrder) rowSmsBowerCountryOrder.style.display = fixedMode || randomMode ? 'none' : '';
-  if (rowSmsBowerCountryOrderActions) rowSmsBowerCountryOrderActions.style.display = fixedMode || randomMode ? 'none' : '';
+  if (rowSmsBowerCountryOrder) rowSmsBowerCountryOrder.style.display = fixedMode || randomMode || recommendedMode ? 'none' : '';
+  if (rowSmsBowerCountryOrderActions) rowSmsBowerCountryOrderActions.style.display = fixedMode || randomMode || recommendedMode ? 'none' : '';
   if (rowSmsBowerFixedCountry) rowSmsBowerFixedCountry.style.display = fixedMode ? '' : 'none';
   [
     [btnSmsBowerCountryModeRandom, randomMode],
-    [btnSmsBowerCountryModePriority, !randomMode && !fixedMode],
+    [btnSmsBowerCountryModePriority, !randomMode && !fixedMode && !recommendedMode],
+    [btnSmsBowerCountryModeRecommended, recommendedMode],
     [btnSmsBowerCountryModeFixed, fixedMode],
   ].forEach(([button, active]) => {
     if (!button) return;
@@ -9492,9 +9530,15 @@ function updateSmsBowerCountryModeUI() {
       ? `固定模式下只向 ${getSmsBowerCountryLabelById(fixedCountryId)}（${fixedCountryId}）买号。`
       : '请填写一个上游 country ID；固定模式下只会向该国家买号。';
   }
+  if (btnSmsBowerProviderMenu) {
+    btnSmsBowerProviderMenu.disabled = recommendedMode;
+    btnSmsBowerProviderMenu.title = recommendedMode
+      ? '推荐模式固定使用推荐线路池'
+      : '';
+  }
   const providerMenuModeKey = fixedMode
     ? `fixed:${fixedCountryId}`
-    : (randomMode ? 'random' : 'priority');
+    : (recommendedMode ? 'recommended' : (randomMode ? 'random' : 'priority'));
   if (providerMenuModeKey !== smsbowerProviderMenuModeKey) {
     smsbowerProviderMenuModeKey = providerMenuModeKey;
     if (fixedMode && fixedCountryId) {
@@ -19563,10 +19607,9 @@ function buildPhoneSmsProviderStatePatch(provider = getSelectedPhoneSmsProvider(
     return {
       smsbowerApiKey: String(inputSmsBowerApiKey?.value || ''),
       smsbowerServiceCode: normalizeSmsBowerServiceCodeValue(inputSmsBowerServiceCode?.value || latestState?.smsbowerServiceCode || DEFAULT_SMSBOWER_SERVICE_CODE),
-      smsbowerCountryMode: normalizeSmsBowerCountryModeValue(
-        selectSmsBowerCountryMode?.value,
-        inputSmsBowerFixedCountryId?.value
-      ),
+      smsbowerCountryMode: typeof selectSmsBowerCountryMode !== 'undefined' && selectSmsBowerCountryMode?.value === 'fixed'
+        ? 'fixed'
+        : (typeof selectSmsBowerCountryMode !== 'undefined' && selectSmsBowerCountryMode?.value === 'recommended' ? 'recommended' : 'priority'),
       smsbowerCountryOrder: normalizeSmsBowerCountryOrderValue(
         smsBowerCountryOrderSelectionValue.length
           ? smsBowerCountryOrderSelectionValue
@@ -20051,6 +20094,11 @@ btnSmsBowerProviderMenu?.addEventListener('click', (event) => {
 btnSmsBowerCountryModePriority?.addEventListener('click', (event) => {
   event.preventDefault();
   setSmsBowerCountryMode(SMSBOWER_COUNTRY_MODE_PRIORITY, { persist: true });
+  updateHeroSmsPlatformDisplay();
+});
+btnSmsBowerCountryModeRecommended?.addEventListener('click', (event) => {
+  event.preventDefault();
+  setSmsBowerCountryMode(SMSBOWER_COUNTRY_MODE_RECOMMENDED, { persist: true });
   updateHeroSmsPlatformDisplay();
 });
 btnSmsBowerCountryModeFixed?.addEventListener('click', (event) => {
