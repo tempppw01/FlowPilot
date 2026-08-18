@@ -149,6 +149,7 @@ const DEFAULT_MADAO_MODE = 'routing_plan';
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_COUNTRY_MODE_PRIORITY = 'priority';
 const SMSBOWER_COUNTRY_MODE_FIXED = 'fixed';
+const SMSBOWER_COUNTRY_MODE_RECOMMENDED = 'recommended';
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = [22, 52, 73, 48, 78, 6, 33, 16, 151, 31, 95, 85, 19, 10, 269, 160, 5560, 1099, 708, 976, 2058, 3118, 18397, 43, 53, 54, 39, 46, 215, 187];
 const SMSBOWER_PROVIDER_IDS_BY_COUNTRY_ID = {
   22: '3193,2266',
@@ -456,6 +457,7 @@ return {
   assert.equal(api.normalizePersistentSettingValue('smsbowerApiKey', ' demo-smsbower '), ' demo-smsbower ');
   assert.equal(api.normalizePersistentSettingValue('smsbowerServiceCode', ' DR! '), 'dr');
   assert.equal(api.normalizePersistentSettingValue('smsbowerCountryMode', 'fixed'), 'fixed');
+  assert.equal(api.normalizePersistentSettingValue('smsbowerCountryMode', 'recommended'), 'recommended');
   assert.equal(api.normalizePersistentSettingValue('smsbowerCountryMode', 'unknown'), 'priority');
   assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [187, '52', 187]), [187, 52]);
   assert.deepStrictEqual(api.normalizePersistentSettingValue('smsbowerCountryOrder', [3237, 3398, 187]), [52, 73, 187]);

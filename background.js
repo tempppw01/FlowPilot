@@ -712,6 +712,7 @@ const DEFAULT_MADAO_MODE = 'routing_plan';
 const DEFAULT_SMSBOWER_SERVICE_CODE = 'dr';
 const SMSBOWER_COUNTRY_MODE_PRIORITY = 'priority';
 const SMSBOWER_COUNTRY_MODE_FIXED = 'fixed';
+const SMSBOWER_COUNTRY_MODE_RECOMMENDED = 'recommended';
 const DEFAULT_SMSBOWER_COUNTRY_ORDER = Object.freeze([
   22,
   52,
@@ -2394,7 +2395,11 @@ function normalizeSmsBowerCountryId(value, fallback = DEFAULT_SMSBOWER_COUNTRY_O
 
 function normalizeSmsBowerCountryMode(value = '', fixedCountryId = 0) {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === SMSBOWER_COUNTRY_MODE_FIXED || normalized === SMSBOWER_COUNTRY_MODE_PRIORITY) {
+  if (
+    normalized === SMSBOWER_COUNTRY_MODE_FIXED
+    || normalized === SMSBOWER_COUNTRY_MODE_PRIORITY
+    || normalized === SMSBOWER_COUNTRY_MODE_RECOMMENDED
+  ) {
     return normalized;
   }
   return normalizeSmsBowerCountryId(fixedCountryId, 0)
