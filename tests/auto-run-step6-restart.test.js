@@ -585,6 +585,22 @@ test('auto-run restarts oauth-login when phone verification asks to refresh OAut
   assert.ok(!events.logs.some(({ message }) => /PHONE_RESTART_STEP7::/.test(message)));
 });
 
+test('auto-run restarts oauth-login when CPA reports invalid_auth_step', async () => {
+  const harness = createHarness({
+    failureStep: 9,
+    failureBudget: 1,
+    failureMessage: '错误代码：invalid_auth_step',
+    authState: { state: 'phone_verification_page', url: 'https://auth.openai.com/phone-verification' },
+  });
+
+  const events = await harness.run();
+
+  assert.deepStrictEqual(events.steps, [7, 8, 9, 7, 8, 9, 10]);
+  assert.equal(events.invalidations.length, 1);
+  assert.equal(events.invalidations[0].step, 6);
+  assert.ok(events.logs.some(({ message }) => /回到节点 oauth-login 重新开始授权流程/.test(message)));
+});
+
 test('auto-run restarts bound-email phone verification failures up to the email-mode cap', async () => {
   const emailBoundSteps = {
     10: { key: 'oauth-login' },

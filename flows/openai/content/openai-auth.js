@@ -4472,6 +4472,7 @@ function inspectLoginAuthState() {
   const addPhonePage = isAddPhonePageReady();
   const addEmailPage = isAddEmailPageReady();
   const phoneVerificationPage = isPhoneVerificationPageReady();
+  const invalidAuthStep = /\binvalid_auth_step\b/i.test(getPageTextSnapshot());
   const consentReady = isStep8Ready();
   const oauthConsentPage = isOAuthConsentPage();
   const chooseAccountPage = isChooseAccountPage();
@@ -4499,6 +4500,7 @@ function inspectLoginAuthState() {
     addPhonePage,
     addEmailPage,
     phoneVerificationPage,
+    invalidAuthStep,
     oauthConsentPage,
     consentReady,
     chooseAccountPage,
@@ -4508,6 +4510,13 @@ function inspectLoginAuthState() {
     return {
       ...baseState,
       state: 'login_timeout_error_page',
+    };
+  }
+
+  if (invalidAuthStep) {
+    return {
+      ...baseState,
+      state: 'invalid_auth_step',
     };
   }
 
@@ -4624,6 +4633,7 @@ function serializeLoginAuthState(snapshot) {
     addPhonePage: Boolean(snapshot?.addPhonePage),
     addEmailPage: Boolean(snapshot?.addEmailPage),
     phoneVerificationPage: Boolean(snapshot?.phoneVerificationPage),
+    invalidAuthStep: Boolean(snapshot?.invalidAuthStep),
     oauthConsentPage: Boolean(snapshot?.oauthConsentPage),
     consentReady: Boolean(snapshot?.consentReady),
     chooseAccountPage: Boolean(snapshot?.chooseAccountPage),
@@ -4643,6 +4653,8 @@ function getLoginAuthStateLabel(snapshot) {
       return '手机号输入页';
     case 'phone_verification_page':
       return '手机验证码页';
+    case 'invalid_auth_step':
+      return 'OAuth 授权步骤失效页';
     case 'login_timeout_error_page':
       return '登录超时报错页';
     case 'oauth_consent_page':

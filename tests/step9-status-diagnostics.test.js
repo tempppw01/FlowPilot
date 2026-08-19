@@ -78,7 +78,7 @@ function createApi() {
 function isRecoverableStep9AuthFailure(text) {
   const normalized = String(text || '').trim();
   return /(?:认证失败|回调\\s*url\\s*提交失败|回调url提交失败|提交回调失败)\\s*[:：]?/i.test(normalized)
-    || /oauth flow is not pending|请更新\\s*cli\\s*proxy\\s*api\\s*或检查连接|bad request|state code error|failed to exchange authorization code for tokens|failed to save authentication tokens|unknown or expired state|invalid state|state is required|code or error is required|invalid redirect_url|provider does not match state|failed to persist oauth callback|timeout waiting for oauth callback|oauth flow timed out/i.test(normalized);
+    || /oauth flow is not pending|请更新\\s*cli\\s*proxy\\s*api\\s*或检查连接|invalid_auth_step|bad request|state code error|failed to exchange authorization code for tokens|failed to save authentication tokens|unknown or expired state|invalid state|state is required|code or error is required|invalid redirect_url|provider does not match state|failed to persist oauth callback|timeout waiting for oauth callback|oauth flow timed out/i.test(normalized);
 }
 
 ${bundle}
@@ -203,6 +203,14 @@ test('step 10 explains callback upgrade hint with user-friendly reason', () => {
   assert.equal(explanation.code, 'callback_submit_api_unavailable');
   assert.match(explanation.userMessage, /CLI Proxy API 版本过旧|管理接口未启动|连接异常/);
   assert.match(explanation.userMessage, /回调提交阶段/);
+});
+
+test('step 10 explains invalid_auth_step as an expired OAuth session', () => {
+  const api = createApi();
+  const explanation = api.explainStep10Failure('错误代码：invalid_auth_step', 'main');
+
+  assert.equal(explanation.code, 'oauth_invalid_auth_step');
+  assert.match(explanation.userMessage, /刷新 OAuth 链接并重新登录/);
 });
 
 test('step 10 warns about CPA multithread cleanup when success and callback failure coexist', () => {

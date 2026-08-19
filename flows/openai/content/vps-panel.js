@@ -289,7 +289,7 @@ function isStep10MainFailureText(statusText) {
   const text = normalizeStep9StatusText(statusText);
   if (!text) return false;
   if (/^认证失败\s*[:：]?\s*/i.test(text)) return true;
-  return /bad request|state code error|failed to exchange authorization code for tokens|failed to save authentication tokens|unknown or expired state|invalid state|state is required|code or error is required|invalid redirect_url|provider does not match state|failed to persist oauth callback|timeout waiting for oauth callback|oauth flow timed out|request failed with status code \d+|timeout of \d+ms exceeded|network error|failed to fetch/i.test(text);
+  return /bad request|invalid_auth_step|state code error|failed to exchange authorization code for tokens|failed to save authentication tokens|unknown or expired state|invalid state|state is required|code or error is required|invalid redirect_url|provider does not match state|failed to persist oauth callback|timeout waiting for oauth callback|oauth flow timed out|request failed with status code \d+|timeout of \d+ms exceeded|network error|failed to fetch/i.test(text);
 }
 
 function isStep9FailureText(statusText) {
@@ -581,6 +581,11 @@ function explainStep10Failure(statusText, sourceKind = 'unknown') {
       : '页面状态阶段';
 
   const rules = [
+    {
+      code: 'oauth_invalid_auth_step',
+      pattern: /invalid_auth_step/i,
+      message: '当前 OAuth 授权步骤已失效，必须刷新 OAuth 链接并重新登录，不能继续使用旧授权会话。',
+    },
     {
       code: 'callback_submit_api_unavailable',
       pattern: /请更新\s*cli\s*proxy\s*api\s*或检查连接/i,

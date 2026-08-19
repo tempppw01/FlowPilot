@@ -16029,6 +16029,9 @@ async function getPostStep6AutoRestartDecision(step, error) {
     const normalizedMessage = String(errorMessage || '');
     return /OPENAI_OAUTH_SESSION_NOT_FOUND|session\s+not\s+found\s+or\s+expired|oauth\s+session\s+(?:not\s+found|expired)|missing\s+SUB2API\s+session_id|缺少\s*SUB2API\s*(?:session_id|会话信息)|SUB2API[\s\S]*(?:会话|session)[\s\S]*(?:过期|失效|不存在|not\s+found|expired)/i.test(normalizedMessage);
   };
+  const isInvalidAuthStepError = (errorMessage = '') => (
+    /invalid_auth_step/i.test(String(errorMessage || ''))
+  );
   const isPhoneVerificationLocalFailure = (errorMessage = '') => {
     const normalizedMessage = String(errorMessage || '');
     if (isPhoneSmsPlatformRateLimitFailure(normalizedMessage)) {
@@ -16089,9 +16092,10 @@ async function getPostStep6AutoRestartDecision(step, error) {
     && isPlatformVerifyTransientRetryError(errorMessage);
   const shouldRestartFromOAuthLoginStep = currentNodeKey === 'platform-verify'
     && isPlatformVerifyOAuthSessionExpiredError(errorMessage);
+  const shouldRestartFromInvalidAuthStep = isInvalidAuthStepError(errorMessage);
   const restartAnchorStep = shouldRetryFromConfirmStep
     ? confirmOauthStep
-    : (shouldRestartFromOAuthLoginStep
+    : (shouldRestartFromInvalidAuthStep || shouldRestartFromOAuthLoginStep
       ? authChainStartStep
       : (isBoundEmailReloginTailStep && Number.isFinite(boundEmailReloginStep) && boundEmailReloginStep > 0
       ? boundEmailReloginStep
@@ -16134,6 +16138,17 @@ async function getPostStep6AutoRestartDecision(step, error) {
       shouldRestart: true,
       blockedByAddPhone: false,
       forcedByPhoneVerificationTimeout: true,
+      restartStep: authChainStartStep,
+      errorMessage,
+      authState: null,
+    };
+  }
+
+  if (shouldRestartFromInvalidAuthStep) {
+    return {
+      shouldRestart: true,
+      blockedByAddPhone: false,
+      forcedByPhoneVerificationTimeout: false,
       restartStep: authChainStartStep,
       errorMessage,
       authState: null,

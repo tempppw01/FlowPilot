@@ -497,6 +497,9 @@
         });
         return;
       }
+      if (pageState?.state === 'invalid_auth_step' || pageState?.invalidAuthStep) {
+        throw new Error(`INVALID_AUTH_STEP::步骤 ${visibleStep}：当前 OAuth 授权步骤已失效，请刷新 OAuth 链接并重新登录。`);
+      }
       if (pageState?.state !== 'add_phone_page' && pageState?.state !== 'phone_verification_page') {
         throw new Error(`步骤 ${visibleStep}：手机号验证步骤只处理添加手机号页或手机验证码页，当前状态：${pageState?.state || 'unknown'}。URL: ${pageState?.url || ''}`.trim());
       }

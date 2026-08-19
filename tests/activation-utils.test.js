@@ -92,6 +92,11 @@ test('isRecoverableStep9AuthFailure matches timeout and CPA auth failure statuse
   );
 
   assert.equal(
+    isRecoverableStep9AuthFailure('错误代码：invalid_auth_step'),
+    true
+  );
+
+  assert.equal(
     isRecoverableStep9AuthFailure('认证成功！'),
     false
   );
