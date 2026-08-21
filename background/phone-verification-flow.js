@@ -78,6 +78,7 @@
     ]);
     const MAX_PHONE_REUSABLE_POOL = 12;
     const PHONE_CODE_TIMEOUT_ERROR_PREFIX = 'PHONE_CODE_TIMEOUT::';
+    const INVALID_AUTH_STEP_ERROR_PREFIX = 'INVALID_AUTH_STEP::';
     const PHONE_STALE_SIGNUP_EMAIL_VERIFICATION_ERROR_CODE = 'PHONE_SIGNUP_STALE_EMAIL_VERIFICATION';
     const PHONE_RESTART_STEP7_ERROR_PREFIX = 'PHONE_RESTART_STEP7::';
     const PHONE_RESEND_THROTTLED_ERROR_PREFIX = 'PHONE_RESEND_THROTTLED::';
@@ -1589,6 +1590,33 @@
       return /Receiving end does not exist|Could not establish connection|Frame with ID \d+ is showing error page|Content script .* did not respond|Try refreshing the tab and retry|等待认证页状态检查超时/i.test(message);
     }
 
+    function isInvalidAuthStepPageState(pageState = {}) {
+      const state = String(pageState?.state || '').trim().toLowerCase();
+      if (state === 'invalid_auth_step' || pageState?.invalidAuthStep === true) {
+        return true;
+      }
+      const pageText = [
+        pageState?.errorText,
+        pageState?.message,
+        pageState?.title,
+        pageState?.detail,
+        pageState?.url,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return /invalid_auth_step|授权步骤(?:无效|已失效)/i.test(pageText);
+    }
+
+    function isInvalidAuthStepMessage(message = '') {
+      return isInvalidAuthStepPageState({ errorText: String(message || '') });
+    }
+
+    function buildInvalidAuthStepError() {
+      return new Error(
+        `${INVALID_AUTH_STEP_ERROR_PREFIX}步骤 9：当前 OAuth 授权步骤已失效，请刷新 OAuth 链接并重新登录。`
+      );
+    }
+
     // Order cleanup may happen after polling changed persisted settings.
     // Prefer the latest runtime state while keeping the caller snapshot as fallback.
     async function readLatestPhoneRuntimeState(state = {}) {
@@ -2216,7 +2244,13 @@
         });
 
         if (result?.error) {
+          if (isInvalidAuthStepMessage(result.error)) {
+            throw buildInvalidAuthStepError();
+          }
           throw new Error(result.error);
+        }
+        if (isInvalidAuthStepPageState(result)) {
+          throw buildInvalidAuthStepError();
         }
         return result || {};
       })();
@@ -2284,7 +2318,13 @@
       });
 
       if (result?.error) {
+        if (isInvalidAuthStepMessage(result.error)) {
+          throw buildInvalidAuthStepError();
+        }
         throw new Error(result.error);
+      }
+      if (isInvalidAuthStepPageState(result)) {
+        throw buildInvalidAuthStepError();
       }
       return result || {};
     }
@@ -2338,6 +2378,9 @@
         }
         throw new Error(result.error);
       }
+      if (isInvalidAuthStepPageState(result)) {
+        throw buildInvalidAuthStepError();
+      }
       return result || {};
     }
 
@@ -2360,6 +2403,9 @@
       });
 
       if (result?.error) {
+        if (isInvalidAuthStepMessage(result.error)) {
+          throw buildInvalidAuthStepError();
+        }
         throw new Error(result.error);
       }
       return result || {};
@@ -2389,6 +2435,9 @@
       });
 
       if (result?.error) {
+        if (isInvalidAuthStepMessage(result.error)) {
+          throw buildInvalidAuthStepError();
+        }
         throw new Error(result.error);
       }
       return result || {};
@@ -2414,6 +2463,9 @@
       });
 
       if (result?.error) {
+        if (isInvalidAuthStepMessage(result.error)) {
+          throw buildInvalidAuthStepError();
+        }
         throw new Error(result.error);
       }
       return result || {};
@@ -2438,6 +2490,9 @@
       });
 
       if (result?.error) {
+        if (isInvalidAuthStepMessage(result.error)) {
+          throw buildInvalidAuthStepError();
+        }
         throw new Error(result.error);
       }
       return result || {};
@@ -2581,6 +2636,21 @@
 
     async function clearCurrentActivation() {
       await persistCurrentActivation(null);
+    }
+
+    async function resetPhoneVerificationForOAuthRestart(state = {}) {
+      const latestState = await readLatestPhoneRuntimeState(state);
+      const activation = normalizeActivation(latestState[PHONE_ACTIVATION_STATE_KEY]);
+      if (activation) {
+        await cancelPhoneActivation(latestState, activation);
+      }
+      await clearCurrentActivation();
+      await setPhoneRuntimeState({
+        [PHONE_VERIFICATION_CODE_STATE_KEY]: '',
+        currentPhoneVerificationCountdownEndsAt: 0,
+        currentPhoneVerificationCountdownWindowIndex: 0,
+        currentPhoneVerificationCountdownWindowTotal: 0,
+      });
     }
 
     async function clearReusableActivation() {
@@ -4030,7 +4100,19 @@
       activePhoneVerificationLogStepKey = 'phone-verification';
       let state = await getState();
       let activation = normalizeActivation(state[PHONE_ACTIVATION_STATE_KEY]);
-      let pageState = initialPageState || await readPhonePageState(tabId);
+      let pageState = null;
+      try {
+        pageState = initialPageState || await readPhonePageState(tabId);
+      } catch (error) {
+        if (String(error?.message || error || '').startsWith(INVALID_AUTH_STEP_ERROR_PREFIX)) {
+          await resetPhoneVerificationForOAuthRestart(state);
+        }
+        throw error;
+      }
+      if (isInvalidAuthStepPageState(pageState)) {
+        await resetPhoneVerificationForOAuthRestart(state);
+        throw buildInvalidAuthStepError();
+      }
       // SMSBower orders are paid and do not support reuse. If the flow is
       // resumed with a persisted order, it must still be released on failure.
       let shouldCancelActivation = Boolean(
@@ -4123,6 +4205,9 @@
         try {
           snapshot = await readPhonePageState(tabId, 12000);
         } catch (error) {
+          if (String(error?.message || error || '').startsWith(INVALID_AUTH_STEP_ERROR_PREFIX)) {
+            throw error;
+          }
           snapshotError = error;
           await addLog(
             `步骤 9：检查认证页状态失败（${attemptLabel}）。${error.message}`,
@@ -4146,6 +4231,9 @@
             return merged;
           }
         } catch (error) {
+          if (String(error?.message || error || '').startsWith(INVALID_AUTH_STEP_ERROR_PREFIX)) {
+            throw error;
+          }
           returnError = error;
           await addLog(
             `步骤 9：返回添加手机号页面失败（${attemptLabel}）。${error.message}`,
@@ -4170,6 +4258,9 @@
         try {
           latest = await readPhonePageState(tabId, 15000);
         } catch (error) {
+          if (String(error?.message || error || '').startsWith(INVALID_AUTH_STEP_ERROR_PREFIX)) {
+            throw error;
+          }
           if (allowDirectNavigation && isAuthContentScriptUnreachableError(error)) {
             const navigated = await directNavigateToAddPhone(attemptLabel);
             if (navigated) {
@@ -5027,6 +5118,7 @@
       prepareSignupPhoneActivation,
       reactivatePhoneActivation,
       requestPhoneActivation,
+      resetPhoneVerificationForOAuthRestart,
       waitForLoginPhoneCode,
       waitForSignupPhoneCode,
     };

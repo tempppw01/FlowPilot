@@ -498,6 +498,7 @@
         return;
       }
       if (pageState?.state === 'invalid_auth_step' || pageState?.invalidAuthStep) {
+        await phoneVerificationHelpers?.resetPhoneVerificationForOAuthRestart?.(state);
         throw new Error(`INVALID_AUTH_STEP::步骤 ${visibleStep}：当前 OAuth 授权步骤已失效，请刷新 OAuth 链接并重新登录。`);
       }
       if (pageState?.state !== 'add_phone_page' && pageState?.state !== 'phone_verification_page') {

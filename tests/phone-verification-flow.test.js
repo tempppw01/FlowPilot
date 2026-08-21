@@ -4601,6 +4601,84 @@ test('phone verification helper returns to the phone page and replaces SMSBower 
   }
 });
 
+test('phone verification helper aborts and cancels SMSBower when OAuth becomes invalid after submitting a number', async () => {
+  const requests = [];
+  const submittedPhones = [];
+  let currentState = {
+    phoneSmsProvider: 'smsbower',
+    smsbowerApiKey: 'demo-key',
+    smsbowerServiceCode: 'dr',
+    smsbowerCountryOrder: [187],
+    smsbowerProviderIds: '3193',
+    smsbowerMaxPrice: '0.1',
+    verificationResendCount: 0,
+    phoneCodeWaitSeconds: 60,
+    phoneCodeTimeoutWindows: 1,
+    phoneCodePollIntervalSeconds: 5,
+    phoneCodePollMaxRounds: 1,
+    currentPhoneActivation: null,
+    reusablePhoneActivation: null,
+  };
+  const helpers = api.createPhoneVerificationHelpers({
+    addLog: async () => {},
+    ensureStep8SignupPageReady: async () => {},
+    fetchImpl: async (url) => {
+      const parsedUrl = new URL(url);
+      requests.push(parsedUrl);
+      const action = parsedUrl.searchParams.get('action');
+      if (action === 'getNumber') {
+        return {
+          ok: true,
+          text: async () => 'ACCESS_NUMBER:invalid-oauth-1:14075550125',
+        };
+      }
+      if (action === 'setStatus') {
+        return {
+          ok: true,
+          text: async () => 'ACCESS_CANCEL',
+        };
+      }
+      throw new Error(`Unexpected SMSBower action: ${action}`);
+    },
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => defaultTimeoutMs,
+    getState: async () => ({ ...currentState }),
+    sendToContentScriptResilient: async (_source, message) => {
+      if (message.type === 'SUBMIT_PHONE_NUMBER') {
+        submittedPhones.push(message.payload.phoneNumber);
+        return {
+          error: 'invalid_auth_step',
+          url: 'https://auth.openai.com/oauth/authorize',
+        };
+      }
+      throw new Error(`Unexpected content-script message: ${message.type}`);
+    },
+    setState: async (updates) => {
+      currentState = { ...currentState, ...updates };
+    },
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  await assert.rejects(
+    () => helpers.completePhoneVerificationFlow(1, {
+      addPhonePage: true,
+      phoneVerificationPage: false,
+      url: 'https://auth.openai.com/add-phone',
+    }),
+    /INVALID_AUTH_STEP::/
+  );
+
+  assert.equal(submittedPhones.length, 1, 'invalid OAuth must not submit a second phone number');
+  assert.deepStrictEqual(
+    requests
+      .filter((requestUrl) => requestUrl.searchParams.get('action') === 'setStatus')
+      .map((requestUrl) => requestUrl.searchParams.get('status')),
+    ['8'],
+    'the paid SMSBower activation must be cancelled'
+  );
+  assert.equal(currentState.currentPhoneActivation, null);
+});
+
 test('phone verification helper advances SMSBower provider ID after timeout in the same flow', async () => {
   const requests = [];
   const messages = [];
@@ -4706,7 +4784,6 @@ test('phone verification helper advances SMSBower provider ID after timeout in t
       phoneVerificationPage: false,
       url: 'https://auth.openai.com/add-phone',
     });
-
     assert.deepStrictEqual(result, {
       success: true,
       consentReady: true,
@@ -4828,7 +4905,6 @@ test('phone verification helper retries the same SMSBower line in fixed country 
       phoneVerificationPage: false,
       url: 'https://auth.openai.com/add-phone',
     });
-
     assert.deepStrictEqual(result, {
       success: true,
       consentReady: true,
@@ -9603,11 +9679,10 @@ test('SMSBower OAuth phone verification retains the five-minute timeout state', 
   });
 
   const result = await helpers.completePhoneVerificationFlow(1, {
-    addPhonePage: false,
-    phoneVerificationPage: true,
-    url: 'https://auth.openai.com/phone-verification',
-  });
-
+      addPhonePage: false,
+      phoneVerificationPage: true,
+      url: 'https://auth.openai.com/phone-verification',
+    });
   assert.deepStrictEqual(result, {
     success: true,
     consentReady: true,

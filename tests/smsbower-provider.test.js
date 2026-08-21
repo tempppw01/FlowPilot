@@ -371,6 +371,7 @@ test('SMSBower provider continues through a randomized non-USA country queue whe
     smsbowerApiKey: 'key-1',
     smsbowerCountryOrder: [52, 6],
     smsbowerProviderIds: '2266,3193,3237,3408',
+    smsbowerNoNumbersConfirmRetries: 0,
   });
 
   assert.equal(requests[0].searchParams.get('country'), '52');
@@ -508,6 +509,7 @@ test('SMSBower fixed USA mode never falls back to other provider IDs when 3193 h
       smsbowerCountryOrder: [187],
       smsbowerProviderIds: '3193,2377,2266,2217,3160,3243,3253,3288',
       smsbowerActivationRetryRounds: 1,
+      smsbowerNoNumbersConfirmRetries: 0,
     }),
     /均无可用号码/
   );
@@ -614,6 +616,7 @@ test('SMSBower provider tries the next provider ID in the same country when a li
     smsbowerCountryOrder: [33],
     smsbowerProviderIds: '3243,3253,3288,3160',
     smsbowerMaxPrice: '0.2',
+    smsbowerNoNumbersConfirmRetries: 0,
   });
 
   assert.equal(requests.length, 2);
@@ -627,6 +630,44 @@ test('SMSBower provider tries the next provider ID in the same country when a li
   assert.equal(activation.countryLabel, 'Colombia');
   assert.equal(activation.providerIds, '3253');
   assert.equal(activation.selectedPrice, '0.12');
+});
+
+test('SMSBower confirms a transient NO_NUMBERS response on the same line before rotation', async () => {
+  const requests = [];
+  const sleeps = [];
+  let requestCount = 0;
+  const module = loadModule();
+  const provider = module.createProvider({
+    sleepWithStop: async (delayMs) => sleeps.push(delayMs),
+    fetchImpl: async (url) => {
+      requests.push(new URL(url));
+      requestCount += 1;
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return requestCount === 1
+            ? 'NO_NUMBERS'
+            : 'ACCESS_NUMBER:176296:+573001234567';
+        },
+      };
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryOrder: [33],
+    smsbowerProviderIds: '3243,3253',
+    smsbowerActivationRetryRounds: 1,
+  });
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].searchParams.get('country'), '33');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3243');
+  assert.equal(requests[1].searchParams.get('country'), '33');
+  assert.equal(requests[1].searchParams.get('providerIds'), '3243');
+  assert.deepStrictEqual(sleeps, [3000]);
+  assert.equal(activation.providerIds, '3243');
 });
 
 test('SMSBower manual provider selection does not expand into the country auto list', async () => {
@@ -652,6 +693,7 @@ test('SMSBower manual provider selection does not expand into the country auto l
       smsbowerProviderIds: '3193',
       smsbowerProviderIdsManual: true,
       smsbowerActivationRetryRounds: 1,
+      smsbowerNoNumbersConfirmRetries: 0,
     }),
     /均无可用号码/
   );
@@ -867,6 +909,7 @@ test('SMSBower recommended mode cycles through the same route pool after a full 
     smsbowerApiKey: 'key-1',
     smsbowerCountryMode: 'recommended',
     smsbowerActivationRetryRounds: 2,
+    smsbowerNoNumbersConfirmRetries: 0,
   });
 
   assert.equal(requests.length, 6, 'the next acquire round should start from the recommended pool again');

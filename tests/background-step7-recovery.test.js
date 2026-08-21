@@ -405,6 +405,61 @@ test('post-login phone verification completes only on phone pages', async () => 
   ]);
 });
 
+test('post-login phone verification clears the current SMS activation on invalid OAuth step', async () => {
+  const calls = {
+    reset: [],
+    completions: [],
+  };
+  const executor = api.createStep8Executor({
+    addLog: async () => {},
+    chrome: {
+      tabs: { update: async () => {} },
+    },
+    completeNodeFromBackground: async (step, payload) => {
+      calls.completions.push({ step, payload });
+    },
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => defaultTimeoutMs,
+    getState: async () => ({
+      phoneVerificationEnabled: true,
+      currentPhoneActivation: {
+        provider: 'smsbower',
+        activationId: 'activation-1',
+        phoneNumber: '+15550000001',
+      },
+      oauthUrl: 'https://oauth.example/latest',
+    }),
+    getTabId: async () => 1,
+    phoneVerificationHelpers: {
+      resetPhoneVerificationForOAuthRestart: async (state) => {
+        calls.reset.push(state);
+      },
+      completePhoneVerificationFlow: async () => {
+        throw new Error('invalid OAuth step should not enter phone verification');
+      },
+    },
+    reuseOrCreateTab: async () => 1,
+    sendToContentScriptResilient: async () => ({
+      state: 'invalid_auth_step',
+      invalidAuthStep: true,
+      url: 'https://auth.openai.com/oauth/authorize',
+    }),
+    setState: async () => {},
+    throwIfStopped: () => {},
+  });
+
+  await assert.rejects(
+    () => executor.executePostLoginPhoneVerification({
+      visibleStep: 9,
+      nodeId: 'post-login-phone-verification',
+      phoneVerificationEnabled: true,
+      oauthUrl: 'https://oauth.example/latest',
+    }),
+    /INVALID_AUTH_STEP::/
+  );
+  assert.equal(calls.reset.length, 1);
+  assert.equal(calls.completions.length, 0);
+});
+
 test('post-login phone verification skips on OAuth consent and errors when disabled', async () => {
   const completions = [];
   const executor = api.createStep8Executor({

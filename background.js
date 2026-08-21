@@ -16030,7 +16030,7 @@ async function getPostStep6AutoRestartDecision(step, error) {
     return /OPENAI_OAUTH_SESSION_NOT_FOUND|session\s+not\s+found\s+or\s+expired|oauth\s+session\s+(?:not\s+found|expired)|missing\s+SUB2API\s+session_id|缺少\s*SUB2API\s*(?:session_id|会话信息)|SUB2API[\s\S]*(?:会话|session)[\s\S]*(?:过期|失效|不存在|not\s+found|expired)/i.test(normalizedMessage);
   };
   const isInvalidAuthStepError = (errorMessage = '') => (
-    /invalid_auth_step/i.test(String(errorMessage || ''))
+    /invalid_auth_step|INVALID_AUTH_STEP|授权步骤(?:无效|已失效)/i.test(String(errorMessage || ''))
   );
   const isPhoneVerificationLocalFailure = (errorMessage = '') => {
     const normalizedMessage = String(errorMessage || '');

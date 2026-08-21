@@ -24,6 +24,7 @@
     const PHONE_RESEND_SERVER_ERROR_PREFIX = 'PHONE_RESEND_SERVER_ERROR::';
     const PHONE_MAX_USAGE_EXCEEDED_PATTERN = /phone_max_usage_exceeded/i;
     const PHONE_ROUTE_405_RECOVERY_FAILED_ERROR_PREFIX = 'PHONE_ROUTE_405_RECOVERY_FAILED::';
+    const INVALID_AUTH_STEP_ERROR_PREFIX = 'INVALID_AUTH_STEP::';
     const PHONE_ROUTE_405_RECOVERY_COOLDOWN_MS = 6000;
     const PHONE_RESEND_ROUTE_405_MAX_RECOVERIES = 2;
     const PHONE_RESEND_ROUTE_405_MAX_RECOVERY_TOTAL_MS = 12000;
@@ -37,6 +38,18 @@
     const phoneCountryUtils = rootScope?.MultiPagePhoneCountryUtils || globalThis?.MultiPagePhoneCountryUtils || {};
     let lastPhoneRoute405RecoveryFailedAt = 0;
     let activePhoneResendPromise = null;
+
+    function isInvalidAuthStepPage() {
+      return /invalid_auth_step|授权步骤(?:无效|已失效)/i.test(
+        String(typeof getPageTextSnapshot === 'function' ? getPageTextSnapshot() : '')
+      );
+    }
+
+    function throwIfInvalidAuthStepPage() {
+      if (isInvalidAuthStepPage()) {
+        throw new Error(`${INVALID_AUTH_STEP_ERROR_PREFIX}当前 OAuth 授权步骤已失效，请刷新 OAuth 链接并重新登录。`);
+      }
+    }
 
     async function performOperationWithDelay(metadata, operation) {
       const gate = injectedPerformOperationWithDelay || rootScope?.CodexOperationDelay?.performOperationWithDelay;
@@ -870,6 +883,7 @@
       const start = Date.now();
       while (Date.now() - start < timeout) {
         throwIfStopped();
+        throwIfInvalidAuthStepPage();
         if (isAddPhonePageReady()) {
           return true;
         }
@@ -882,6 +896,7 @@
       const start = Date.now();
       while (Date.now() - start < timeout) {
         throwIfStopped();
+        throwIfInvalidAuthStepPage();
         if (is405MethodNotAllowedPage()) {
           await recoverPhoneRoute405(Math.min(12000, Math.max(1000, timeout - (Date.now() - start))));
           continue;
@@ -905,6 +920,7 @@
         }
         await sleep(150);
       }
+      throwIfInvalidAuthStepPage();
       if (isAddPhonePageReady()) {
         const errorText = getAddPhoneErrorText();
         if (errorText) {

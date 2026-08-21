@@ -19,6 +19,8 @@
   const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
   const DEFAULT_ACQUIRE_RETRY_ROUNDS = 3;
   const DEFAULT_ACQUIRE_RETRY_DELAY_MS = 2000;
+  const DEFAULT_NO_NUMBERS_CONFIRM_RETRIES = 1;
+  const DEFAULT_NO_NUMBERS_CONFIRM_DELAY_MS = 3000;
   const DEFAULT_POLL_TIMEOUT_MS = 180000;
   const DEFAULT_POLL_INTERVAL_MS = 5000;
   const PHONE_CODE_TIMEOUT_ERROR_PREFIX = 'PHONE_CODE_TIMEOUT::';
@@ -1261,6 +1263,14 @@
     }
     const maxAcquireRounds = Math.max(1, Math.min(10, Math.floor(Number(state?.smsbowerActivationRetryRounds) || DEFAULT_ACQUIRE_RETRY_ROUNDS)));
     const retryDelayMs = Math.max(500, Math.min(30000, Math.floor(Number(state?.smsbowerActivationRetryDelayMs) || DEFAULT_ACQUIRE_RETRY_DELAY_MS)));
+    const configuredNoNumbersConfirmRetries = Number(state?.smsbowerNoNumbersConfirmRetries);
+    const noNumbersConfirmRetries = Number.isFinite(configuredNoNumbersConfirmRetries)
+      ? Math.max(0, Math.min(3, Math.floor(configuredNoNumbersConfirmRetries)))
+      : DEFAULT_NO_NUMBERS_CONFIRM_RETRIES;
+    const configuredNoNumbersConfirmDelayMs = Number(state?.smsbowerNoNumbersConfirmDelayMs);
+    const noNumbersConfirmDelayMs = Number.isFinite(configuredNoNumbersConfirmDelayMs)
+      ? Math.max(500, Math.min(15000, Math.floor(configuredNoNumbersConfirmDelayMs)))
+      : DEFAULT_NO_NUMBERS_CONFIRM_DELAY_MS;
     const configuredMaxPrice = getCappedSmsBowerMaxPrice(state?.smsbowerMaxPrice || DEFAULT_MAX_PRICE);
     let finalNoNumbersByCountry = [];
     let finalLastError = null;
@@ -1289,78 +1299,106 @@
         }
 
         for (const providerIdAttempt of lineAttempts) {
+          let noNumbersConfirmAttempt = 0;
           const countryAttempt = (payloadOrError) => formatSmsBowerAcquireFailure(countryLabel, countryId, providerIdAttempt, payloadOrError);
-          try {
-            const query = {
-              action: 'getNumber',
-              service: config.serviceCode,
-              country: countryId,
-            };
-            if (providerIdAttempt) {
-              query.providerIds = providerIdAttempt;
-            }
-            const maxPrice = getEffectiveMaxPrice(countryId, configuredMaxPrice);
-            if (maxPrice) {
-              query.maxPrice = maxPrice;
-            }
-            const payload = await fetchPayload(config, query, 'SMSBower getNumber');
-            const activation = parseActivationPayload(payload, {
-              countryId,
-              countryLabel,
-              serviceCode: config.serviceCode,
-              selectedPrice: maxPrice,
-              providerIds: providerIdAttempt,
-            });
-            if (activation) {
-              return activation;
-            }
+          while (true) {
+            deps.throwIfStopped?.();
+            try {
+              const query = {
+                action: 'getNumber',
+                service: config.serviceCode,
+                country: countryId,
+              };
+              if (providerIdAttempt) {
+                query.providerIds = providerIdAttempt;
+              }
+              const maxPrice = getEffectiveMaxPrice(countryId, configuredMaxPrice);
+              if (maxPrice) {
+                query.maxPrice = maxPrice;
+              }
+              const payload = await fetchPayload(config, query, 'SMSBower getNumber');
+              const activation = parseActivationPayload(payload, {
+                countryId,
+                countryLabel,
+                serviceCode: config.serviceCode,
+                selectedPrice: maxPrice,
+                providerIds: providerIdAttempt,
+              });
+              if (activation) {
+                return activation;
+              }
 
-            const failure = countryAttempt(payload);
-            const failureSummary = failure.message.startsWith('SMSBower ')
-              ? failure.message.slice(9)
-              : failure.message;
-            if (failure.failure.isNoNumbers) {
-              noNumbersByCountry.push(failureSummary);
+              const failure = countryAttempt(payload);
+              const failureSummary = failure.message.startsWith('SMSBower ')
+                ? failure.message.slice(9)
+                : failure.message;
+              if (failure.failure.isNoNumbers) {
+                if (noNumbersConfirmAttempt < noNumbersConfirmRetries) {
+                  noNumbersConfirmAttempt += 1;
+                  if (typeof deps.addLog === 'function') {
+                    await deps.addLog(
+                      `步骤 9：${failure.message}，${Math.ceil(noNumbersConfirmDelayMs / 1000)} 秒后复查同一线路（第 ${noNumbersConfirmAttempt}/${noNumbersConfirmRetries} 次）。`,
+                      'info'
+                    );
+                  }
+                  await deps.sleepWithStop?.(noNumbersConfirmDelayMs);
+                  continue;
+                }
+                noNumbersByCountry.push(failureSummary);
+                if (typeof deps.addLog === 'function') {
+                  await deps.addLog(`步骤 9：${failure.message}`, 'warn');
+                }
+                break;
+              }
+
+              finalLastError = new Error(failure.message);
+              finalLastError.countryId = countryId;
+              finalLastError.countryLabel = countryLabel;
+              finalLastError.providerIds = providerIdAttempt;
+              finalLastError.failureReason = failure.failure.reason;
               if (typeof deps.addLog === 'function') {
                 await deps.addLog(`步骤 9：${failure.message}`, 'warn');
               }
-              continue;
-            }
+              break;
+            } catch (error) {
+              const failure = countryAttempt(error);
+              const failureSummary = failure.message.startsWith('SMSBower ')
+                ? failure.message.slice(9)
+                : failure.message;
+              if (failure.failure.isNoNumbers || isNoNumbersPayload(error?.payload || error?.message)) {
+                if (noNumbersConfirmAttempt < noNumbersConfirmRetries) {
+                  noNumbersConfirmAttempt += 1;
+                  if (typeof deps.addLog === 'function') {
+                    await deps.addLog(
+                      `步骤 9：${failure.message}，${Math.ceil(noNumbersConfirmDelayMs / 1000)} 秒后复查同一线路（第 ${noNumbersConfirmAttempt}/${noNumbersConfirmRetries} 次）。`,
+                      'info'
+                    );
+                  }
+                  await deps.sleepWithStop?.(noNumbersConfirmDelayMs);
+                  continue;
+                }
+                noNumbersByCountry.push(failureSummary);
+                if (typeof deps.addLog === 'function') {
+                  await deps.addLog(`步骤 9：${failure.message}`, 'warn');
+                }
+                break;
+              }
 
-            finalLastError = new Error(failure.message);
-            finalLastError.countryId = countryId;
-            finalLastError.countryLabel = countryLabel;
-            finalLastError.providerIds = providerIdAttempt;
-            finalLastError.failureReason = failure.failure.reason;
-            if (typeof deps.addLog === 'function') {
-              await deps.addLog(`步骤 9：${failure.message}`, 'warn');
-            }
-          } catch (error) {
-            const failure = countryAttempt(error);
-            const failureSummary = failure.message.startsWith('SMSBower ')
-              ? failure.message.slice(9)
-              : failure.message;
-            if (failure.failure.isNoNumbers || isNoNumbersPayload(error?.payload || error?.message)) {
-              noNumbersByCountry.push(failureSummary);
+              finalLastError = new Error(failure.message);
+              finalLastError.cause = error;
+              finalLastError.payload = error?.payload;
+              finalLastError.status = error?.status;
+              finalLastError.countryId = countryId;
+              finalLastError.countryLabel = countryLabel;
+              finalLastError.providerIds = providerIdAttempt;
+              finalLastError.failureReason = failure.failure.reason;
               if (typeof deps.addLog === 'function') {
                 await deps.addLog(`步骤 9：${failure.message}`, 'warn');
               }
-              continue;
-            }
-
-            finalLastError = new Error(failure.message);
-            finalLastError.cause = error;
-            finalLastError.payload = error?.payload;
-            finalLastError.status = error?.status;
-            finalLastError.countryId = countryId;
-            finalLastError.countryLabel = countryLabel;
-            finalLastError.providerIds = providerIdAttempt;
-            finalLastError.failureReason = failure.failure.reason;
-            if (typeof deps.addLog === 'function') {
-              await deps.addLog(`步骤 9：${failure.message}`, 'warn');
-            }
-            if (failure.failure.isTerminal) {
-              throw finalLastError;
+              if (failure.failure.isTerminal) {
+                throw finalLastError;
+              }
+              break;
             }
           }
         }
