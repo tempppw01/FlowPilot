@@ -483,6 +483,11 @@
     return RECOMMENDED_ROUTE_CANDIDATES.map((entry) => ({ ...entry }));
   }
 
+  function getSmsBowerRecommendedRouteWeight(entry) {
+    // USA has the best observed success rate, but remains part of the random pool.
+    return normalizeSmsBowerCountryId(entry?.id, 0) === 187 ? 4 : 1;
+  }
+
   function resolveCountryCandidates(state = {}) {
     if (isSmsBowerRecommendedMode(state)) {
       return resolveRecommendedRouteCandidates();
@@ -1216,7 +1221,15 @@
       }
     }
     if (recommendedMode) {
-      countryCandidates = shuffleSmsBowerItems(countryCandidates, randomFn);
+      countryCandidates = weightedShuffleSmsBowerEntries(
+        countryCandidates,
+        (entry) => getSmsBowerRecommendedRouteWeight(entry)
+          + getSmsBowerCountrySuccessWeightBonus(
+            state?.smsbowerSuccessWeightsByCountry,
+            entry?.id
+          ),
+        randomFn
+      );
     } else if (randomMode) {
       countryCandidates = resolveSmsBowerRandomCountryCandidates(
         countryCandidates,

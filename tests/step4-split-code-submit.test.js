@@ -1413,6 +1413,7 @@ async function waitForSignupEntryState() {
 function getSignupEmailContinueButton() { return continueButton; }
 function isActionEnabled() { return true; }
 
+${extractFunction('waitForSignupEmailContinueButton')}
 ${extractFunction('fillSignupEmailAndContinue')}
 
 return {
@@ -1475,6 +1476,54 @@ return {
   ]);
 });
 
+test('fillSignupEmailAndContinue waits for a delayed continue button after filling email', async () => {
+  const api = new Function(`
+let buttonLookups = 0;
+const emailInput = { value: '' };
+const continueButton = { textContent: 'Continue' };
+const location = { href: 'https://auth.openai.com/u/signup' };
+const window = {
+  setTimeout(callback) {
+    callback();
+    return 1;
+  },
+};
+
+function getOperationDelayRunner() {
+  return async (_metadata, operation) => operation();
+}
+function throwIfStopped() {}
+function isStopError() { return false; }
+function log() {}
+async function humanPause() {}
+async function sleep() {}
+function fillInput(input, value) { input.value = value; }
+function simulateClick(button) { button.clicked = true; }
+async function waitForSignupEntryState() {
+  return { state: 'email_entry', emailInput, continueButton: null, url: location.href };
+}
+function getSignupEmailContinueButton() {
+  buttonLookups += 1;
+  return buttonLookups >= 3 ? continueButton : null;
+}
+function isActionEnabled(button) { return Boolean(button); }
+
+${extractFunction('waitForSignupEmailContinueButton')}
+${extractFunction('fillSignupEmailAndContinue')}
+
+return {
+  run() { return fillSignupEmailAndContinue('delayed@example.com', 2); },
+  getButtonLookups() { return buttonLookups; },
+  getButton() { return continueButton; },
+};
+`)();
+
+  const result = await api.run();
+  assert.equal(result.submitted, true);
+  assert.equal(api.getButtonLookups() >= 3, true);
+  assert.equal(api.getButton().clicked, true);
+});
+
 test('submitSignupPhoneNumberAndContinue reports before deferred submit while submit still waits for operation delay', async () => {
   const api = new Function(`
 const events = [];
@@ -1526,6 +1575,7 @@ function toE164PhoneNumber() { return '+15551234567'; }
 function getSignupEmailContinueButton() { return continueButton; }
 function isActionEnabled() { return true; }
 
+${extractFunction('waitForSignupEmailContinueButton')}
 ${extractFunction('submitSignupPhoneNumberAndContinue')}
 
 return {

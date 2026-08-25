@@ -874,6 +874,8 @@ test('SMSBower recommended mode only uses the configured five-line route pool', 
 
   const activation = await provider.requestActivation(state);
 
+  assert.equal(requests[0].searchParams.get('country'), '187');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3193');
   assert.equal(requests.length, 2, 'a failed line should move to another recommended line');
   requests.forEach((request) => {
     assert.equal(allowedRoutes.has(`${request.searchParams.get('country')}:${request.searchParams.get('providerIds')}`), true);

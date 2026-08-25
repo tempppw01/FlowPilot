@@ -1644,6 +1644,13 @@
       );
     }
 
+    function buildPhoneFirstWindowTimeoutRestartError(phoneNumber = '') {
+      const suffix = phoneNumber ? ` 当前号码：${phoneNumber}。` : '';
+      return new Error(
+        `${PHONE_RESTART_STEP7_ERROR_PREFIX}第一轮等待手机验证码超时，当前 OAuth 会话不能继续换号，请回到步骤 7 刷新 OAuth 后重新获取号码。${suffix}`
+      );
+    }
+
     function buildPhoneReplacementLimitError(maxNumberReplacementAttempts, reason = '') {
       const safeMax = Math.max(0, Math.floor(Number(maxNumberReplacementAttempts) || 0));
       const safeReason = String(reason || 'unknown').trim() || 'unknown';
@@ -3267,6 +3274,8 @@
       if (!normalizedActivation) {
         throw new Error('缺少手机号接码订单。');
       }
+      const visibleStep = normalizeLogStep(activePhoneVerificationLogStep) || 9;
+      const stepKey = activePhoneVerificationLogStepKey || 'phone-verification';
       const provider = getPhoneSmsProviderAdapterForActivation(state, normalizedActivation);
       const providerLabel = getPhoneSmsProviderLabel(normalizedActivation.provider);
       const usePageResend = callPhoneSmsProviderCapability(
@@ -3423,6 +3432,24 @@
               };
             }
             throw error;
+          }
+
+          // OpenAI binds the phone-verification session to the first submitted
+          // number. Re-entering add-phone with a replacement number commonly
+          // produces invalid_auth_step, so restart OAuth after the first wait.
+          if (windowIndex === 1) {
+            await addLog(
+              `步骤 ${visibleStep}：号码 ${normalizedActivation.phoneNumber} 第一轮等待 ${waitSeconds} 秒未收到验证码，将清理当前订单并回到步骤 7 刷新 OAuth。`,
+              'warn',
+              { step: visibleStep, stepKey }
+            );
+            await clearPhoneRuntimeCountdown();
+            return {
+              code: '',
+              replaceNumber: false,
+              restartOAuth: true,
+              reason: 'sms_timeout_first_window',
+            };
           }
 
           if (normalizedActivation.provider === PHONE_SMS_PROVIDER_SMSBOWER) {
@@ -4835,6 +4862,9 @@
             throwIfStopped();
 
             const codeResult = await waitForPhoneCodeOrRotateNumber(tabId, state, activation);
+            if (codeResult.restartOAuth) {
+              throw buildPhoneFirstWindowTimeoutRestartError(activation.phoneNumber);
+            }
             if (codeResult.replaceNumber) {
               await markPreferredActivationExhausted(codeResult.reason || 'sms_timeout');
               shouldReplaceNumber = true;

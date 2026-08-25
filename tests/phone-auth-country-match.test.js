@@ -66,7 +66,7 @@ function createFakeAddPhoneDom(config = {}) {
 
   const selectValueNode = {
     get textContent() {
-      return options[select.selectedIndex]?.buttonText || '';
+      return config.visibleButtonText || options[select.selectedIndex]?.buttonText || '';
     },
   };
 
@@ -419,6 +419,69 @@ test('phone auth rejects stale selected country when it does not match phone dia
     assert.equal(dom.phoneInput.value, '');
     assert.equal(dom.hiddenPhoneInput.value, '');
     assert.equal(dom.wasSubmitClicked(), false);
+  } finally {
+    global.document = originalDocument;
+    global.Event = originalEvent;
+    global.location = originalLocation;
+  }
+});
+
+test('phone auth trusts the visible USA plus-one state when the hidden country options are unavailable', async () => {
+  const originalDocument = global.document;
+  const originalEvent = global.Event;
+  const originalLocation = global.location;
+
+  const dom = createFakeAddPhoneDom({
+    options: [{ value: 'CL', textContent: 'Chile (+56)', buttonText: 'Chile (+56)' }],
+    visibleButtonText: 'USA (+1)',
+  });
+  let phoneVerificationReady = false;
+
+  global.document = dom.document;
+  global.Event = class Event {
+    constructor(type) {
+      this.type = type;
+    }
+  };
+  global.location = { href: 'https://auth.openai.com/add-phone' };
+
+  try {
+    const helpers = api.createPhoneAuthHelpers({
+      fillInput: (element, value) => {
+        element.value = value;
+      },
+      getActionText: () => '',
+      getPageTextSnapshot: () => '',
+      getVerificationErrorText: () => '',
+      humanPause: async () => {},
+      isActionEnabled: () => true,
+      isAddPhonePageReady: () => true,
+      isConsentReady: () => false,
+      isPhoneVerificationPageReady: () => phoneVerificationReady,
+      isVisibleElement: () => true,
+      simulateClick: (element) => {
+        element.click?.();
+        phoneVerificationReady = true;
+        global.location.href = 'https://auth.openai.com/phone-verification';
+      },
+      sleep: async () => {},
+      throwIfStopped: () => {},
+      waitForElement: async () => null,
+    });
+
+    const result = await helpers.submitPhoneNumber({
+      countryLabel: 'USA',
+      phoneNumber: '19092295549',
+    });
+
+    assert.equal(dom.phoneInput.value, '9092295549');
+    assert.equal(dom.hiddenPhoneInput.value, '+19092295549');
+    assert.equal(dom.wasSubmitClicked(), true);
+    assert.deepStrictEqual(result, {
+      phoneVerificationPage: true,
+      displayedPhone: '',
+      url: 'https://auth.openai.com/phone-verification',
+    });
   } finally {
     global.document = originalDocument;
     global.Event = originalEvent;

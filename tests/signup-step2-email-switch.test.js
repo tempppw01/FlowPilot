@@ -550,6 +550,17 @@ function getActionText(el) {
     .trim();
 }
 
+function getSignupEmailInput() {
+  return null;
+}
+
+function getSignupPhoneInput() {
+  return null;
+}
+
+${extractConst('SIGNUP_SWITCH_TO_EMAIL_PATTERN')}
+${extractConst('SIGNUP_SWITCH_TO_PHONE_PATTERN')}
+
 ${extractFunction('getSignupEmailContinueButton')}
 
 return {
@@ -560,6 +571,72 @@ return {
 `)();
 
   assert.equal(api.run(), '続ける');
+});
+
+test('getSignupEmailContinueButton prefers the signup form over social continue actions', () => {
+  const api = new Function(`
+const signupForm = {};
+const emailInput = { form: signupForm };
+const googleButton = {
+  textContent: '使用 Google 账户继续',
+  disabled: false,
+  getAttribute() { return ''; },
+  getBoundingClientRect() { return { width: 240, height: 48 }; },
+};
+const phoneButton = {
+  textContent: '使用电话号码继续',
+  disabled: false,
+  getAttribute() { return ''; },
+  getBoundingClientRect() { return { width: 240, height: 48 }; },
+};
+const signupContinueButton = {
+  textContent: '继续',
+  disabled: false,
+  form: signupForm,
+  getAttribute(name) {
+    if (name === 'type') return 'submit';
+    return '';
+  },
+  getBoundingClientRect() { return { width: 240, height: 48 }; },
+};
+
+const document = {
+  querySelector() { return null; },
+  querySelectorAll(selector) {
+    if (selector === 'button, a, [role="button"], [role="link"], input[type="button"], input[type="submit"]') {
+      return [googleButton, phoneButton, signupContinueButton];
+    }
+    if (selector === 'button[type="submit"], input[type="submit"]') {
+      return [signupContinueButton];
+    }
+    return [];
+  },
+};
+
+function getSignupEmailInput() { return emailInput; }
+function getSignupPhoneInput() { return null; }
+function isVisibleElement(el) { return Boolean(el); }
+function isActionEnabled(el) {
+  return Boolean(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true';
+}
+function getActionText(el) {
+  return [el?.textContent, el?.value, el?.getAttribute?.('aria-label'), el?.getAttribute?.('title')]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\\s+/g, ' ')
+    .trim();
+}
+
+${extractConst('SIGNUP_SWITCH_TO_EMAIL_PATTERN')}
+${extractConst('SIGNUP_SWITCH_TO_PHONE_PATTERN')}
+${extractFunction('getSignupEmailContinueButton')}
+
+return {
+  run() { return getSignupEmailContinueButton(); },
+};
+`)();
+
+  assert.equal(api.run().textContent, '继续');
 });
 
 test('waitForSignupEntryState retries the signup entry click five times before giving up', async () => {
@@ -1404,6 +1481,7 @@ ${extractFunction('toNationalPhoneNumber')}
 ${extractFunction('toE164PhoneNumber')}
 ${extractFunction('resolveSignupPhoneDialCode')}
 ${extractFunction('waitForSignupPhoneEntryState')}
+${extractFunction('waitForSignupEmailContinueButton')}
 ${extractFunction('submitSignupPhoneNumberAndContinue')}
 
 return {
@@ -1730,6 +1808,7 @@ ${extractFunction('toNationalPhoneNumber')}
 ${extractFunction('toE164PhoneNumber')}
 ${extractFunction('resolveSignupPhoneDialCode')}
 ${extractFunction('waitForSignupPhoneEntryState')}
+${extractFunction('waitForSignupEmailContinueButton')}
 ${extractFunction('submitSignupPhoneNumberAndContinue')}
 
 return {
@@ -1989,6 +2068,7 @@ ${extractFunction('toNationalPhoneNumber')}
 ${extractFunction('toE164PhoneNumber')}
 ${extractFunction('resolveSignupPhoneDialCode')}
 ${extractFunction('waitForSignupPhoneEntryState')}
+${extractFunction('waitForSignupEmailContinueButton')}
 ${extractFunction('submitSignupPhoneNumberAndContinue')}
 
 return {
@@ -2243,6 +2323,7 @@ ${extractFunction('toNationalPhoneNumber')}
 ${extractFunction('toE164PhoneNumber')}
 ${extractFunction('resolveSignupPhoneDialCode')}
 ${extractFunction('waitForSignupPhoneEntryState')}
+${extractFunction('waitForSignupEmailContinueButton')}
 ${extractFunction('submitSignupPhoneNumberAndContinue')}
 
 return {

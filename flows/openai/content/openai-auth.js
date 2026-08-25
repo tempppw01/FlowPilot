@@ -698,18 +698,71 @@ function findSignupMoreOptionsTrigger() {
 }
 
 function getSignupEmailContinueButton({ allowDisabled = false } = {}) {
-  const direct = document.querySelector('button[type="submit"], input[type="submit"]');
-  if (direct && isVisibleElement(direct) && (allowDisabled || isActionEnabled(direct))) {
-    return direct;
-  }
-
+  const signupInput = getSignupEmailInput() || getSignupPhoneInput();
+  const signupForm = signupInput?.form || signupInput?.closest?.('form') || null;
+  const providerActionPattern = /google|apple|microsoft|facebook|github|使用\s*(?:Google|Apple|Microsoft|Facebook|GitHub)|(?:sign|log)\s*in\s+with\s+(?:google|apple|microsoft|facebook|github)/i;
   const candidates = document.querySelectorAll(
     'button, a, [role="button"], [role="link"], input[type="button"], input[type="submit"]'
   );
-  return Array.from(candidates).find((el) => {
+  const rankedCandidates = Array.from(candidates).map((el) => {
     if (!isVisibleElement(el) || (!allowDisabled && !isActionEnabled(el))) return false;
-    return /continue|next|submit|继续|下一步|続行|続ける|次へ|送信/i.test(getActionText(el));
-  }) || null;
+    const text = getActionText(el);
+    if (!text) return false;
+    const dataAction = String(el.getAttribute?.('data-dd-action-name') || '').trim();
+    const actionText = `${text} ${dataAction}`;
+    if (!/continue|next|submit|继续|下一步|続行|続ける|次へ|送信/i.test(actionText)) return false;
+    if (providerActionPattern.test(text)
+      || SIGNUP_SWITCH_TO_EMAIL_PATTERN.test(text)
+      || SIGNUP_SWITCH_TO_PHONE_PATTERN.test(text)) {
+      return false;
+    }
+
+    const elementForm = el.form || el.closest?.('form') || null;
+    const normalizedText = text.replace(/\s+/g, '').toLowerCase();
+    const normalizedDataAction = dataAction.replace(/\s+/g, '').toLowerCase();
+    let score = 0;
+    if (signupForm && elementForm === signupForm) score += 1000;
+    if (normalizedDataAction === 'continue') score += 500;
+    if (/^(?:continue|next|submit|继续|下一步|続行|続ける|次へ|送信)$/i.test(normalizedText)) score += 400;
+    if (String(el.getAttribute?.('type') || el.type || '').toLowerCase() === 'submit') score += 300;
+    if (isActionEnabled(el)) score += 25;
+    return { element: el, score };
+  }).filter(Boolean).sort((left, right) => right.score - left.score);
+
+  if (rankedCandidates.length) {
+    return rankedCandidates[0].element;
+  }
+
+  const directCandidates = Array.from(document.querySelectorAll('button[type="submit"], input[type="submit"]'))
+    .filter((el) => isVisibleElement(el) && (allowDisabled || isActionEnabled(el)))
+    .sort((left, right) => {
+      const leftSameForm = signupForm && (left.form || left.closest?.('form')) === signupForm;
+      const rightSameForm = signupForm && (right.form || right.closest?.('form')) === signupForm;
+      return Number(rightSameForm) - Number(leftSameForm);
+    });
+  if (directCandidates.length) {
+    return directCandidates[0];
+  }
+  return null;
+}
+
+async function waitForSignupEmailContinueButton({ timeout = 5000, interval = 150 } = {}) {
+  const start = Date.now();
+  let lastButton = null;
+  while (Date.now() - start < timeout) {
+    throwIfStopped();
+    const button = getSignupEmailContinueButton({ allowDisabled: true });
+    if (button) {
+      lastButton = button;
+      if (isActionEnabled(button)) {
+        return button;
+      }
+    }
+    await sleep(interval);
+  }
+
+  const finalButton = getSignupEmailContinueButton({ allowDisabled: false });
+  return finalButton || (lastButton && isActionEnabled(lastButton) ? lastButton : null);
 }
 
 function findSignupEntryTrigger(options = {}) {
@@ -1342,7 +1395,7 @@ async function fillSignupEmailAndContinue(email, step) {
   });
   log(`步骤 ${step}：邮箱已填写`);
 
-  const continueButton = snapshot.continueButton || getSignupEmailContinueButton({ allowDisabled: true });
+  const continueButton = await waitForSignupEmailContinueButton();
   if (!continueButton || !isActionEnabled(continueButton)) {
     throw new Error(`步骤 ${step}：未找到可点击的“继续”按钮。URL: ${location.href}`);
   }
@@ -1352,7 +1405,11 @@ async function fillSignupEmailAndContinue(email, step) {
     try {
       throwIfStopped();
       await performOperationWithDelay({ stepKey: step === 2 ? 'signup-entry' : 'fill-password', kind: 'submit', label: 'submit-signup-email' }, async () => {
-        simulateClick(continueButton);
+        const latestButton = getSignupEmailContinueButton({ allowDisabled: false }) || continueButton;
+        if (!latestButton || !isActionEnabled(latestButton)) {
+          throw new Error(`步骤 ${step}：点击前“继续”按钮暂不可用。URL: ${location.href}`);
+        }
+        simulateClick(latestButton);
       });
     } catch (error) {
       if (!isStopError(error)) {
@@ -2612,7 +2669,7 @@ async function submitSignupPhoneNumberAndContinue(payload = {}) {
   }
   log(`步骤 2：手机号已填写：${phoneNumber}${dialCode ? `（区号 +${dialCode}，本地号 ${inputValue}）` : ''}`);
 
-  const continueButton = getSignupEmailContinueButton({ allowDisabled: true });
+  const continueButton = await waitForSignupEmailContinueButton();
   if (!continueButton || !isActionEnabled(continueButton)) {
     throw new Error(`步骤 2：未找到可点击的“继续”按钮。URL: ${location.href}`);
   }
@@ -2622,7 +2679,11 @@ async function submitSignupPhoneNumberAndContinue(payload = {}) {
     try {
       throwIfStopped();
       await performOperationWithDelay({ stepKey: 'signup-phone-entry', kind: 'submit', label: 'submit-signup-phone' }, async () => {
-        simulateClick(continueButton);
+        const latestButton = getSignupEmailContinueButton({ allowDisabled: false }) || continueButton;
+        if (!latestButton || !isActionEnabled(latestButton)) {
+          throw new Error('步骤 2：点击前“继续”按钮暂不可用。URL: ' + location.href);
+        }
+        simulateClick(latestButton);
       });
     } catch (error) {
       if (!isStopError(error)) {
