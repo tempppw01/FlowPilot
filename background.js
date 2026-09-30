@@ -9,6 +9,9 @@ importScripts(
   'flows/grok/workflow.js',
   'flows/claude/index.js',
   'flows/claude/workflow.js',
+  'flows/devin/index.js',
+  'flows/devin/workflow.js',
+  'flows/devin/mail-rules.js',
   'flows/index.js',
   'core/flow-kernel/flow-registry.js',
   'shared/contribution-registry.js',
@@ -50,6 +53,7 @@ importScripts(
   'flows/grok/background/register-runner.js',
   'flows/claude/background/claude2api-client.js',
   'flows/claude/background/register-runner.js',
+  'flows/devin/background/register-runner.js',
   'flows/kiro/background/desktop-client.js',
   'flows/kiro/background/desktop-authorize-runner.js',
   'flows/kiro/background/publisher-kiro-rs.js',
@@ -10835,6 +10839,10 @@ function getDownstreamStateResets(step, state = {}) {
     oauthUrl: null,
     cpaOAuthState: null,
     cpaManagementOrigin: null,
+    devinOAuthState: null,
+    devinOAuthUrl: null,
+    devinOAuthStatus: 'idle',
+    devinOAuthError: null,
     sub2apiSessionId: null,
     sub2apiOAuthState: null,
     sub2apiGroupId: null,
@@ -14543,6 +14551,7 @@ const OPENAI_AUTH_INJECT_FILES = ['content/utils.js', 'content/operation-delay.j
 const KIRO_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'shared/kiro-timeouts.js', 'content/utils.js', 'flows/kiro/content/register-page.js'];
 const KIRO_DESKTOP_AUTHORIZE_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'shared/kiro-timeouts.js', 'content/utils.js', 'flows/kiro/content/desktop-authorize-page.js'];
 const GROK_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'content/utils.js', 'flows/grok/content/register-page.js'];
+const DEVIN_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/devin/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'flows/devin/content/register-page.js'];
 const CLAUDE_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'content/utils.js', 'flows/claude/content/register-page.js'];
 const panelBridge = self.MultiPageBackgroundPanelBridge?.createPanelBridge({
   chrome,
@@ -14611,12 +14620,18 @@ const grokMailRules = self.MultiPageGrokMailRules?.createGrokMailRules({
   MAIL_2925_VERIFICATION_INTERVAL_MS,
   MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
 });
+const devinMailRules = self.MultiPageDevinMailRules?.createDevinMailRules({
+  LUCKMAIL_PROVIDER,
+  MAIL_2925_VERIFICATION_INTERVAL_MS,
+  MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
+});
 const mailRuleRegistry = self.MultiPageBackgroundMailRuleRegistry?.createMailRuleRegistry({
   defaultFlowId: DEFAULT_ACTIVE_FLOW_ID,
   flowBuilders: {
     openai: openAiMailRules,
     kiro: kiroMailRules,
     grok: grokMailRules,
+    devin: devinMailRules,
   },
 });
 const flowMailPollingService = self.MultiPageBackgroundFlowMailPolling?.createFlowMailPollingService({
@@ -15056,6 +15071,35 @@ const grokRegisterRunner = self.MultiPageBackgroundGrokRegisterRunner?.createGro
   GROK_REGISTER_INJECT_FILES,
   markCurrentRegistrationAccountUsed,
 });
+const devinRegisterRunner = self.MultiPageBackgroundDevinRegisterRunner?.createDevinRegisterRunner({
+  addLog,
+  chrome,
+  completeNodeFromBackground,
+  ensureContentScriptReadyOnTab,
+  getTabId,
+  getState,
+  isTabAlive,
+  pollFlowVerificationCode: flowMailPollingService?.pollFlowVerificationCode,
+  registerTab,
+  resolveSignupEmailForFlow,
+  reuseOrCreateTab,
+  sendToContentScriptResilient,
+  setState,
+  sleepWithStop,
+  throwIfStopped,
+  waitForTabStableComplete,
+  startDevinOAuth: async (state) => {
+    const cpaApi = self.MultiPageBackgroundCpaApi?.createCpaApi({ fetchImpl: typeof fetch === 'function' ? fetch.bind(globalThis) : null });
+    if (!cpaApi) throw new Error('CPA Devin OAuth 能力尚未加载。');
+    return cpaApi.requestDevinOAuthUrl(state);
+  },
+  submitDevinOAuthCallback: async (state, callbackUrl) => {
+    const cpaApi = self.MultiPageBackgroundCpaApi?.createCpaApi({ fetchImpl: typeof fetch === 'function' ? fetch.bind(globalThis) : null });
+    if (!cpaApi) throw new Error('CPA Devin OAuth 能力尚未加载。');
+    return cpaApi.submitDevinOAuthCallback(state, callbackUrl);
+  },
+  DEVIN_REGISTER_INJECT_FILES,
+});
 const claudeRegisterRunner = self.MultiPageBackgroundClaudeRegisterRunner?.createClaudeRegisterRunner({
   addLog,
   chrome,
@@ -15292,6 +15336,12 @@ const stepExecutorsByKey = {
   'grok-upload-sso-to-grok2api': (state) => grok2ApiPublisher.executeGrokUploadSsoToGrok2Api(state),
   'grok-start-grok2api-device-auth': (state) => grok2ApiPublisher.executeGrokStartGrok2ApiDeviceAuth(state),
   'grok-complete-grok2api-device-auth': (state) => grok2ApiPublisher.executeGrokCompleteGrok2ApiDeviceAuth(state),
+  'devin-open-authorization': (state) => devinRegisterRunner.execute(state),
+  'devin-enter-email': (state) => devinRegisterRunner.execute(state),
+  'devin-enter-email-code': (state) => devinRegisterRunner.execute(state),
+  'devin-select-free-plan': (state) => devinRegisterRunner.execute(state),
+  'devin-start-cpa-oauth': (state) => devinRegisterRunner.execute(state),
+  'devin-submit-callback': (state) => devinRegisterRunner.execute(state),
   'claude-open-official-page': (state) => claudeRegisterRunner.executeClaudeOpenOfficialPage(state),
   'claude-wait-official-page': (state) => claudeRegisterRunner.executeClaudeWaitOfficialPageLoaded(state),
   'claude-fill-email': (state) => claudeRegisterRunner.executeClaudeFillEmail(state),
@@ -15351,6 +15401,34 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
       fetchImpl: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
     });
     return cpaApi.testCpaConnection(baseUrl, managementKey);
+  },
+  startDevinOAuth: async (state) => {
+    const cpaApi = self.MultiPageBackgroundCpaApi?.createCpaApi({
+      fetchImpl: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
+    });
+    if (!cpaApi) throw new Error('CPA Devin OAuth 能力尚未加载。');
+    return cpaApi.requestDevinOAuthUrl(state);
+  },
+  submitDevinOAuthCallback: async (state, callbackUrl) => {
+    const cpaApi = self.MultiPageBackgroundCpaApi?.createCpaApi({
+      fetchImpl: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
+    });
+    if (!cpaApi) throw new Error('CPA Devin OAuth 能力尚未加载。');
+    return cpaApi.submitDevinOAuthCallback(state, callbackUrl);
+  },
+  getDevinOAuthStatus: async (state) => {
+    const cpaApi = self.MultiPageBackgroundCpaApi?.createCpaApi({
+      fetchImpl: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
+    });
+    if (!cpaApi) throw new Error('CPA Devin OAuth 能力尚未加载。');
+    return cpaApi.getDevinOAuthStatus(state);
+  },
+  cancelDevinOAuth: async (state) => {
+    const cpaApi = self.MultiPageBackgroundCpaApi?.createCpaApi({
+      fetchImpl: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
+    });
+    if (!cpaApi) throw new Error('CPA Devin OAuth 能力尚未加载。');
+    return cpaApi.cancelDevinOAuth(state);
   },
   testKiroRsConnection: async (baseUrl, apiKey) => {
     if (typeof self.MultiPageBackgroundKiroPublisherKiroRs?.checkKiroRsConnection !== 'function') {

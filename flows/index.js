@@ -20,6 +20,7 @@
       id: 'claude',
       path: 'flows/claude/',
     },
+    devin: { id: 'devin', path: 'flows/devin/' },
   });
 
   function normalizeFlowId(value = '') {
@@ -44,14 +45,18 @@
           ? (rootScope.MultiPageKiroFlowDefinition || null)
           : (normalized === 'grok'
             ? (rootScope.MultiPageGrokFlowDefinition || null)
-            : (rootScope.MultiPageClaudeFlowDefinition || null))),
+            : (normalized === 'devin'
+              ? (rootScope.MultiPageDevinFlowDefinition || null)
+              : (rootScope.MultiPageClaudeFlowDefinition || null)))),
       workflow: normalized === 'openai'
         ? (rootScope.MultiPageOpenAiWorkflow || null)
         : (normalized === 'kiro'
           ? (rootScope.MultiPageKiroWorkflow || null)
           : (normalized === 'grok'
             ? (rootScope.MultiPageGrokWorkflow || null)
-            : (rootScope.MultiPageClaudeWorkflow || null))),
+            : (normalized === 'devin'
+              ? (rootScope.MultiPageDevinWorkflow || null)
+              : (rootScope.MultiPageClaudeWorkflow || null)))),
     };
   }
 

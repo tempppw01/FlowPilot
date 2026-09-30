@@ -41,6 +41,10 @@
       exportSettingsBundle,
       fetchGeneratedEmail,
       testCpaConnection,
+      startDevinOAuth,
+      submitDevinOAuthCallback,
+      getDevinOAuthStatus,
+      cancelDevinOAuth,
       testKiroRsConnection,
       testClaude2ApiConnection,
       testGrok2ApiConnection,
@@ -1436,6 +1440,7 @@
         }
 
         case 'RESUME_AUTO_RUN': {
+          const resumeState = await getState();
           clearStopRequest();
           if (message.source === 'sidepanel') {
             await lockAutomationWindowFromMessage(message, sender);
@@ -1692,6 +1697,93 @@
             status: Number(result?.status) || 0,
             message: String(result?.message || '').trim(),
           };
+        }
+
+        case 'START_DEVIN_OAUTH': {
+          if (typeof startDevinOAuth !== 'function') {
+            throw new Error('CPA Devin OAuth 能力尚未接入。');
+          }
+          const currentState = await getState();
+          if (!currentState?.devinRegistrationCompleted) {
+            throw new Error('请先完成 Devin 注册，再获取 CPA 登录链接。');
+          }
+          const cpaSettings = currentState?.settingsState?.flows?.openai?.targets?.cpa
+            || currentState?.flows?.openai?.targets?.cpa
+            || {};
+          const authState = {
+            ...currentState,
+            ...cpaSettings,
+            vpsUrl: message.payload?.vpsUrl ?? cpaSettings.vpsUrl ?? currentState?.vpsUrl,
+            vpsPassword: message.payload?.vpsPassword ?? cpaSettings.vpsPassword ?? currentState?.vpsPassword,
+          };
+          const result = await startDevinOAuth(authState);
+          const updates = {
+            devinOAuthState: result.oauthState,
+            devinOAuthUrl: result.oauthUrl,
+            cpaManagementOrigin: result.cpaManagementOrigin,
+            devinOAuthStatus: 'wait',
+          };
+          await setState(updates);
+          broadcastDataUpdate(updates);
+          return { ok: true, ...updates };
+        }
+
+        case 'SUBMIT_DEVIN_OAUTH_CALLBACK': {
+          if (typeof submitDevinOAuthCallback !== 'function') {
+            throw new Error('CPA Devin OAuth 回调能力尚未接入。');
+          }
+          const currentState = await getState();
+          const cpaSettings = currentState?.settingsState?.flows?.openai?.targets?.cpa
+            || currentState?.flows?.openai?.targets?.cpa
+            || {};
+          const authState = { ...currentState, ...cpaSettings };
+          const result = await submitDevinOAuthCallback(authState, message.payload?.callbackUrl);
+          const updates = { devinOAuthStatus: 'wait', devinOAuthError: null };
+          await setState(updates);
+          broadcastDataUpdate(updates);
+          return { ok: true, ...result, ...updates };
+        }
+
+        case 'POLL_DEVIN_OAUTH_STATUS': {
+          if (typeof getDevinOAuthStatus !== 'function') {
+            throw new Error('CPA Devin OAuth 状态查询能力尚未接入。');
+          }
+          const currentState = await getState();
+          const cpaSettings = currentState?.settingsState?.flows?.openai?.targets?.cpa
+            || currentState?.flows?.openai?.targets?.cpa
+            || {};
+          const result = await getDevinOAuthStatus({ ...currentState, ...cpaSettings });
+          const status = String(result?.status || 'wait').trim().toLowerCase();
+          if (status === 'ok' || status === 'error') {
+            const updates = {
+              devinOAuthStatus: status,
+              devinOAuthError: status === 'error' ? String(result?.error || 'Devin OAuth 认证失败。') : null,
+            };
+            await setState(updates);
+            broadcastDataUpdate(updates);
+            return { ok: true, ...updates };
+          }
+          return { ok: true, devinOAuthStatus: 'wait' };
+        }
+
+        case 'CANCEL_DEVIN_OAUTH': {
+          if (typeof cancelDevinOAuth !== 'function') {
+            throw new Error('CPA Devin OAuth 取消能力尚未接入。');
+          }
+          const currentState = await getState();
+          const cpaSettings = currentState?.settingsState?.flows?.openai?.targets?.cpa
+            || currentState?.flows?.openai?.targets?.cpa
+            || {};
+          await cancelDevinOAuth({ ...currentState, ...cpaSettings });
+          const updates = {
+            devinOAuthState: null,
+            devinOAuthUrl: null,
+            devinOAuthStatus: 'idle',
+            devinOAuthError: null,
+          };
+          await setState(updates);
+          broadcastDataUpdate(updates);
+          return { ok: true, ...updates };
         }
 
         case 'CHECK_KIRO_RS_CONNECTION': {

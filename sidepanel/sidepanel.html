@@ -95,6 +95,7 @@
         <div class="data-inline">
           <select id="select-flow" class="data-select" aria-label="Flow 选择">
             <option value="openai" selected>Codex / OpenAI</option>
+            <option value="devin">Devin</option>
             <option value="kiro">Kiro</option>
             <option value="grok">Grok</option>
             <option value="claude">Claude</option>
@@ -2102,6 +2103,38 @@
     <div class="steps-list"></div>
   </section>
 
+  <!-- Devin OAuth status and callback controls belong to the ordered flow, below its steps. -->
+  <section id="devin-oauth-card" class="data-card devin-oauth-card" style="display:none;" aria-labelledby="devin-oauth-title">
+        <div class="section-mini-header">
+          <div class="section-mini-copy">
+            <span id="devin-oauth-title" class="section-label">Devin OAuth</span>
+            <span class="data-value">自动完成 Devin 邮箱注册，并通过 CPA OAuth 保存认证文件。</span>
+          </div>
+        </div>
+        <span class="data-value">需要 CLI Proxy API v7.3.1 或更高版本，请在五分钟内完成授权。</span>
+        <div id="devin-oauth-session" class="devin-oauth-session" style="display:none;">
+          <div class="devin-oauth-field">
+            <span class="devin-oauth-label">授权链接</span>
+            <span id="display-devin-oauth-url" class="data-value mono devin-oauth-url">等待中...</span>
+          </div>
+          <div class="section-mini-actions">
+            <button id="btn-copy-devin-oauth-url" class="btn btn-outline btn-xs" type="button">复制链接</button>
+            <button id="btn-open-devin-oauth-url" class="btn btn-outline btn-xs" type="button">打开链接</button>
+            <button id="btn-cancel-devin-oauth" class="btn btn-ghost btn-xs" type="button">取消 Devin 登录</button>
+          </div>
+          <label class="devin-oauth-field" for="input-devin-oauth-callback">
+            <span class="devin-oauth-label">回调 URL</span>
+            <input id="input-devin-oauth-callback" class="data-input" type="url" autocomplete="url"
+              placeholder="http://127.0.0.1:8317/callback?code=...&amp;state=..." />
+          </label>
+          <span class="data-value">授权后复制浏览器地址栏中的完整回调 URL（保留原端口、code 和 state），提交后继续等待认证完成。</span>
+          <div class="section-mini-actions">
+            <button id="btn-submit-devin-oauth-callback" class="btn btn-outline btn-xs" type="button">提交回调 URL</button>
+          </div>
+        </div>
+        <div id="display-devin-oauth-status" class="devin-oauth-status" role="status" aria-live="polite">尚未开始</div>
+      </section>
+
   <section id="log-section">
     <div class="log-header">
       <span class="section-label">日志</span>
@@ -2206,6 +2239,8 @@
   <script src="../flows/grok/workflow.js"></script>
   <script src="../flows/claude/index.js"></script>
   <script src="../flows/claude/workflow.js"></script>
+  <script src="../flows/devin/index.js"></script>
+  <script src="../flows/devin/workflow.js"></script>
   <script src="../flows/index.js"></script>
   <script src="../core/flow-kernel/flow-registry.js"></script>
   <script src="../shared/contribution-registry.js"></script>

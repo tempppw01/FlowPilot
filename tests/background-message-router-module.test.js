@@ -1039,6 +1039,30 @@ test('AUTO_RUN applies current flow selection from payload before starting loop'
   ]);
 });
 
+test('AUTO_RUN allows Devin when requested directly through the background router', async () => {
+  const source = fs.readFileSync('background/message-router.js', 'utf8');
+  const globalScope = { console };
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundMessageRouter;`)(globalScope);
+  const calls = [];
+  let state = { activeFlowId: 'openai', flowId: 'openai', targetId: 'cpa' };
+  const router = api.createMessageRouter({
+    clearStopRequest: () => {},
+    getPendingAutoRunTimerPlan: () => null,
+    getState: async () => ({ ...state }),
+    normalizeRunCount: (value) => Number(value) || 1,
+    setState: async (updates) => { state = { ...state, ...updates }; calls.push(updates); },
+    startAutoRunLoop: () => calls.push('started'),
+    validateAutoRunStart: () => ({ ok: true, errors: [] }),
+  });
+
+  const result = await router.handleMessage({
+    type: 'AUTO_RUN',
+    payload: { totalRuns: 1, activeFlowId: 'devin', targetId: 'devin' },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(calls.includes('started'), true);
+});
+
 test('AUTO_RUN applies current phone capability state from sidepanel payload before starting loop', async () => {
   const source = fs.readFileSync('background/message-router.js', 'utf8');
   const globalScope = { console };
@@ -1312,4 +1336,27 @@ test('SAVE_SETTING applies shared mode-switch normalization before persisting in
     signupMethod: 'email',
   });
   assert.equal(response.modeValidation?.errors?.[0]?.code, 'plus_mode_unsupported');
+});
+
+
+test('START_DEVIN_OAUTH is blocked until Devin registration is complete and does not clear signup cookies', async () => {
+  const source = fs.readFileSync('background/message-router.js', 'utf8');
+  const scope = {};
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundMessageRouter;`)(scope);
+  let state = { devinRegistrationCompleted: false };
+  const calls = [];
+  const router = api.createMessageRouter({
+    getState: async () => ({ ...state }),
+    setState: async (patch) => { state = { ...state, ...patch }; },
+    broadcastDataUpdate: () => {},
+    startDevinOAuth: async () => { calls.push('oauth'); return { oauthUrl: 'https://app.devin.ai/auth', oauthState: 'state' }; },
+    clearDevinSiteData: async () => calls.push('clear-cookies'),
+  });
+  await assert.rejects(router.handleMessage({ type: 'START_DEVIN_OAUTH' }), /请先完成 Devin 注册/);
+  assert.deepEqual(calls, []);
+
+  state.devinRegistrationCompleted = true;
+  const result = await router.handleMessage({ type: 'START_DEVIN_OAUTH' });
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ['oauth']);
 });

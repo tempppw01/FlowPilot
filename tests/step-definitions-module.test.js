@@ -179,7 +179,7 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
   assert.equal(api.hasFlow('grok'), true);
   assert.equal(api.hasFlow('claude'), true);
   assert.equal(api.hasFlow('site-a'), false);
-  assert.deepStrictEqual(api.getRegisteredFlowIds(), ['openai', 'kiro', 'grok', 'claude']);
+  assert.deepStrictEqual(api.getRegisteredFlowIds(), ['openai', 'kiro', 'grok', 'claude', 'devin']);
   assert.deepStrictEqual(api.getSteps({ activeFlowId: 'site-a' }), []);
   assert.equal(api.getStepById(2, { activeFlowId: 'site-a' }), null);
   assert.deepStrictEqual(

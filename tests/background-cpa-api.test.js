@@ -223,3 +223,36 @@ test('cpa connection test returns the management endpoint failure without exposi
   assert.equal(result.message, 'CPA 连接测试失败：invalid management key');
   assert.equal(result.message.includes('management-key'), false);
 });
+
+test('Devin OAuth uses the cognition provider and submits only a matching localhost callback', async () => {
+  const apiModule = loadCpaApiModule();
+  const fetchCalls = [];
+  const api = apiModule.createCpaApi({
+    fetchImpl: async (url, options = {}) => {
+      const parsed = new URL(url);
+      fetchCalls.push({ path: parsed.pathname, search: parsed.search, method: options.method, headers: options.headers, body: options.body ? JSON.parse(options.body) : null });
+      if (parsed.pathname.endsWith('/devin-auth-url')) {
+        return createJsonResponse({ url: 'https://app.devin.ai/auth/cli/continue?state=state-123' });
+      }
+      return createJsonResponse({});
+    },
+  });
+  const state = { vpsUrl: 'https://cpa.example.com/management.html', vpsPassword: 'management-key' };
+  const authorization = await api.requestDevinOAuthUrl(state);
+  assert.equal(authorization.oauthUrl, 'https://app.devin.ai/auth/cli/continue?state=state-123');
+  assert.equal(authorization.oauthState, 'state-123');
+  assert.equal(fetchCalls[0].path, '/v0/management/devin-auth-url');
+  assert.equal(fetchCalls[0].search, '?is_webui=true');
+  assert.equal(fetchCalls[0].method, 'GET');
+  assert.equal(fetchCalls[0].headers.Authorization, 'Bearer management-key');
+
+  await api.submitDevinOAuthCallback({ ...state, ...authorization, devinOAuthState: authorization.oauthState }, 'http://localhost:1455/callback?code=oauth-code&state=state-123');
+  assert.equal(fetchCalls[1].path, '/v0/management/oauth-callback');
+  assert.equal(fetchCalls[1].body.provider, 'cognition');
+  assert.equal(fetchCalls[1].body.redirect_url, 'http://localhost:1455/callback?code=oauth-code&state=state-123');
+  await assert.rejects(
+    api.submitDevinOAuthCallback({ ...state, ...authorization, devinOAuthState: authorization.oauthState }, 'http://localhost:1455/callback?code=oauth-code&state=wrong-state'),
+    /state 与当前 Devin 授权不匹配/
+  );
+  assert.equal(fetchCalls.length, 2, 'mismatched callback state must not be submitted');
+});

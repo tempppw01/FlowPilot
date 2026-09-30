@@ -77,6 +77,16 @@ const rowVpsPassword = document.getElementById('row-vps-password');
 const inputVpsPassword = document.getElementById('input-vps-password');
 const btnTestCpa = document.getElementById('btn-test-cpa');
 const displayCpaTestStatus = document.getElementById('display-cpa-test-status');
+const rowSourceSelector = document.getElementById('row-source-selector');
+const devinOAuthCard = document.getElementById('devin-oauth-card');
+const devinOAuthSession = document.getElementById('devin-oauth-session');
+const displayDevinOAuthUrl = document.getElementById('display-devin-oauth-url');
+const displayDevinOAuthStatus = document.getElementById('display-devin-oauth-status');
+const inputDevinOAuthCallback = document.getElementById('input-devin-oauth-callback');
+const btnCopyDevinOAuthUrl = document.getElementById('btn-copy-devin-oauth-url');
+const btnOpenDevinOAuthUrl = document.getElementById('btn-open-devin-oauth-url');
+const btnCancelDevinOAuth = document.getElementById('btn-cancel-devin-oauth');
+const btnSubmitDevinOAuthCallback = document.getElementById('btn-submit-devin-oauth-callback');
 const rowLocalCpaStep9Mode = document.getElementById('row-local-cpa-step9-mode');
 const localCpaStep9ModeButtons = Array.from(document.querySelectorAll('[data-local-cpa-step9-mode]'));
 const rowSub2ApiUrl = document.getElementById('row-sub2api-url');
@@ -5999,7 +6009,7 @@ function collectSettingsPayload() {
     paypalPassword: String(currentPayPalAccount?.password || latestState?.paypalPassword || ''),
     currentPayPalAccountId: String(latestState?.currentPayPalAccountId || '').trim(),
     paypalAccounts: payPalAccounts,
-    ...(accountContributionEnabled ? {} : {
+    ...(accountContributionEnabled || activeFlowId === 'devin' ? {} : {
       customPassword: inputPassword.value,
     }),
     mailProvider: selectMailProvider.value,
@@ -13604,6 +13614,7 @@ function applyAutoRunStatus(payload = currentAutoRun) {
   updateFallbackThreadIntervalInputState();
   syncAutoRunCountdownTicker();
   updateStopButtonState(paused || locked || Object.values(getStepStatuses()).some(status => status === 'running'));
+  if (typeof updateDevinAutomaticRunAvailability === 'function') updateDevinAutomaticRunAvailability();
   updateConfigMenuControls();
   renderContributionMode();
 }
@@ -14882,15 +14893,19 @@ function syncPasswordField(state) {
   const activeFlowId = typeof normalizeFlowId === 'function'
     ? normalizeFlowId(state?.activeFlowId || state?.flowId || selectFlow?.value || DEFAULT_ACTIVE_FLOW_ID)
     : String(state?.activeFlowId || state?.flowId || selectFlow?.value || DEFAULT_ACTIVE_FLOW_ID || '').trim().toLowerCase();
-  const passwordDisabled = activeFlowId === 'claude';
-  inputPassword.disabled = passwordDisabled;
-  inputPassword.placeholder = passwordDisabled
-    ? 'Claude 使用邮箱魔法登录，无需账户密码'
-    : '账户密码，留空则自动生成';
-  inputPassword.value = (accountContributionEnabled || passwordDisabled) ? '' : (state.customPassword || state.password || '');
+  const passwordNotUsed = activeFlowId === 'claude' || activeFlowId === 'devin';
+  const passwordRow = rowCustomPassword || document.getElementById('row-custom-password');
+  if (passwordRow) passwordRow.style.display = passwordNotUsed ? 'none' : '';
+  inputPassword.disabled = passwordNotUsed;
+  inputPassword.placeholder = activeFlowId === 'devin'
+    ? 'Devin 使用邮箱验证码注册，无需账户密码'
+    : activeFlowId === 'claude'
+      ? 'Claude 使用邮箱魔法登录，无需账户密码'
+      : '账户密码，留空则自动生成';
+  inputPassword.value = (accountContributionEnabled || passwordNotUsed) ? '' : (state.customPassword || state.password || '');
   if (btnTogglePassword) {
-    btnTogglePassword.disabled = passwordDisabled;
-    btnTogglePassword.setAttribute('aria-disabled', String(passwordDisabled));
+    btnTogglePassword.disabled = passwordNotUsed;
+    btnTogglePassword.setAttribute('aria-disabled', String(passwordNotUsed));
   }
 }
 
@@ -16203,6 +16218,7 @@ function updatePanelModeUI() {
       ? 'SUB2API 回调验证'
       : (useCodex2Api ? 'Codex2API 回调验证' : 'CPA 回调验证');
   }
+  renderDevinOAuthUI(latestState);
 }
 
 // ============================================================
@@ -16356,6 +16372,7 @@ function updateButtonStates() {
   });
 
   btnReset.disabled = anyRunning || isAutoRunPausedPhase() || autoLocked;
+  if (typeof updateDevinAutomaticRunAvailability === 'function') updateDevinAutomaticRunAvailability();
   const disableIcloudControls = anyRunning || autoLocked;
   if (btnIcloudRefresh) btnIcloudRefresh.disabled = disableIcloudControls;
   if (btnIcloudDeleteUsed) btnIcloudDeleteUsed.disabled = disableIcloudControls || !hasDeletableUsedIcloudAliases();
@@ -18041,6 +18058,159 @@ btnTestCpa?.addEventListener('click', async () => {
   } finally {
     btnTestCpa.disabled = false;
     btnTestCpa.textContent = defaultLabel;
+  }
+});
+
+let devinOAuthPollTimer = null;
+let devinOAuthPollInFlight = false;
+
+function stopDevinOAuthStatusPolling() {
+  if (devinOAuthPollTimer) {
+    clearInterval(devinOAuthPollTimer);
+    devinOAuthPollTimer = null;
+  }
+  devinOAuthPollInFlight = false;
+}
+
+// Devin 注册面板独立显示；自动按钮仍走通用有序节点执行器。
+function isDevinRegistrationSelected(state = latestState || {}) {
+  return String(selectFlow?.value || state?.activeFlowId || state?.flowId || DEFAULT_ACTIVE_FLOW_ID)
+    .trim().toLowerCase() === 'devin';
+}
+
+function updateDevinAutomaticRunAvailability() {
+  const isDevin = isDevinRegistrationSelected();
+  if (btnAutoRun) {
+    btnAutoRun.disabled = Boolean(currentAutoRun?.autoRunning);
+    btnAutoRun.title = isDevin ? '自动执行 Devin 注册流程' : '自动执行全部步骤';
+    btnAutoRun.setAttribute('aria-label', '自动');
+    if (!currentAutoRun?.autoRunning) btnAutoRun.textContent = '自动';
+  }
+  if (inputRunCount) inputRunCount.disabled = Boolean(currentAutoRun?.autoRunning);
+}
+
+function renderDevinOAuthUI(state = latestState || {}) {
+  if (!devinOAuthCard) return;
+  const flowId = String(state?.activeFlowId || state?.flowId || DEFAULT_ACTIVE_FLOW_ID).trim().toLowerCase();
+  const targetId = typeof getSelectedTargetId === 'function'
+    ? getSelectedTargetId(flowId)
+    : String(selectPanelMode?.value || state?.targetId || 'cpa').trim().toLowerCase();
+  const isDevin = flowId === 'devin';
+  if (rowSourceSelector) rowSourceSelector.style.display = isDevin ? 'none' : '';
+  const status = String(state?.devinOAuthStatus || 'idle').trim().toLowerCase();
+  const oauthUrl = String(state?.devinOAuthUrl || '').trim();
+  devinOAuthCard.style.display = isDevin && (oauthUrl || status === 'error') ? '' : 'none';
+  updateDevinAutomaticRunAvailability();
+
+  const waiting = status === 'wait' && Boolean(state?.devinOAuthState);
+  if (devinOAuthSession) {
+    devinOAuthSession.style.display = oauthUrl ? '' : 'none';
+  }
+  if (displayDevinOAuthUrl) {
+    displayDevinOAuthUrl.textContent = oauthUrl || '等待中...';
+  }
+  if (displayDevinOAuthStatus) {
+    displayDevinOAuthStatus.dataset.status = status;
+    if (status === 'wait') {
+      displayDevinOAuthStatus.textContent = '等待 Devin 授权与认证中...';
+    } else if (status === 'ok') {
+      displayDevinOAuthStatus.textContent = 'Devin 授权成功，认证文件已保存到 CPA。';
+    } else if (status === 'error') {
+      displayDevinOAuthStatus.textContent = `授权失败：${String(state?.devinOAuthError || '请重新开始登录。')}`;
+    } else {
+      displayDevinOAuthStatus.textContent = '尚未开始';
+    }
+  }
+  if (btnCancelDevinOAuth) {
+    btnCancelDevinOAuth.style.display = waiting ? '' : 'none';
+  }
+  if (btnSubmitDevinOAuthCallback) {
+    btnSubmitDevinOAuthCallback.disabled = !waiting;
+  }
+  if (waiting) {
+    startDevinOAuthStatusPolling();
+  } else {
+    stopDevinOAuthStatusPolling();
+  }
+}
+
+function startDevinOAuthStatusPolling() {
+  if (devinOAuthPollTimer || !latestState?.devinOAuthState) return;
+  const poll = async () => {
+    if (devinOAuthPollInFlight) return;
+    devinOAuthPollInFlight = true;
+    try {
+      const response = await sendSidepanelMessage({ type: 'POLL_DEVIN_OAUTH_STATUS' });
+      if (response?.error) throw new Error(response.error);
+      if (response?.devinOAuthStatus === 'ok' || response?.devinOAuthStatus === 'error') {
+        syncLatestState(response);
+        renderDevinOAuthUI(latestState);
+      }
+    } catch (error) {
+      if (displayDevinOAuthStatus && latestState?.devinOAuthStatus === 'wait') {
+        displayDevinOAuthStatus.textContent = `连接 CPA 查询状态失败，将自动重试：${error?.message || '网络错误'}`;
+      }
+    } finally {
+      devinOAuthPollInFlight = false;
+    }
+  };
+  void poll();
+  devinOAuthPollTimer = setInterval(poll, 2000);
+}
+
+btnCopyDevinOAuthUrl?.addEventListener('click', async () => {
+  try {
+    await copyTextToClipboard(latestState?.devinOAuthUrl || '');
+    showToast('Devin 授权链接已复制。', 'success', 1800);
+  } catch (error) {
+    showToast(error?.message || '复制授权链接失败。', 'error');
+  }
+});
+
+btnOpenDevinOAuthUrl?.addEventListener('click', () => {
+  const oauthUrl = String(latestState?.devinOAuthUrl || '').trim();
+  if (!oauthUrl) {
+    showToast('请先开始 Devin 登录以获取授权链接。', 'info', 2200);
+    return;
+  }
+  openExternalUrl(oauthUrl);
+});
+
+btnSubmitDevinOAuthCallback?.addEventListener('click', async () => {
+  const callbackUrl = String(inputDevinOAuthCallback?.value || '').trim();
+  if (!callbackUrl) {
+    showToast('请粘贴浏览器地址栏中的完整回调 URL。', 'info', 2200);
+    return;
+  }
+  btnSubmitDevinOAuthCallback.disabled = true;
+  try {
+    const response = await sendSidepanelMessage({
+      type: 'SUBMIT_DEVIN_OAUTH_CALLBACK',
+      payload: { callbackUrl },
+    });
+    if (response?.error) throw new Error(response.error);
+    syncLatestState(response);
+    renderDevinOAuthUI(latestState);
+    showToast('回调已提交，正在等待 Devin 认证完成。', 'success', 2400);
+  } catch (error) {
+    showToast(error?.message || '提交 Devin 回调失败。', 'error', 4200);
+  } finally {
+    renderDevinOAuthUI(latestState);
+  }
+});
+
+btnCancelDevinOAuth?.addEventListener('click', async () => {
+  btnCancelDevinOAuth.disabled = true;
+  try {
+    const response = await sendSidepanelMessage({ type: 'CANCEL_DEVIN_OAUTH' });
+    if (response?.error) throw new Error(response.error);
+    syncLatestState(response);
+    renderDevinOAuthUI(latestState);
+    showToast('已取消 Devin 登录。', 'info', 1800);
+  } catch (error) {
+    showToast(error?.message || '取消 Devin 登录失败。', 'error', 4200);
+  } finally {
+    btnCancelDevinOAuth.disabled = false;
   }
 });
 
@@ -20788,6 +20958,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     case 'DATA_UPDATED': {
       syncLatestState(message.payload);
+      if (
+        message.payload.devinOAuthState !== undefined
+        || message.payload.devinOAuthUrl !== undefined
+        || message.payload.devinOAuthStatus !== undefined
+        || message.payload.devinOAuthError !== undefined
+      ) {
+        renderDevinOAuthUI(latestState);
+      }
       const activeSettingsEditor = typeof document !== 'undefined' ? document.activeElement : null;
       const shouldDeferDataUpdatedUiApply = settingsSaveInFlight
         && isEditableElementInSettingsCard(activeSettingsEditor);

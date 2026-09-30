@@ -32,6 +32,10 @@
       platformBinding: Object.freeze([
         'cpaOAuthState',
         'cpaManagementOrigin',
+        'devinOAuthState',
+        'devinOAuthUrl',
+        'devinOAuthStatus',
+        'devinOAuthError',
         'sub2apiSessionId',
         'sub2apiOAuthState',
         'sub2apiGroupId',

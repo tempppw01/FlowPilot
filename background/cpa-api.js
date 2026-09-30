@@ -477,6 +477,94 @@
       };
     }
 
+    async function requestDevinOAuthUrl(state = {}, options = {}) {
+      const managementKey = normalizeString(state?.vpsPassword);
+      if (!managementKey) {
+        throw new Error('尚未配置 CPA 管理密钥，请先在侧边栏填写。');
+      }
+      const origin = deriveCpaManagementOrigin(state?.vpsUrl);
+      const result = await fetchCpaManagementJson(origin, '/v0/management/devin-auth-url?is_webui=true', {
+        method: 'GET',
+        managementKey,
+        timeoutMs: options.timeoutMs,
+      });
+      const oauthUrl = firstNonEmpty(result?.url, result?.auth_url, result?.authUrl);
+      const oauthState = firstNonEmpty(result?.state, extractStateFromAuthUrl(oauthUrl));
+      if (!oauthUrl.startsWith('https://') || !oauthState) {
+        throw new Error('CPA 未返回有效的 Devin 授权链接或 state。请确认 CLI Proxy API 版本不低于 v7.3.1。');
+      }
+      return {
+        oauthUrl,
+        oauthState,
+        cpaManagementOrigin: origin,
+      };
+    }
+
+    async function submitDevinOAuthCallback(state = {}, callbackUrl = '', options = {}) {
+      const managementKey = normalizeString(state?.vpsPassword);
+      if (!managementKey) {
+        throw new Error('尚未配置 CPA 管理密钥，请先在侧边栏填写。');
+      }
+      const expectedState = normalizeString(state?.devinOAuthState);
+      if (!expectedState) {
+        throw new Error('请先开始 Devin 登录，再提交回调 URL。');
+      }
+      let callback;
+      try {
+        callback = new URL(normalizeString(callbackUrl));
+      } catch {
+        throw new Error('回调 URL 格式无效，请粘贴浏览器地址栏中的完整回调地址。');
+      }
+      if (!['http:', 'https:'].includes(callback.protocol) || !/\/(?:devin\/)?callback\/?$/i.test(callback.pathname)) {
+        throw new Error('回调 URL 路径无效，请粘贴完整的 /callback 或 /devin/callback 地址。');
+      }
+      if ((!callback.searchParams.get('code') && !callback.searchParams.get('error')) || !callback.searchParams.get('state')) {
+        throw new Error('回调 URL 缺少 code/error 或 state，请确认授权已完成并复制完整地址。');
+      }
+      if (expectedState && callback.searchParams.get('state') !== expectedState) {
+        throw new Error('回调 URL 的 state 与当前 Devin 授权不匹配。');
+      }
+      const origin = normalizeString(state?.cpaManagementOrigin) || deriveCpaManagementOrigin(state?.vpsUrl);
+      await fetchCpaManagementJson(origin, '/v0/management/oauth-callback', {
+        method: 'POST',
+        managementKey,
+        timeoutMs: options.timeoutMs,
+        body: {
+          provider: 'cognition',
+          redirect_url: normalizeString(callbackUrl),
+        },
+      });
+      return { submitted: true };
+    }
+
+    async function getDevinOAuthStatus(state = {}, options = {}) {
+      const managementKey = normalizeString(state?.vpsPassword);
+      const oauthState = normalizeString(state?.devinOAuthState);
+      if (!managementKey || !oauthState) {
+        throw new Error('缺少 CPA 管理密钥或 Devin OAuth state。');
+      }
+      const origin = normalizeString(state?.cpaManagementOrigin) || deriveCpaManagementOrigin(state?.vpsUrl);
+      return fetchCpaManagementJson(origin, `/v0/management/get-auth-status?state=${encodeURIComponent(oauthState)}`, {
+        method: 'GET',
+        managementKey,
+        timeoutMs: options.timeoutMs,
+      });
+    }
+
+    async function cancelDevinOAuth(state = {}, options = {}) {
+      const managementKey = normalizeString(state?.vpsPassword);
+      const oauthState = normalizeString(state?.devinOAuthState);
+      if (!managementKey || !oauthState) {
+        throw new Error('缺少 CPA 管理密钥或 Devin OAuth state。');
+      }
+      const origin = normalizeString(state?.cpaManagementOrigin) || deriveCpaManagementOrigin(state?.vpsUrl);
+      return fetchCpaManagementJson(origin, `/v0/management/oauth-session?state=${encodeURIComponent(oauthState)}`, {
+        method: 'DELETE',
+        managementKey,
+        timeoutMs: options.timeoutMs,
+      });
+    }
+
     async function importCurrentChatGptSession(state = {}, options = {}) {
       const logLabel = normalizeString(options.logLabel) || 'CPA 会话导入';
       const managementKey = normalizeString(state?.vpsPassword);
@@ -511,10 +599,14 @@
 
     return {
       buildCpaSessionAuthJson,
+      cancelDevinOAuth,
       deriveCpaManagementOrigin,
       fetchCpaManagementJson,
+      getDevinOAuthStatus,
       importCurrentChatGptSession,
       requestOAuthUrl,
+      requestDevinOAuthUrl,
+      submitDevinOAuthCallback,
       submitOAuthCallback,
       testCpaConnection,
     };

@@ -13,13 +13,26 @@ function loadApis() {
   };`)(scope);
 }
 
+
+test('Devin registration exposes the shared CPA configuration rows', () => {
+  const { flowRegistry } = loadApis();
+  assert.deepEqual(
+    flowRegistry.getSettingsGroupDefinitions()?.['devin-registration']?.rowIds,
+    ['row-vps-url', 'row-vps-password', 'row-cpa-test-status']
+  );
+  assert.ok(flowRegistry.getVisibleGroupIds('devin', 'devin').includes('devin-registration'));
+});
+
 test('flow registry exposes canonical flow and target metadata', () => {
   const { flowRegistry } = loadApis();
 
-  assert.deepEqual(flowRegistry.getRegisteredFlowIds(), ['openai', 'kiro', 'grok', 'claude']);
+  assert.deepEqual(flowRegistry.getRegisteredFlowIds(), ['openai', 'kiro', 'grok', 'claude', 'devin']);
   assert.equal(flowRegistry.normalizeFlowId('kiro'), 'kiro');
   assert.equal(flowRegistry.normalizeFlowId('grok'), 'grok');
   assert.equal(flowRegistry.normalizeFlowId('claude'), 'claude');
+  assert.equal(flowRegistry.normalizeFlowId('devin'), 'devin');
+  assert.equal(flowRegistry.getFlowLabel('devin'), 'Devin');
+  assert.equal(flowRegistry.getFlowCapabilities('devin')?.supportsAutomaticRun, true);
   assert.equal(flowRegistry.normalizeFlowId('unknown'), 'openai');
   assert.equal(flowRegistry.getFlowLabel('openai'), 'Codex / OpenAI');
   assert.deepEqual(

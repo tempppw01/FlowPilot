@@ -578,6 +578,54 @@ header {
   box-shadow: var(--shadow-sm);
 }
 
+.devin-oauth-card {
+  align-items: stretch;
+  margin: 2px 0 4px;
+  padding: 12px;
+}
+
+.devin-oauth-session,
+.devin-oauth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.devin-oauth-session {
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-base) 55%, transparent);
+}
+
+.devin-oauth-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.devin-oauth-url {
+  overflow-wrap: anywhere;
+}
+
+.devin-oauth-status {
+  align-self: flex-start;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.devin-oauth-status[data-status="ok"] {
+  color: var(--green, #27845a);
+}
+
+.devin-oauth-status[data-status="error"] {
+  color: var(--red, #c44545);
+}
+
 .data-card.is-locked {
   position: relative;
   overflow: hidden;

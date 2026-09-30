@@ -4,6 +4,7 @@ const fs = require('node:fs');
 
 const sidepanelSource = fs.readFileSync('sidepanel/sidepanel.js', 'utf8');
 const sidepanelHtml = fs.readFileSync('sidepanel/sidepanel.html', 'utf8');
+const sidepanelCss = fs.readFileSync('sidepanel/sidepanel.css', 'utf8');
 
 function stripHtmlComments(html) {
   return String(html || '').replace(/<!--[\s\S]*?-->/g, '');
@@ -45,6 +46,8 @@ test('sidepanel html exposes flow selector and kiro source fields', () => {
     'class="data-metrics-label"',
     '<option value="grok">Grok</option>',
     '<option value="claude">Claude</option>',
+    '<option value="devin">Devin</option>',
+    'id="devin-oauth-card"',
     'id="label-source-selector"',
     'id="btn-open-target-repository"',
     'id="row-step6-cookie-settings"',
@@ -671,6 +674,7 @@ function updatePlusModeUI() {
 function updatePhoneVerificationSettingsUI() {
   calls.push({ type: 'phone' });
 }
+function renderDevinOAuthUI() {}
 function resolveCurrentSidepanelCapabilities() {
   return {
     visibleGroupIds: ['service-account', 'openai-plus', 'openai-phone'],
@@ -699,4 +703,41 @@ return {
   );
   assert.equal(api.selectFlow.value, 'openai');
   assert.equal(api.selectPanelMode.value, 'cpa');
+});
+
+
+test('Devin OAuth controls follow the ordered step chain without a duplicate start button', () => {
+  const stepsEnd = sidepanelHtml.indexOf('</section>', sidepanelHtml.indexOf('id="steps-section"'));
+  const oauthStart = sidepanelHtml.indexOf('id="devin-oauth-card"');
+  assert.ok(stepsEnd >= 0 && oauthStart > stepsEnd);
+  assert.doesNotMatch(sidepanelHtml, /id="btn-start-devin-oauth"/);
+  assert.doesNotMatch(sidepanelSource, /START_DEVIN_OAUTH/);
+  assert.match(sidepanelHtml, /id="btn-submit-devin-oauth-callback"/);
+  assert.match(sidepanelHtml, /id="display-devin-oauth-url"/);
+  assert.doesNotMatch(sidepanelHtml, /DEVIN 独立注册|按主流程列表顺序自动注册|授权链接与回调由 CPA OAuth 服务提供/);
+  assert.doesNotMatch(sidepanelSource, /devinRegistrationPanel/);
+  assert.match(sidepanelSource, /devinOAuthCard\.style\.display = isDevin && \(oauthUrl \|\| status === 'error'\) \? '' : 'none'/);
+  assert.match(sidepanelSource, /rowSourceSelector\.style\.display = isDevin \? 'none' : ''/);
+  assert.doesNotMatch(sidepanelHtml, /class="devin-registration-steps"/);
+  assert.doesNotMatch(sidepanelCss, /\.devin-registration-steps/);
+});
+
+test('Devin CPA OAuth step is wired to the existing Devin workflow executor', () => {
+  assert.match(
+    fs.readFileSync('background.js', 'utf8'),
+    /'devin-start-cpa-oauth': \(state\) => devinRegisterRunner\.execute\(state\)/
+  );
+});
+
+test('Devin hides account password and preserves shared password settings', () => {
+  assert.match(sidepanelSource, /const passwordNotUsed = activeFlowId === 'claude' \|\| activeFlowId === 'devin'/);
+  assert.match(sidepanelSource, /passwordRow\.style\.display = passwordNotUsed \? 'none' : ''/);
+  assert.match(sidepanelSource, /accountContributionEnabled \|\| activeFlowId === 'devin' \? \{\} : \{/);
+});
+
+test('Devin automatic execution is available in the sidepanel without a duplicate step list', () => {
+  assert.match(sidepanelSource, /btnAutoRun\.disabled = Boolean\(currentAutoRun\?\.autoRunning\)/);
+  assert.match(sidepanelSource, /自动执行 Devin 注册流程/);
+  assert.doesNotMatch(sidepanelHtml, /class="devin-registration-steps"/);
+  assert.doesNotMatch(sidepanelCss, /\.devin-registration-steps/);
 });
