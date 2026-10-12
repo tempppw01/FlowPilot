@@ -1774,15 +1774,12 @@ function normalizePhoneVerificationReplacementLimit(value, fallback = DEFAULT_PH
   const rawValue = String(value ?? '').trim();
   const numeric = Number(rawValue);
   if (!rawValue || !Number.isFinite(numeric)) {
-    return Math.min(
-      PHONE_REPLACEMENT_LIMIT_MAX,
-      Math.max(PHONE_REPLACEMENT_LIMIT_MIN, Math.floor(Number(fallback) || DEFAULT_PHONE_VERIFICATION_REPLACEMENT_LIMIT))
+    return Math.max(
+      PHONE_REPLACEMENT_LIMIT_MIN,
+      Math.floor(Number(fallback) || DEFAULT_PHONE_VERIFICATION_REPLACEMENT_LIMIT)
     );
   }
-  return Math.min(
-    PHONE_REPLACEMENT_LIMIT_MAX,
-    Math.max(PHONE_REPLACEMENT_LIMIT_MIN, Math.floor(numeric))
-  );
+  return Math.max(PHONE_REPLACEMENT_LIMIT_MIN, Math.floor(numeric));
 }
 
 function normalizePhoneCodeWaitSeconds(value, fallback = DEFAULT_PHONE_CODE_WAIT_SECONDS) {

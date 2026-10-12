@@ -8022,10 +8022,10 @@ function normalizePhoneVerificationReplacementLimit(value, fallback = DEFAULT_PH
   if (!Number.isFinite(parsed)) {
     return Math.max(
       PHONE_REPLACEMENT_LIMIT_MIN,
-      Math.min(PHONE_REPLACEMENT_LIMIT_MAX, Number(fallback) || DEFAULT_PHONE_VERIFICATION_REPLACEMENT_LIMIT)
+      Number(fallback) || DEFAULT_PHONE_VERIFICATION_REPLACEMENT_LIMIT
     );
   }
-  return Math.max(PHONE_REPLACEMENT_LIMIT_MIN, Math.min(PHONE_REPLACEMENT_LIMIT_MAX, parsed));
+  return Math.max(PHONE_REPLACEMENT_LIMIT_MIN, parsed);
 }
 
 function normalizePhoneCodeWaitSecondsValue(value, fallback = DEFAULT_PHONE_CODE_WAIT_SECONDS) {
