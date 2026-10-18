@@ -4,7 +4,6 @@
   const LISTENER_SENTINEL = '__multipageDevinRegisterPageListener__';
   const CAPTCHA_PATTERN = /captcha|recaptcha|hcaptcha|verify you are human|security challenge|人机验证|安全验证/i;
   const CONTINUE_PATTERN = /^(continue|next|submit|continue with email|继续|下一步|提交|确认)$/i;
-  const FREE_PATTERN = /\bfree\b|free plan|starter|免费方案|免费版/i;
   function textOf(el) { return String(el?.innerText || el?.textContent || el?.getAttribute?.('aria-label') || el?.value || '').replace(/\s+/g, ' ').trim(); }
   function visible(el) {
     if (!(el instanceof HTMLElement)) return false;
@@ -44,14 +43,6 @@
       else setValue(fields[0], code);
       const button = choose(CONTINUE_PATTERN); if (button) click(button); else fields[0].form?.requestSubmit?.();
       return response({ codeSubmitted: true });
-    }
-    if (action === 'select-free-plan') {
-      const cards = [...document.querySelectorAll('button, a, [role="button"], label, [role="radio"], [role="option"]')].filter(visible).filter((el) => FREE_PATTERN.test(textOf(el)));
-      const card = cards.find((el) => /select|choose|get started|continue|免费|free/i.test(textOf(el))) || cards[0];
-      if (!card) throw new Error('当前页面未找到免费方案选项。');
-      click(card); await new Promise((resolve) => setTimeout(resolve, 250));
-      const next = choose(CONTINUE_PATTERN); if (next && next !== card) click(next);
-      return response({ selectedPlan: textOf(card) });
     }
     throw new Error(`不支持的 Devin 页面操作：${action}`);
   }

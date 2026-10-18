@@ -100,7 +100,6 @@ test('manually skipping every Devin registration step still allows fetching the 
     'devin-open-authorization',
     'devin-enter-email',
     'devin-enter-email-code',
-    'devin-select-free-plan',
   ].map((nodeId) => [nodeId, 'skipped']));
   const runner = createRunner({
     addLog: async () => {},
@@ -126,9 +125,9 @@ test('manually skipping every Devin registration step still allows fetching the 
   assert.ok(trace.some((event) => event[0] === 'complete' && event[1] === 'devin-start-cpa-oauth'));
 });
 
-test('selecting the free plan marks registration complete before CPA OAuth is fetched', async () => {
+test('completing the email code marks registration complete before CPA OAuth is fetched', async () => {
   const trace = [];
-  let state = { devinRegisterTabId: 12, devinRegistrationCompleted: false };
+  let state = { devinRegisterTabId: 12, email: 'a@example.com', devinRegistrationCompleted: false };
   const runner = createRunner({
     addLog: async (message) => trace.push(['log', message]),
     chrome: { tabs: { get: async (id) => ({ id }), update: async () => {} } },
@@ -136,8 +135,9 @@ test('selecting the free plan marks registration complete before CPA OAuth is fe
     getState: async () => state,
     getTabId: async () => 12,
     isTabAlive: async () => true,
+    pollFlowVerificationCode: async () => ({ code: '123456' }),
     ready: async () => {},
-    sendToContentScriptResilient: async (_source, message) => { trace.push(['page', message.action]); return { selectedPlan: 'Free' }; },
+    sendToContentScriptResilient: async (_source, message) => { trace.push(['page', message.action]); return {}; },
     setState: async (patch) => { state = { ...state, ...patch }; trace.push(['state', patch]); },
     registerTab: async () => {},
     reuseOrCreateTab: async (_source, url) => { trace.push(['open', url]); return 12; },
@@ -148,12 +148,12 @@ test('selecting the free plan marks registration complete before CPA OAuth is fe
     },
     DEVIN_REGISTER_INJECT_FILES: [],
   });
-  await runner.execute({ nodeId: 'devin-select-free-plan' });
+  await runner.execute({ nodeId: 'devin-enter-email-code' });
   assert.equal(state.devinRegistrationCompleted, true);
   await runner.execute({ nodeId: 'devin-start-cpa-oauth' });
-  assert.ok(trace.findIndex((event) => event[0] === 'complete' && event[1] === 'devin-select-free-plan')
+  assert.ok(trace.some((event) => event[0] === 'oauth'));
+  assert.ok(trace.findIndex((event) => event[0] === 'complete' && event[1] === 'devin-enter-email-code')
     < trace.findIndex((event) => event[0] === 'oauth'));
-  assert.deepEqual(trace.find((event) => event[0] === 'open'), ['open', 'https://app.devin.ai/auth/cli/continue?state=x']);
 });
 
 test('Devin register runner uses shared email resolver and verification poller', async () => {
@@ -202,10 +202,11 @@ test('Devin runner rejects a stale saved tab ID when the registered tab is diffe
     getState: async () => state,
     getTabId: async () => 12,
     isTabAlive: async () => true,
+    resolveSignupEmailForFlow: async () => 'a@example.com',
     sendToContentScriptResilient: async (_source, message) => { calls.push(['command', message.action]); return {}; },
     setState: async (patch) => { state = { ...state, ...patch }; },
   });
-  await runner.execute({ nodeId: 'devin-select-free-plan' });
+  await runner.execute({ nodeId: 'devin-enter-email', email: 'a@example.com' });
   assert.ok(calls.some(([kind, tabId]) => kind === 'ready' && tabId === 12));
 });
 

@@ -11,7 +11,6 @@
     'devin-open-authorization',
     'devin-enter-email',
     'devin-enter-email-code',
-    'devin-select-free-plan',
   ];
 
   function clean(value) { return String(value ?? '').trim(); }
@@ -157,7 +156,7 @@
         if (found) return found;
         if (Date.now() - lastProgressAt >= 25000) {
           lastProgressAt = Date.now();
-          await log('步骤 6：等待 Devin 返回本地 OAuth 回调地址...', 'info', 'devin-submit-callback');
+          await log('步骤 5：等待 Devin 返回本地 OAuth 回调地址...', 'info', 'devin-submit-callback');
         }
         await sleepWithStop(1000);
       }
@@ -194,14 +193,16 @@
           return;
         }
         if (nodeId === 'devin-start-cpa-oauth') {
+          const registrationCompleted = current.devinRegistrationCompleted
+            || isRegistrationStepSettled(current.nodeStatuses?.['devin-enter-email-code']);
           const registrationStepsSettled = DEVIN_REGISTRATION_NODE_IDS.every((registrationNodeId) =>
             isRegistrationStepSettled(current.nodeStatuses?.[registrationNodeId])
           );
-          if (!current.devinRegistrationCompleted && !registrationStepsSettled) {
+          if (!registrationCompleted && !registrationStepsSettled) {
             throw new Error('请先完成或手动跳过 Devin 注册步骤，再获取 CPA 登录链接。');
           }
           if (typeof startDevinOAuth !== 'function') throw new Error('CPA Devin OAuth 能力尚未接入。');
-          await log('步骤 5：Devin 注册已完成，正在向 CPA 获取登录链接...', 'info', nodeId);
+          await log('步骤 4：Devin 注册已完成，正在向 CPA 获取登录链接...', 'info', nodeId);
           const auth = await startDevinOAuth(current);
           const url = clean(auth?.oauthUrl);
           if (!url) throw new Error('CPA 未返回 Devin 登录链接。');
@@ -228,7 +229,7 @@
           if (typeof submitDevinOAuthCallback !== 'function') throw new Error('CPA Devin OAuth 回调能力尚未接入。');
           await submitDevinOAuthCallback(current, callbackUrl);
           await setState({ devinOAuthStatus: 'wait', devinOAuthError: null, devinOAuthCallbackUrl: callbackUrl });
-          await log('步骤 6：已自动提交 Devin OAuth 回调地址。', 'ok', nodeId);
+          await log('步骤 5：已自动提交 Devin OAuth 回调地址。', 'ok', nodeId);
           await complete(nodeId);
           return;
         }
@@ -253,10 +254,11 @@
           const code = clean(polled?.code).replace(/\s/g, '');
           if (!code) throw new Error('邮件中没有可用的 Devin 验证码。');
           await command(nodeId, 'submit-code', { code });
-          await setState({ devinVerificationCode: code, devinVerificationMessageId: polled.messageId || polled.mailId || '' });
-        } else if (nodeId === 'devin-select-free-plan') {
-          await command(nodeId, 'select-free-plan');
-          await setState({ devinRegistrationCompleted: true });
+          await setState({
+            devinVerificationCode: code,
+            devinVerificationMessageId: polled.messageId || polled.mailId || '',
+            devinRegistrationCompleted: true,
+          });
         } else {
           throw new Error(`未知 Devin 注册节点：${nodeId || '(empty)'}`);
         }

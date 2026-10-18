@@ -15332,7 +15332,6 @@ const stepExecutorsByKey = {
   'devin-open-authorization': (state) => devinRegisterRunner.execute(state),
   'devin-enter-email': (state) => devinRegisterRunner.execute(state),
   'devin-enter-email-code': (state) => devinRegisterRunner.execute(state),
-  'devin-select-free-plan': (state) => devinRegisterRunner.execute(state),
   'devin-start-cpa-oauth': (state) => devinRegisterRunner.execute(state),
   'devin-submit-callback': (state) => devinRegisterRunner.execute(state),
   'claude-open-official-page': (state) => claudeRegisterRunner.executeClaudeOpenOfficialPage(state),
