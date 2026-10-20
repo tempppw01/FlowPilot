@@ -18,6 +18,24 @@
 
 </div>
 
+<table border="1" cellpadding="16" cellspacing="0" width="100%">
+  <tr>
+    <td>
+      <h3>IPWO 住宅代理</h3>
+      <p align="center">
+        <a href="https://www.ipwo.net/?ref=githubFlowPilot" target="_blank" rel="noreferrer">
+          <img alt="IPWO住宅代理" src="./docs/images/ipwo-banner.png" />
+        </a>
+      </p>
+      <p>IPWO 住宅代理，面向 AI 自动化、浏览器操作和多账号管理等场景。</p>
+      <p>支持灵活配置不同地区网络环境，可结合 OpenAI、Kiro、Grok 等平台的注册、授权及自动化流程使用，为开发者提供便捷的代理资源选择。</p>
+      <p>195+地区动静态IP资源提供免费测试，优惠折扣码：0204。</p>
+      <p><a href="https://www.ipwo.net/?ref=githubFlowPilot" target="_blank" rel="noreferrer">https://www.ipwo.net/?ref=githubFlowPilot</a>。</p>
+      <p>广告合作请联系我：2825305047</p>
+    </td>
+  </tr>
+</table>
+
 ## Star History
 
 <a href="https://www.star-history.com/?repos=QLHazyCoder%2FFlowPilot&type=timeline&logscale&legend=top-left">
