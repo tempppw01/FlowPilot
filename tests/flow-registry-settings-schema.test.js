@@ -97,7 +97,7 @@ test('flow registry exposes canonical flow and target metadata', () => {
   );
   assert.deepEqual(
     flowRegistry.getTargetOptions('grok').map((entry) => entry.id),
-    ['webchat2api', 'grok2api']
+    ['webchat2api', 'grok2api', 'sub2api']
   );
   assert.deepEqual(
     flowRegistry.getTargetOptions('claude').map((entry) => entry.id),
@@ -136,7 +136,7 @@ test('flow registry exposes canonical flow and target metadata', () => {
   assert.equal(flowRegistry.getFlowCapabilities('kiro').supportsAccountContribution, true);
   assert.equal(flowRegistry.getFlowCapabilities('grok').supportsAccountContribution, false);
   assert.equal(flowRegistry.getFlowCapabilities('claude').supportsAccountContribution, false);
-  assert.deepEqual(flowRegistry.getFlowCapabilities('grok').supportedTargetIds, ['webchat2api', 'grok2api']);
+  assert.deepEqual(flowRegistry.getFlowCapabilities('grok').supportedTargetIds, ['webchat2api', 'grok2api', 'sub2api']);
   assert.deepEqual(
     flowRegistry.getFlowCapabilities('openai').contributionAdapterIds,
     ['openai-oauth', 'openai-codex-file', 'openai-sub2api-file']

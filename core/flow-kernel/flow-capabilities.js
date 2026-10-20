@@ -335,6 +335,53 @@
       };
     }
 
+    function resolveGrok2ApiState(state = {}, targetId = '') {
+      const normalizedState = getNormalizedSettingsState(state);
+      const grokFlow = isPlainObject(normalizedState?.flows?.grok)
+        ? normalizedState.flows.grok
+        : (isPlainObject(state?.settingsState?.flows?.grok) ? state.settingsState.flows.grok : {});
+      const grok2ApiConfig = isPlainObject(grokFlow?.targets?.grok2api)
+        ? grokFlow.targets.grok2api
+        : {};
+      const sub2apiConfig = isPlainObject(grokFlow?.targets?.sub2api)
+        ? grokFlow.targets.sub2api
+        : {};
+      const normalizedTargetId = String(targetId || '').trim().toLowerCase();
+      const dualUploadEnabled = normalizedTargetId === 'sub2api' && Boolean(
+        hasOwn(state, 'grokSub2apiGrok2ApiUploadEnabled')
+          ? state.grokSub2apiGrok2ApiUploadEnabled
+          : sub2apiConfig.grok2apiUploadEnabled
+      );
+      const targetIsGrok2Api = normalizedTargetId === 'grok2api';
+      const baseUrl = cleanString(hasOwn(state, 'grok2ApiUrl')
+        ? state.grok2ApiUrl
+        : grok2ApiConfig.baseUrl);
+      const adminUsername = cleanString(hasOwn(state, 'grok2ApiAdminUsername')
+        ? state.grok2ApiAdminUsername
+        : grok2ApiConfig.adminUsername);
+      const adminPassword = cleanString(hasOwn(state, 'grok2ApiAdminPassword')
+        ? state.grok2ApiAdminPassword
+        : grok2ApiConfig.adminPassword);
+      const missingFields = [];
+      if (!baseUrl) missingFields.push('baseUrl');
+      if (!adminUsername) missingFields.push('adminUsername');
+      if (!adminPassword) missingFields.push('adminPassword');
+      return {
+        configComplete: missingFields.length === 0,
+        dualUploadEnabled,
+        missingFields,
+        targetIsGrok2Api,
+        uploadRequired: targetIsGrok2Api || dualUploadEnabled,
+      };
+    }
+
+    function buildGrok2ApiValidationError() {
+      return {
+        code: 'grok2api_config_required',
+        message: 'grok2api 上传需要先完成地址和管理员账号密码配置。',
+      };
+    }
+
     function getFlowCapabilities(flowId) {
       const normalizedFlowId = normalizeCapabilityFlowId(flowId, defaultFlowId);
       const entry = flowCapabilities[normalizedFlowId] || null;
@@ -532,6 +579,15 @@
           targetIsChatgpt2Api: false,
           uploadRequired: false,
         };
+      const grok2Api = activeFlowId === 'grok'
+        ? resolveGrok2ApiState(state, effectiveTargetId)
+        : {
+          configComplete: true,
+          dualUploadEnabled: false,
+          missingFields: [],
+          targetIsGrok2Api: false,
+          uploadRequired: false,
+        };
 
       return {
         activeFlowId,
@@ -549,6 +605,7 @@
         effectiveSignupMethods,
         effectiveTargetId,
         flowCapabilities: flowState,
+        grok2Api,
         openaiChatgpt2Api,
         openaiWebchat,
         panelCapabilities: targetState,
@@ -567,6 +624,7 @@
           phoneVerificationEnabled: runtimeLocks.phoneVerificationEnabled,
           openaiChatgpt2ApiUploadEnabled: openaiChatgpt2Api.uploadRequired,
           openaiWebchatUploadEnabled: openaiWebchat.uploadRequired,
+          grokSub2apiGrok2ApiUploadEnabled: grok2Api.dualUploadEnabled,
           signupMethod: effectiveSignupMethod,
         },
         supportedPanelModes: supportedTargetIds,
@@ -668,6 +726,13 @@
         && !capabilityState.openaiChatgpt2Api?.configComplete
       ) {
         errors.push(buildOpenAiChatgpt2ApiValidationError(capabilityState));
+      }
+      if (
+        capabilityState.activeFlowId === 'grok'
+        && capabilityState.grok2Api?.uploadRequired
+        && !capabilityState.grok2Api?.configComplete
+      ) {
+        errors.push(buildGrok2ApiValidationError());
       }
 
       return {

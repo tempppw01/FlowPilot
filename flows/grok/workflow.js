@@ -11,6 +11,104 @@
     return Object.freeze(entry);
   }
 
+  const REGISTER_STEPS = [
+    {
+      id: 1,
+      order: 10,
+      key: 'grok-open-signup-page',
+      title: '打开 Grok 注册页',
+      sourceId: 'grok-register-page',
+      driverId: 'flows/grok/background/register-runner',
+      command: 'grok-open-signup-page',
+      flowId: 'grok',
+    },
+    {
+      id: 2,
+      order: 20,
+      key: 'grok-submit-email',
+      title: '获取邮箱并继续',
+      sourceId: 'grok-register-page',
+      driverId: 'flows/grok/background/register-runner',
+      command: 'grok-submit-email',
+      flowId: 'grok',
+    },
+    {
+      id: 3,
+      order: 30,
+      key: 'grok-submit-verification-code',
+      title: '获取验证码并继续',
+      sourceId: 'grok-register-page',
+      driverId: 'flows/grok/background/register-runner',
+      command: 'grok-submit-verification-code',
+      mailRuleId: 'grok-submit-verification-code',
+      flowId: 'grok',
+    },
+    {
+      id: 4,
+      order: 40,
+      key: 'grok-submit-profile',
+      title: '填写资料并继续',
+      sourceId: 'grok-register-page',
+      driverId: 'flows/grok/background/register-runner',
+      command: 'grok-submit-profile',
+      flowId: 'grok',
+    },
+  ];
+
+  const SUB2API_OAUTH_TAIL = [
+    {
+      id: 5,
+      order: 50,
+      key: 'grok-start-sub2api-oauth',
+      title: '获取 SUB2API OAuth 授权',
+      sourceId: 'grok-sub2api-oauth-page',
+      driverId: 'flows/grok/background/sub2api-oauth-runner',
+      command: 'grok-start-sub2api-oauth',
+      flowId: 'grok',
+    },
+    {
+      id: 6,
+      order: 60,
+      key: 'grok-complete-sub2api-oauth',
+      title: '完成 SUB2API OAuth 授权',
+      sourceId: 'grok-sub2api-oauth-page',
+      driverId: 'flows/grok/background/sub2api-oauth-runner',
+      command: 'grok-complete-sub2api-oauth',
+      flowId: 'grok',
+    },
+  ];
+
+  const GROK2API_UPLOAD_TAIL = [
+    {
+      id: 5,
+      order: 50,
+      key: 'grok-extract-sso-cookie',
+      title: '提取 SSO Cookie',
+      sourceId: 'grok-register-page',
+      driverId: 'flows/grok/background/register-runner',
+      command: 'grok-extract-sso-cookie',
+      flowId: 'grok',
+    },
+    {
+      id: 6,
+      order: 60,
+      key: 'grok-upload-sso-to-grok2api',
+      title: '上传 SSO 到 grok2api',
+      sourceId: 'grok2api',
+      driverId: 'flows/grok/background/publisher-grok2api',
+      command: 'grok-upload-sso-to-grok2api',
+      flowId: 'grok',
+    },
+  ];
+
+  function withOrder(steps = []) {
+    return steps.map((step, index) => ({
+      ...step,
+      id: index + 1,
+      order: (index + 1) * 10,
+    }));
+  }
+
   const STEP_VARIANTS = freezeDeep({
     default: [
       {
@@ -221,6 +319,15 @@
         flowId: 'grok',
       },
     ],
+    sub2api: withOrder([
+      ...REGISTER_STEPS,
+      ...SUB2API_OAUTH_TAIL,
+    ]),
+    'sub2api-dual-publish': withOrder([
+      ...REGISTER_STEPS,
+      ...GROK2API_UPLOAD_TAIL,
+      ...SUB2API_OAUTH_TAIL,
+    ]),
   });
 
   function getVariantStepDefinitions(variantKey = 'default') {
@@ -229,6 +336,13 @@
 
   function getModeStepDefinitions(options = {}) {
     const targetId = String(options?.targetId || options?.settingsState?.flows?.grok?.selectedTargetId || '').trim().toLowerCase();
+    if (targetId === 'sub2api') {
+      return getVariantStepDefinitions(
+        options?.grokSub2apiGrok2ApiUploadEnabled
+          ? 'sub2api-dual-publish'
+          : 'sub2api'
+      );
+    }
     if (targetId !== 'grok2api') {
       return getVariantStepDefinitions('default');
     }

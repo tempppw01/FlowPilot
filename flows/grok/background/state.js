@@ -83,6 +83,17 @@
     ));
   }
 
+  function normalizePositiveIds(values = []) {
+    if (!Array.isArray(values)) {
+      return [];
+    }
+    return Array.from(new Set(
+      values
+        .map((value) => normalizeInteger(value))
+        .filter((value) => value > 0)
+    ));
+  }
+
   function buildDefaultRuntimeState() {
     return {
       session: {
@@ -128,6 +139,18 @@
         intervalSeconds: 0,
         completedAt: 0,
         message: '',
+      },
+      oauth: {
+        sessionId: '',
+        state: '',
+        authUrl: '',
+        authTabId: null,
+        proxyId: null,
+        groupIds: [],
+        status: '',
+        startedAt: 0,
+        completedAt: 0,
+        lastError: '',
       },
     };
   }
@@ -178,6 +201,18 @@
         intervalSeconds: Math.max(0, normalizeInteger(merged.deviceAuth?.intervalSeconds)),
         completedAt: Math.max(0, normalizeInteger(merged.deviceAuth?.completedAt)),
         message: cleanString(merged.deviceAuth?.message),
+      },
+      oauth: {
+        sessionId: cleanString(merged.oauth?.sessionId),
+        state: cleanString(merged.oauth?.state),
+        authUrl: cleanString(merged.oauth?.authUrl),
+        authTabId: normalizeNullableInteger(merged.oauth?.authTabId),
+        proxyId: normalizeNullableInteger(merged.oauth?.proxyId),
+        groupIds: normalizePositiveIds(merged.oauth?.groupIds),
+        status: cleanString(merged.oauth?.status),
+        startedAt: Math.max(0, normalizeInteger(merged.oauth?.startedAt)),
+        completedAt: Math.max(0, normalizeInteger(merged.oauth?.completedAt)),
+        lastError: cleanString(merged.oauth?.lastError),
       },
     };
   }
@@ -247,6 +282,7 @@
       upload: {},
       grok2ApiUpload: {},
       deviceAuth: {},
+      oauth: {},
     };
     assignPositiveInteger(flatRuntime.session, 'registerTabId', state.grokRegisterTabId);
     assignCleanString(flatRuntime.session, 'pageState', state.grokPageState);
@@ -354,6 +390,14 @@
     });
   }
 
+  function buildOauthResetPatch(currentState = {}) {
+    const currentRuntimeState = ensureRuntimeState(currentState);
+    return buildRuntimeStatePatch(currentState, {
+      ...currentRuntimeState,
+      oauth: buildDefaultRuntimeState().oauth,
+    });
+  }
+
   function buildDownstreamResetPatch(stepKey = '', currentState = {}) {
     switch (cleanString(stepKey)) {
       case 'grok-open-signup-page':
@@ -370,6 +414,9 @@
       case 'grok-submit-profile':
       case 'grok-extract-sso-cookie':
         return buildSsoResetPatch(currentState);
+      case 'grok-start-sub2api-oauth':
+      case 'grok-complete-sub2api-oauth':
+        return buildOauthResetPatch(currentState);
       default:
         return {};
     }

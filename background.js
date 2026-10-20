@@ -59,6 +59,7 @@ importScripts(
   'flows/kiro/background/publisher-kiro-rs.js',
   'flows/grok/background/publisher-webchat2api.js',
   'flows/grok/background/publisher-grok2api.js',
+  'flows/grok/background/sub2api-oauth-runner.js',
   'flows/openai/background/session-reader.js',
   'flows/openai/background/publisher-webchat.js',
   'flows/openai/background/publisher-chatgpt2api.js',
@@ -1049,6 +1050,10 @@ function buildResolvedStepDefinitionState(state = {}) {
       ?? capabilityState?.runtimeLocks?.phoneVerificationEnabled
       ?? state?.phoneVerificationEnabled
     ),
+    grokSub2apiGrok2ApiUploadEnabled: Boolean(
+      stepDefinitionOptions.grokSub2apiGrok2ApiUploadEnabled
+      ?? state?.grokSub2apiGrok2ApiUploadEnabled
+    ),
   };
 }
 
@@ -1076,12 +1081,14 @@ function getStepDefinitionsForState(state = {}) {
     const activeFlowId = String(resolvedState?.activeFlowId || '').trim().toLowerCase() || defaultFlowId;
     const definitions = rootScope.MultiPageStepDefinitions.getSteps({
       activeFlowId,
+      targetId: resolvedState?.targetId,
       plusModeEnabled: Boolean(resolvedState?.plusModeEnabled),
       plusPaymentMethod: normalizePlusPaymentMethod(resolvedState?.plusPaymentMethod),
       plusAccountAccessStrategy: normalizePlusAccountAccessStrategy(resolvedState?.plusAccountAccessStrategy),
       signupMethod: getSignupMethodForStepDefinitions(resolvedState),
       phoneVerificationEnabled: Boolean(resolvedState?.phoneVerificationEnabled),
       phoneSignupReloginAfterBindEmailEnabled: Boolean(resolvedState?.phoneSignupReloginAfterBindEmailEnabled),
+      grokSub2apiGrok2ApiUploadEnabled: Boolean(resolvedState?.grokSub2apiGrok2ApiUploadEnabled),
     });
     if (Array.isArray(definitions)) {
       return definitions;
@@ -1389,6 +1396,11 @@ const PERSISTED_SETTING_DEFAULTS = {
   sub2apiGroupNames: DEFAULT_SUB2API_GROUP_NAMES,
   sub2apiAccountPriority: DEFAULT_SUB2API_ACCOUNT_PRIORITY,
   sub2apiDefaultProxyName: DEFAULT_SUB2API_PROXY_NAME,
+  grokSub2apiGroupName: '',
+  grokSub2apiGroupNames: [],
+  grokSub2apiAccountPriority: DEFAULT_SUB2API_ACCOUNT_PRIORITY,
+  grokSub2apiDefaultProxyName: '',
+  grokSub2apiGrok2ApiUploadEnabled: false,
   ipProxyEnabled: false,
   ipProxyService: DEFAULT_IP_PROXY_SERVICE,
   ipProxyMode: DEFAULT_IP_PROXY_MODE,
@@ -1578,6 +1590,11 @@ const SETTINGS_SCHEMA_VIEW_KEYS = Object.freeze([
   'sub2apiGroupNames',
   'sub2apiAccountPriority',
   'sub2apiDefaultProxyName',
+  'grokSub2apiGroupName',
+  'grokSub2apiGroupNames',
+  'grokSub2apiAccountPriority',
+  'grokSub2apiDefaultProxyName',
+  'grokSub2apiGrok2ApiUploadEnabled',
   'codex2apiUrl',
   'codex2apiAdminKey',
   'claude2apiUrl',
@@ -3637,6 +3654,15 @@ function normalizePersistentSettingValue(key, value) {
       return normalizeSub2ApiAccountPriority(value);
     case 'sub2apiDefaultProxyName':
       return String(value || '').trim();
+    case 'grokSub2apiGroupName':
+    case 'grokSub2apiDefaultProxyName':
+      return String(value || '').trim();
+    case 'grokSub2apiGroupNames':
+      return normalizeSub2ApiGroupNames(value);
+    case 'grokSub2apiAccountPriority':
+      return normalizeSub2ApiAccountPriority(value);
+    case 'grokSub2apiGrok2ApiUploadEnabled':
+      return Boolean(value);
     case 'ipProxyEnabled':
       return Boolean(value);
     case 'ipProxyService':
@@ -4016,6 +4042,14 @@ function buildPersistentSettingsPayload(input = {}, options = {}) {
     : Object.keys(persistedSettingDefaults);
 
   const normalizedInput = { ...input };
+  if (
+    normalizedInput.grokSub2apiGrok2ApiUploadEnabled === undefined
+    && normalizedInput.grokSub2apiWebchat2ApiUploadEnabled !== undefined
+  ) {
+    normalizedInput.grokSub2apiGrok2ApiUploadEnabled = Boolean(
+      normalizedInput.grokSub2apiWebchat2ApiUploadEnabled
+    );
+  }
   if (normalizedInput.autoStepDelaySeconds === undefined) {
     const legacyAutoStepDelaySeconds = resolveLegacyAutoStepDelaySeconds(normalizedInput);
     if (legacyAutoStepDelaySeconds !== undefined) {
@@ -4280,13 +4314,29 @@ function buildSettingsStatePatchFromFlatUpdates(updates = {}) {
   assignIfUpdated('vpsUrl', ['flows', 'openai', 'targets', 'cpa', 'vpsUrl']);
   assignIfUpdated('vpsPassword', ['flows', 'openai', 'targets', 'cpa', 'vpsPassword']);
   assignIfUpdated('localCpaStep9Mode', ['flows', 'openai', 'targets', 'cpa', 'localCpaStep9Mode']);
-  assignIfUpdated('sub2apiUrl', ['flows', 'openai', 'targets', 'sub2api', 'sub2apiUrl']);
-  assignIfUpdated('sub2apiEmail', ['flows', 'openai', 'targets', 'sub2api', 'sub2apiEmail']);
-  assignIfUpdated('sub2apiPassword', ['flows', 'openai', 'targets', 'sub2api', 'sub2apiPassword']);
+  for (const key of ['sub2apiUrl', 'sub2apiEmail', 'sub2apiPassword']) {
+    if (hasUpdate(key)) {
+      setSettingsStatePatchValue(patch, ['flows', 'openai', 'targets', 'sub2api', key], updates[key]);
+      setSettingsStatePatchValue(patch, ['flows', 'grok', 'targets', 'sub2api', key], updates[key]);
+    }
+  }
   assignIfUpdated('sub2apiGroupName', ['flows', 'openai', 'targets', 'sub2api', 'sub2apiGroupName']);
   assignIfUpdated('sub2apiGroupNames', ['flows', 'openai', 'targets', 'sub2api', 'sub2apiGroupNames']);
   assignIfUpdated('sub2apiAccountPriority', ['flows', 'openai', 'targets', 'sub2api', 'sub2apiAccountPriority']);
   assignIfUpdated('sub2apiDefaultProxyName', ['flows', 'openai', 'targets', 'sub2api', 'sub2apiDefaultProxyName']);
+  assignIfUpdated('grokSub2apiGroupName', ['flows', 'grok', 'targets', 'sub2api', 'sub2apiGroupName']);
+  assignIfUpdated('grokSub2apiGroupNames', ['flows', 'grok', 'targets', 'sub2api', 'sub2apiGroupNames']);
+  assignIfUpdated('grokSub2apiAccountPriority', ['flows', 'grok', 'targets', 'sub2api', 'sub2apiAccountPriority']);
+  assignIfUpdated('grokSub2apiDefaultProxyName', ['flows', 'grok', 'targets', 'sub2api', 'sub2apiDefaultProxyName']);
+  if (hasUpdate('grokSub2apiGrok2ApiUploadEnabled') || hasUpdate('grokSub2apiWebchat2ApiUploadEnabled')) {
+    setSettingsStatePatchValue(
+      patch,
+      ['flows', 'grok', 'targets', 'sub2api', 'grok2apiUploadEnabled'],
+      hasUpdate('grokSub2apiGrok2ApiUploadEnabled')
+        ? updates.grokSub2apiGrok2ApiUploadEnabled
+        : updates.grokSub2apiWebchat2ApiUploadEnabled
+    );
+  }
   assignIfUpdated('codex2apiUrl', ['flows', 'openai', 'targets', 'codex2api', 'codex2apiUrl']);
   assignIfUpdated('codex2apiAdminKey', ['flows', 'openai', 'targets', 'codex2api', 'codex2apiAdminKey']);
   assignIfUpdated('claude2apiUrl', ['flows', 'claude', 'targets', 'claude', 'claude2apiUrl']);
@@ -9712,6 +9762,10 @@ async function registerTab(source, tabId) {
   return tabRuntime.registerTab(source, tabId);
 }
 
+async function unregisterTab(source, expectedTabId = null) {
+  return tabRuntime.unregisterTab(source, expectedTabId);
+}
+
 async function isTabAlive(source) {
   return tabRuntime.isTabAlive(source);
 }
@@ -11955,6 +12009,8 @@ const AUTO_RUN_BACKGROUND_COMPLETED_STEP_KEYS = new Set([
   'grok-upload-sso-to-grok2api',
   'grok-start-grok2api-device-auth',
   'grok-complete-grok2api-device-auth',
+  'grok-start-sub2api-oauth',
+  'grok-complete-sub2api-oauth',
   'claude-open-official-page',
   'claude-fill-email',
   'claude-submit-email-and-fetch-link',
@@ -12709,6 +12765,9 @@ async function requestStop(options = {}) {
       autoRunTimerPlan: null,
     });
     await clearAutoRunTimerAlarm();
+    if (typeof grokSub2ApiOAuthRunner !== 'undefined') {
+      await grokSub2ApiOAuthRunner?.cleanupAuthorizationTab();
+    }
     clearStopRequest();
     return;
   }
@@ -12721,6 +12780,9 @@ async function requestStop(options = {}) {
   abortActiveIcloudRequests();
   cleanupStep8NavigationListeners();
   rejectPendingStep8(new Error(STOP_ERROR_MESSAGE));
+  if (typeof grokSub2ApiOAuthRunner !== 'undefined') {
+    await grokSub2ApiOAuthRunner?.cleanupAuthorizationTab();
+  }
 
   await addLog(logMessage, 'warn');
   await setState(clearStep5ProfileStatePatch());
@@ -14544,6 +14606,7 @@ const OPENAI_AUTH_INJECT_FILES = ['content/utils.js', 'content/operation-delay.j
 const KIRO_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'shared/kiro-timeouts.js', 'content/utils.js', 'flows/kiro/content/register-page.js'];
 const KIRO_DESKTOP_AUTHORIZE_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'shared/kiro-timeouts.js', 'content/utils.js', 'flows/kiro/content/desktop-authorize-page.js'];
 const GROK_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'content/utils.js', 'flows/grok/content/register-page.js'];
+const GROK_SUB2API_OAUTH_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'content/utils.js', 'flows/grok/content/sub2api-oauth-page.js'];
 const DEVIN_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/devin/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'flows/devin/content/register-page.js'];
 const CLAUDE_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'content/utils.js', 'flows/claude/content/register-page.js'];
 const panelBridge = self.MultiPageBackgroundPanelBridge?.createPanelBridge({
@@ -15189,6 +15252,25 @@ const grok2ApiPublisher = self.MultiPageBackgroundGrokPublisherGrok2Api?.createG
   throwIfStopped,
   GROK_REGISTER_INJECT_FILES,
 });
+const grokSub2ApiOAuthRunner = self.MultiPageBackgroundGrokSub2ApiOAuthRunner?.createGrokSub2ApiOAuthRunner({
+  addLog,
+  chrome,
+  completeNodeFromBackground,
+  ensureContentScriptReadyOnTab,
+  getState,
+  getTabId,
+  isTabAlive,
+  normalizeSub2ApiUrl,
+  registerTab,
+  reuseOrCreateTab,
+  sendToContentScriptResilient,
+  setState,
+  sleepWithStop,
+  throwIfStopped,
+  unregisterTab,
+  waitForTabStableComplete,
+  GROK_SUB2API_OAUTH_INJECT_FILES,
+});
 const openAiWebchatPublisher = self.MultiPageBackgroundOpenAiPublisherWebchat?.createOpenAiWebchatPublisher({
   addLog,
   broadcastDataUpdate,
@@ -15326,6 +15408,8 @@ const stepExecutorsByKey = {
   'grok-upload-sso-to-grok2api': (state) => grok2ApiPublisher.executeGrokUploadSsoToGrok2Api(state),
   'grok-start-grok2api-device-auth': (state) => grok2ApiPublisher.executeGrokStartGrok2ApiDeviceAuth(state),
   'grok-complete-grok2api-device-auth': (state) => grok2ApiPublisher.executeGrokCompleteGrok2ApiDeviceAuth(state),
+  'grok-start-sub2api-oauth': (state) => grokSub2ApiOAuthRunner.executeGrokStartSub2ApiOAuth(state),
+  'grok-complete-sub2api-oauth': (state) => grokSub2ApiOAuthRunner.executeGrokCompleteSub2ApiOAuth(state),
   'devin-open-authorization': (state) => devinRegisterRunner.execute(state),
   'devin-enter-email': (state) => devinRegisterRunner.execute(state),
   'devin-enter-email-code': (state) => devinRegisterRunner.execute(state),
@@ -15450,6 +15534,7 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
       typeof fetch === 'function' ? fetch.bind(globalThis) : null
     );
   },
+  testSub2ApiConnection: (state, options = {}) => panelBridge.testSub2ApiConnection(state, options),
   finalizeStep3Completion: async () => {
     const currentState = await getState();
     const signupTabId = await getTabId('openai-auth');

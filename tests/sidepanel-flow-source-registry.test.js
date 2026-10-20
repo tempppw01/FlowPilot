@@ -365,6 +365,7 @@ return {
       plusPaymentMethod: 'paypal',
       plusAccountAccessStrategy: 'oauth',
       openaiWebchatUploadEnabled: false,
+      grokSub2apiGrok2ApiUploadEnabled: false,
       settingsState: undefined,
       signupMethod: 'email',
       phoneVerificationEnabled: false,

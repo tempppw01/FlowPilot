@@ -182,12 +182,14 @@ return {
 
   assert.deepEqual(api.getCaptured(), [{
     activeFlowId: 'openai',
+    targetId: undefined,
     plusModeEnabled: false,
     plusPaymentMethod: 'paypal',
     plusAccountAccessStrategy: 'oauth',
     signupMethod: 'phone',
     phoneVerificationEnabled: false,
     phoneSignupReloginAfterBindEmailEnabled: false,
+    grokSub2apiGrok2ApiUploadEnabled: false,
   }]);
   assert.equal(steps[0].title, '注册并输入手机号');
 });
