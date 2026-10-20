@@ -34,6 +34,8 @@
     </div>
     <div class="header-btns">
       <div class="run-group">
+        <button id="btn-portal-tutorial" class="btn btn-outline btn-sm btn-portal-tutorial" type="button"
+          title="打开官网使用教程">使用教程</button>
         <input type="number" id="input-run-count" class="run-count-input" value="1" min="1" title="运行次数" />
         <button id="btn-auto-run" class="btn btn-success" title="自动执行全部步骤">自动</button>
         <button id="btn-stop" class="btn btn-danger" title="停止当前流程" disabled>停止</button>
@@ -67,6 +69,16 @@
       <span class="usage-cost-item">邮箱 <strong id="usage-cost-email">$0.0000</strong></span>
       <span class="usage-cost-item">手机号 <strong id="usage-cost-phone">$0.0000</strong></span>
       <span class="usage-cost-item usage-cost-item-total">合计 <strong id="usage-cost-total">$0.0000</strong></span>
+    </div>
+  </div>
+
+  <div id="portal-update-layer" class="portal-update-layer" hidden>
+    <div id="portal-update-hint" class="portal-update-hint" aria-live="polite" hidden>
+      <p id="portal-update-hint-text" class="portal-update-hint-text">
+        公告 / 使用教程有更新了，可点上方“使用教程”查看。
+      </p>
+      <button id="btn-dismiss-portal-update-hint" class="portal-update-hint-close" type="button"
+        aria-label="关闭更新提示" title="关闭更新提示">×</button>
     </div>
   </div>
 
@@ -2297,6 +2309,7 @@
   <script src="../core/flow-kernel/flow-capabilities.js"></script>
   <script src="../data/step-definitions.js"></script>
   <script src="update-service.js"></script>
+  <script src="portal-content-update-service.js"></script>
   <script src="account-pool-ui.js"></script>
   <script src="form-dialog.js"></script>
   <script src="editable-list-picker.js"></script>

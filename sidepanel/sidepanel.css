@@ -236,6 +236,82 @@ header {
   justify-content: flex-end;
 }
 
+.btn-portal-tutorial {
+  padding-inline: 10px;
+}
+
+.portal-update-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1400;
+}
+
+.portal-update-hint {
+  --portal-update-arrow-left: 20px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: min(220px, calc(100vw - 24px));
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--amber) 10%, var(--bg-base));
+  border: 1px solid color-mix(in srgb, var(--amber) 34%, var(--border));
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
+  pointer-events: auto;
+}
+
+.portal-update-hint::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: calc(var(--portal-update-arrow-left) - 6px);
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border-top: inherit;
+  border-left: inherit;
+  transform: rotate(45deg);
+}
+
+.portal-update-hint-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.portal-update-hint-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--transition), color var(--transition);
+}
+
+.portal-update-hint-close:hover {
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
+  color: var(--text-primary);
+}
+
+.portal-update-hint-close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--amber) 34%, transparent);
+  outline-offset: 1px;
+}
+
 .header-menu {
   position: relative;
   display: flex;

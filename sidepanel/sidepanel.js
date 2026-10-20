@@ -52,6 +52,11 @@ const btnFetchEmail = document.getElementById('btn-fetch-email');
 const btnTogglePassword = document.getElementById('btn-toggle-password');
 const btnStop = document.getElementById('btn-stop');
 const btnReset = document.getElementById('btn-reset');
+const btnPortalTutorial = document.getElementById('btn-portal-tutorial');
+const portalUpdateLayer = document.getElementById('portal-update-layer');
+const portalUpdateHint = document.getElementById('portal-update-hint');
+const portalUpdateHintText = document.getElementById('portal-update-hint-text');
+const btnDismissPortalUpdateHint = document.getElementById('btn-dismiss-portal-update-hint');
 const stepsProgress = document.getElementById('steps-progress');
 const btnAutoRun = document.getElementById('btn-auto-run');
 const btnAutoContinue = document.getElementById('btn-auto-continue');
@@ -1293,6 +1298,7 @@ const AUTO_SKIP_FAILURES_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-auto-skip-fai
 const AUTO_RUN_FALLBACK_RISK_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-auto-run-fallback-risk-prompt-dismissed';
 const CPA_PHONE_SIGNUP_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-cpa-phone-signup-prompt-dismissed';
 const CLOUDFLARE_TEMP_EMAIL_REGISTRATION_LOOKUP_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-cloudflare-temp-email-registration-lookup-prompt-dismissed';
+const PORTAL_CONTENT_PROMPT_DISMISSED_VERSION_STORAGE_KEY = 'multipage-portal-content-prompt-dismissed-version';
 const CPA_PHONE_SIGNUP_WARNING_MESSAGE = '请确保打开手机接码设置中的“绑定后重登”开关，不然可能无法使用（有些版本无需开启）';
 const PHONE_VERIFICATION_SECTION_EXPANDED_STORAGE_KEY = 'multipage-phone-verification-section-expanded';
 let phoneVerificationSectionExpanded = false;
@@ -2015,6 +2021,8 @@ let autoRunCountdownTimer = null;
 let configMenuOpen = false;
 let configActionInFlight = false;
 let currentReleaseSnapshot = null;
+let currentPortalContentSnapshot = null;
+let portalContentSnapshotRequestInFlight = null;
 
 function normalizeAutomationWindowId(value) {
   if (value === null || value === undefined || value === '') {
@@ -2313,6 +2321,7 @@ const normalizeLuckmailTimestampValue = window.LuckMailUtils?.normalizeTimestamp
     return Number.isFinite(timestamp) ? timestamp : 0;
   });
 const sidepanelUpdateService = window.SidepanelUpdateService;
+const portalContentService = window.SidepanelPortalContentService;
 const sharedFormDialog = window.SidepanelFormDialog?.createFormDialog?.({
   overlay: sharedFormModal,
   titleNode: sharedFormModalTitle,
@@ -13783,6 +13792,7 @@ function applyAutoRunStatus(payload = currentAutoRun) {
   if (typeof updateDevinAutomaticRunAvailability === 'function') updateDevinAutomaticRunAvailability();
   updateConfigMenuControls();
   renderContributionMode();
+  if (typeof renderPortalUpdateHint === 'function') renderPortalUpdateHint();
 }
 
 function initializeManualStepActions() {
@@ -14796,12 +14806,217 @@ async function restoreState() {
     updateStatusDisplay(latestState);
     updateProgressCounter();
     renderContributionMode();
+    if (typeof renderPortalUpdateHint === 'function') renderPortalUpdateHint();
   } catch (err) {
     console.error('Failed to restore state:', err);
     if (typeof applyOperationDelayState === 'function') {
       applyOperationDelayState(undefined, { restoreFailed: true });
     }
   }
+}
+
+function getPortalUrl() {
+  return String(portalContentService?.portalUrl || 'https://flowpilot.qlhazycoder.top').trim();
+}
+
+function getPortalContentFlowId(state = latestState) {
+  return String(state?.activeFlowId || state?.flowId || DEFAULT_ACTIVE_FLOW_ID).trim().toLowerCase() || DEFAULT_ACTIVE_FLOW_ID;
+}
+
+function getPortalTutorialUrl() {
+  const baseUrl = getPortalUrl().replace(/\/+$/, '');
+  const url = new URL('/tutorial', `${baseUrl}/`);
+  url.searchParams.set('flow', getPortalContentFlowId(latestState));
+  url.searchParams.set('target', getPortalContentTargetId(latestState));
+  return url.toString();
+}
+
+function getPortalContentTargetId(state = latestState) {
+  const flowId = getPortalContentFlowId(state);
+  if (typeof getSelectedTargetIdForState === 'function') {
+    return getSelectedTargetIdForState(state, flowId);
+  }
+  return normalizeTargetIdForFlow(flowId, state?.targetId || '', getDefaultTargetIdForFlow(flowId));
+}
+
+function getPortalContentPromptScope(snapshot = currentPortalContentSnapshot) {
+  return {
+    flowId: String(snapshot?.flowId || getPortalContentFlowId()).trim().toLowerCase() || DEFAULT_ACTIVE_FLOW_ID,
+    targetId: String(snapshot?.targetId || getPortalContentTargetId()).trim().toLowerCase() || 'cpa',
+  };
+}
+
+function getPortalContentPromptDismissedStorageKey(snapshot = currentPortalContentSnapshot) {
+  const scope = getPortalContentPromptScope(snapshot);
+  return `${PORTAL_CONTENT_PROMPT_DISMISSED_VERSION_STORAGE_KEY}:${scope.flowId}:${scope.targetId}`;
+}
+
+function getDismissedPortalContentPromptVersion(snapshot = currentPortalContentSnapshot) {
+  return String(window.localStorage?.getItem(getPortalContentPromptDismissedStorageKey(snapshot)) || '').trim();
+}
+
+function setDismissedPortalContentPromptVersion(version, snapshot = currentPortalContentSnapshot) {
+  const normalized = String(version || '').trim();
+  const storageKey = getPortalContentPromptDismissedStorageKey(snapshot);
+  if (normalized) {
+    window.localStorage?.setItem(storageKey, normalized);
+  } else {
+    window.localStorage?.removeItem(storageKey);
+  }
+}
+
+function getPortalUpdateHintMessage(snapshot = currentPortalContentSnapshot) {
+  const lines = getPortalUpdatePromptLines(snapshot);
+  if (!lines.length) {
+    return '';
+  }
+  if (lines.length === 1) {
+    return lines[0];
+  }
+  return lines.map((line, index) => `${index + 1}. ${line}`).join('\n');
+}
+
+function getPortalUpdatePromptLines(snapshot = currentPortalContentSnapshot) {
+  if (!snapshot?.promptVersion) {
+    return [];
+  }
+
+  const items = Array.isArray(snapshot.items) ? snapshot.items : [];
+  const autoRunNoticeItem = items.find((item) =>
+    item
+    && String(item.slug || '').trim().toLowerCase() === 'auto_run_notice'
+  );
+  if (autoRunNoticeItem) {
+    const noticeText = String(autoRunNoticeItem.text || '').trim();
+    return autoRunNoticeItem.isVisible && noticeText ? [noticeText] : [];
+  }
+
+  const hasAnnouncementOrTutorial = items.some((item) =>
+    item
+    && item.isVisible
+    && ['announcement', 'tutorial'].includes(String(item.slug || '').trim().toLowerCase())
+  );
+  const hasQuestionnaire = items.some((item) =>
+    item
+    && item.isVisible
+    && String(item.slug || '').trim().toLowerCase() === 'questionnaire'
+  );
+
+  const lines = [];
+  if (hasAnnouncementOrTutorial) {
+    lines.push('公告 / 使用教程有更新了，可点上方“使用教程”查看。');
+  }
+  if (hasQuestionnaire) {
+    lines.push('有新的征求意见，请佬友共同参与选择。');
+  }
+  return lines;
+}
+
+function positionPortalUpdateHint() {
+  if (!portalUpdateLayer || !portalUpdateHint || !btnPortalTutorial) {
+    return;
+  }
+  if (portalUpdateLayer.hidden || portalUpdateHint.hidden) {
+    return;
+  }
+
+  const buttonRect = btnPortalTutorial.getBoundingClientRect();
+  const viewportWidth = Math.max(document.documentElement?.clientWidth || 0, window.innerWidth || 0);
+  const viewportHeight = Math.max(document.documentElement?.clientHeight || 0, window.innerHeight || 0);
+  const hintWidth = portalUpdateHint.offsetWidth || 220;
+  const hintHeight = portalUpdateHint.offsetHeight || 56;
+  const viewportPadding = 12;
+  const gap = 10;
+
+  const maxLeft = Math.max(viewportPadding, viewportWidth - hintWidth - viewportPadding);
+  const left = Math.min(Math.max(viewportPadding, Math.round(buttonRect.left)), maxLeft);
+  const shouldPlaceAbove = (buttonRect.bottom + gap + hintHeight) > (viewportHeight - viewportPadding)
+    && buttonRect.top > (hintHeight + gap + viewportPadding);
+  const top = shouldPlaceAbove
+    ? Math.max(viewportPadding, Math.round(buttonRect.top - hintHeight - gap))
+    : Math.max(viewportPadding, Math.round(buttonRect.bottom + gap));
+  const buttonCenter = Math.round(buttonRect.left + (buttonRect.width / 2));
+  const arrowOffset = Math.min(Math.max(16, buttonCenter - left), Math.max(16, hintWidth - 16));
+
+  portalUpdateHint.style.left = `${left}px`;
+  portalUpdateHint.style.top = `${top}px`;
+  portalUpdateHint.style.setProperty('--portal-update-arrow-left', `${arrowOffset}px`);
+}
+
+function shouldShowPortalUpdateHint(snapshot = currentPortalContentSnapshot) {
+  const promptVersion = String(snapshot?.promptVersion || '').trim();
+  if (!portalUpdateLayer || !portalUpdateHint || !portalUpdateHintText || !btnPortalTutorial) {
+    return false;
+  }
+  if (!promptVersion) {
+    return false;
+  }
+  if (!getPortalUpdatePromptLines(snapshot).length) {
+    return false;
+  }
+  if (promptVersion === getDismissedPortalContentPromptVersion(snapshot)) {
+    return false;
+  }
+  return !btnPortalTutorial.disabled;
+}
+
+function renderPortalUpdateHint(snapshot = currentPortalContentSnapshot) {
+  if (!portalUpdateLayer || !portalUpdateHint) {
+    return;
+  }
+
+  const visible = shouldShowPortalUpdateHint(snapshot);
+  portalUpdateLayer.hidden = !visible;
+  portalUpdateHint.hidden = !visible;
+  if (!visible || !portalUpdateHintText) {
+    return;
+  }
+
+  portalUpdateHintText.textContent = getPortalUpdateHintMessage(snapshot);
+  if (typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(() => positionPortalUpdateHint());
+    return;
+  }
+  positionPortalUpdateHint();
+}
+
+function dismissPortalUpdateHint() {
+  const promptVersion = String(currentPortalContentSnapshot?.promptVersion || '').trim();
+  if (promptVersion) {
+    setDismissedPortalContentPromptVersion(promptVersion);
+  }
+  renderPortalUpdateHint();
+}
+
+async function refreshPortalContentHint() {
+  if (!portalContentService?.getContentUpdateSnapshot) {
+    currentPortalContentSnapshot = null;
+    renderPortalUpdateHint();
+    return null;
+  }
+  if (portalContentSnapshotRequestInFlight) {
+    return portalContentSnapshotRequestInFlight;
+  }
+
+  portalContentSnapshotRequestInFlight = portalContentService.getContentUpdateSnapshot({
+    flowId: getPortalContentFlowId(),
+    targetId: getPortalContentTargetId(),
+  })
+    .then((snapshot) => {
+      currentPortalContentSnapshot = snapshot;
+      renderPortalUpdateHint(snapshot);
+      return snapshot;
+    })
+    .catch((error) => {
+      currentPortalContentSnapshot = null;
+      renderPortalUpdateHint(null);
+      throw error;
+    })
+    .finally(() => {
+      portalContentSnapshotRequestInFlight = null;
+    });
+
+  return portalContentSnapshotRequestInFlight;
 }
 
 function openExternalUrl(url) {
@@ -16708,6 +16923,7 @@ function updateButtonStates() {
   applyStepExecutionRangeState(latestState);
   updateStopButtonState(anyRunning || isAutoRunPausedPhase() || autoLocked);
   renderContributionMode();
+  if (typeof renderPortalUpdateHint === 'function') renderPortalUpdateHint();
 }
 
 function updateStopButtonState(active) {
@@ -17488,6 +17704,13 @@ const bindAccountRecordEvents = accountRecordsManager?.bindEvents
 const closeAccountRecordsPanel = accountRecordsManager?.closePanel
   || (() => { });
 bindAccountRecordEvents();
+btnPortalTutorial?.addEventListener('click', () => {
+  try {
+    openExternalUrl(getPortalTutorialUrl());
+  } catch (error) {
+    showToast('打开官网使用教程失败：' + error.message, 'error');
+  }
+});
 const renderContributionMode = () => {
   updateSignupMethodUI({ notify: true });
 };
@@ -17911,6 +18134,11 @@ extensionUpdateStatus?.addEventListener('click', () => {
   openReleaseListPage();
 });
 
+btnDismissPortalUpdateHint?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  dismissPortalUpdateHint();
+});
+
 configMenu?.addEventListener('click', (event) => {
   event.stopPropagation();
 });
@@ -17962,6 +18190,11 @@ btnAutoStartClose?.addEventListener('click', () => resolveModalChoice(null));
 async function startAutoRunFromCurrentSettings() {
   const requestedTotalRuns = getRunCountValue();
   registerPendingAutoRunStartRunCount(requestedTotalRuns);
+
+  // 站点内容刷新只影响提示展示，不应阻塞自动流程启动。
+  refreshPortalContentHint().catch((error) => {
+    console.warn('Failed to refresh portal content hint before auto run:', error);
+  });
 
   if (typeof persistCurrentSettingsForAction === 'function') {
     await persistCurrentSettingsForAction();
@@ -21417,6 +21650,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         updateAccountRunHistorySettingsUI();
         renderContributionMode();
+        if (typeof renderPortalUpdateHint === 'function') renderPortalUpdateHint();
         void syncPlusManualConfirmationDialog();
         break;
       }
@@ -22259,6 +22493,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       updateAccountRunHistorySettingsUI();
       renderContributionMode();
+      if (typeof renderPortalUpdateHint === 'function') renderPortalUpdateHint();
       void syncPlusManualConfirmationDialog();
       break;
     }
@@ -22396,6 +22631,14 @@ document.addEventListener('keydown', (event) => {
   closeEditableListPickers();
 });
 
+window.addEventListener('resize', () => {
+  positionPortalUpdateHint();
+});
+
+document.addEventListener('scroll', () => {
+  positionPortalUpdateHint();
+}, true);
+
 // ============================================================
 // Init
 // ============================================================
@@ -22456,6 +22699,9 @@ Promise.allSettled([
     updatePanelModeUI();
     updateButtonStates();
     updateStatusDisplay(latestState);
+    refreshPortalContentHint().catch((error) => {
+      console.warn('Failed to refresh portal content hint during initialization:', error);
+    });
   }).catch((err) => {
     console.error('Failed to initialize sidepanel state:', err);
   });
