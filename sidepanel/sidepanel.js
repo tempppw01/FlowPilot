@@ -95,6 +95,9 @@ const rowSub2ApiEmail = document.getElementById('row-sub2api-email');
 const inputSub2ApiEmail = document.getElementById('input-sub2api-email');
 const rowSub2ApiPassword = document.getElementById('row-sub2api-password');
 const inputSub2ApiPassword = document.getElementById('input-sub2api-password');
+const rowSub2ApiConnectionTest = document.getElementById('row-sub2api-connection-test');
+const btnTestSub2ApiConnection = document.getElementById('btn-test-sub2api-connection');
+const displaySub2ApiConnectionTestStatus = document.getElementById('display-sub2api-connection-test-status');
 const rowSub2ApiGroup = document.getElementById('row-sub2api-group');
 const inputSub2ApiGroup = document.getElementById('input-sub2api-group');
 const sub2ApiGroupPickerRoot = document.getElementById('sub2api-group-picker');
@@ -106,6 +109,19 @@ const rowSub2ApiAccountPriority = document.getElementById('row-sub2api-account-p
 const inputSub2ApiAccountPriority = document.getElementById('input-sub2api-account-priority');
 const rowSub2ApiDefaultProxy = document.getElementById('row-sub2api-default-proxy');
 const inputSub2ApiDefaultProxy = document.getElementById('input-sub2api-default-proxy');
+const rowGrokSub2ApiGroup = document.getElementById('row-grok-sub2api-group');
+const inputGrokSub2ApiGroup = document.getElementById('input-grok-sub2api-group');
+const grokSub2ApiGroupPickerRoot = document.getElementById('grok-sub2api-group-picker');
+const btnGrokSub2ApiGroupMenu = document.getElementById('btn-grok-sub2api-group-menu');
+const grokSub2ApiGroupCurrent = document.getElementById('grok-sub2api-group-current');
+const grokSub2ApiGroupMenu = document.getElementById('grok-sub2api-group-menu');
+const btnAddGrokSub2ApiGroup = document.getElementById('btn-add-grok-sub2api-group');
+const rowGrokSub2ApiAccountPriority = document.getElementById('row-grok-sub2api-account-priority');
+const inputGrokSub2ApiAccountPriority = document.getElementById('input-grok-sub2api-account-priority');
+const rowGrokSub2ApiDefaultProxy = document.getElementById('row-grok-sub2api-default-proxy');
+const inputGrokSub2ApiDefaultProxy = document.getElementById('input-grok-sub2api-default-proxy');
+const rowGrokSub2ApiGrok2ApiUpload = document.getElementById('row-grok-sub2api-grok2api-upload');
+const inputGrokSub2ApiGrok2ApiUploadEnabled = document.getElementById('input-grok-sub2api-grok2api-upload-enabled');
 const rowIpProxyEnabled = document.getElementById('row-ip-proxy-enabled');
 const inputIpProxyEnabled = document.getElementById('input-ip-proxy-enabled');
 const btnToggleIpProxySection = document.getElementById('btn-toggle-ip-proxy-section');
@@ -188,6 +204,11 @@ const inputGrokWebchat2ApiUrl = document.getElementById('input-grok-webchat2api-
 const rowGrokWebchat2ApiKey = document.getElementById('row-grok-webchat2api-key');
 const inputGrokWebchat2ApiKey = document.getElementById('input-grok-webchat2api-key');
 const inputGrok2ApiUrl = document.getElementById('input-grok2api-url');
+const rowGrok2ApiUrl = document.getElementById('row-grok2api-url');
+const rowGrok2ApiAdminUsername = document.getElementById('row-grok2api-admin-username');
+const rowGrok2ApiAdminPassword = document.getElementById('row-grok2api-admin-password');
+const rowGrok2ApiTestStatus = document.getElementById('row-grok2api-test-status');
+const rowGrok2ApiUploadMethod = document.getElementById('row-grok2api-upload-method');
 const inputGrok2ApiAdminUsername = document.getElementById('input-grok2api-admin-username');
 const inputGrok2ApiAdminPassword = document.getElementById('input-grok2api-admin-password');
 const selectGrok2ApiUploadMethod = document.getElementById('select-grok2api-upload-method');
@@ -686,11 +707,14 @@ let currentPhoneSignupReloginAfterBindEmailEnabled = DEFAULT_PHONE_SIGNUP_RELOGI
 let currentStepDefinitionFlowId = DEFAULT_ACTIVE_FLOW_ID;
 let currentStepDefinitionTargetId = '';
 let currentStepDefinitionOpenAiWebchatUploadEnabled = false;
+let currentStepDefinitionGrokSub2apiGrok2ApiUploadEnabled = false;
 let phoneSignupReuseUiWasLocked = false;
 let kiroRsConnectionTestStatusText = '未测试';
 let claude2ApiConnectionTestStatusText = '未测试';
 let grok2ApiConnectionTestStatusText = '未测试';
 let cpaConnectionTestStatusText = '未测试';
+let sub2ApiConnectionTestStatusText = '未测试';
+let sub2ApiConnectionTestStatusTone = '';
 let lastPhoneSmsProviderBeforeChange = null;
 let heroSmsCountrySelectionOrder = [];
 let heroSmsOperatorsByCountryId = new Map();
@@ -1400,6 +1424,15 @@ function getStepDefinitionsForMode(plusModeEnabled = false, options = {}) {
   const openaiWebchatUploadEnabled = typeof options === 'string'
     ? Boolean(typeof latestState !== 'undefined' ? latestState?.openaiWebchatUploadEnabled : false)
     : Boolean(options.openaiWebchatUploadEnabled ?? (typeof latestState !== 'undefined' ? latestState?.openaiWebchatUploadEnabled : false));
+  const grokSub2apiGrok2ApiUploadEnabled = typeof options === 'string'
+    ? Boolean(typeof latestState !== 'undefined' ? (
+      latestState?.grokSub2apiGrok2ApiUploadEnabled
+      ?? latestState?.settingsState?.flows?.grok?.targets?.sub2api?.grok2apiUploadEnabled
+    ) : false)
+    : Boolean(options.grokSub2apiGrok2ApiUploadEnabled ?? (typeof latestState !== 'undefined' ? (
+      latestState?.grokSub2apiGrok2ApiUploadEnabled
+      ?? latestState?.settingsState?.flows?.grok?.targets?.sub2api?.grok2apiUploadEnabled
+    ) : false));
   const settingsState = typeof options === 'string'
     ? (typeof latestState !== 'undefined' ? latestState?.settingsState : undefined)
     : (options.settingsState || (typeof latestState !== 'undefined' ? latestState?.settingsState : undefined));
@@ -1410,6 +1443,7 @@ function getStepDefinitionsForMode(plusModeEnabled = false, options = {}) {
     plusPaymentMethod: normalizePlusPaymentMethod(rawPaymentMethod),
     plusAccountAccessStrategy: normalizePlusAccountAccessStrategy(rawPlusAccountAccessStrategy),
     openaiWebchatUploadEnabled,
+    grokSub2apiGrok2ApiUploadEnabled,
     settingsState,
     signupMethod: normalizeSignupMethod(rawSignupMethod),
     phoneVerificationEnabled,
@@ -1459,6 +1493,15 @@ function getWorkflowNodesForMode(plusModeEnabled = false, options = {}) {
   const openaiWebchatUploadEnabled = typeof options === 'string'
     ? Boolean(typeof latestState !== 'undefined' ? latestState?.openaiWebchatUploadEnabled : false)
     : Boolean(options.openaiWebchatUploadEnabled ?? (typeof latestState !== 'undefined' ? latestState?.openaiWebchatUploadEnabled : false));
+  const grokSub2apiGrok2ApiUploadEnabled = typeof options === 'string'
+    ? Boolean(typeof latestState !== 'undefined' ? (
+      latestState?.grokSub2apiGrok2ApiUploadEnabled
+      ?? latestState?.settingsState?.flows?.grok?.targets?.sub2api?.grok2apiUploadEnabled
+    ) : false)
+    : Boolean(options.grokSub2apiGrok2ApiUploadEnabled ?? (typeof latestState !== 'undefined' ? (
+      latestState?.grokSub2apiGrok2ApiUploadEnabled
+      ?? latestState?.settingsState?.flows?.grok?.targets?.sub2api?.grok2apiUploadEnabled
+    ) : false));
   const settingsState = typeof options === 'string'
     ? (typeof latestState !== 'undefined' ? latestState?.settingsState : undefined)
     : (options.settingsState || (typeof latestState !== 'undefined' ? latestState?.settingsState : undefined));
@@ -1469,6 +1512,7 @@ function getWorkflowNodesForMode(plusModeEnabled = false, options = {}) {
     plusPaymentMethod: normalizePlusPaymentMethod(rawPaymentMethod),
     plusAccountAccessStrategy: normalizePlusAccountAccessStrategy(rawPlusAccountAccessStrategy),
     openaiWebchatUploadEnabled,
+    grokSub2apiGrok2ApiUploadEnabled,
     settingsState,
     signupMethod: normalizeSignupMethod(rawSignupMethod),
     phoneVerificationEnabled,
@@ -1557,6 +1601,13 @@ function rebuildStepDefinitionState(plusModeEnabled = false, options = {}) {
     options.openaiWebchatUploadEnabled
     ?? (typeof latestState !== 'undefined' ? latestState?.openaiWebchatUploadEnabled : false)
   );
+  const grokSub2apiGrok2ApiUploadEnabled = Boolean(
+    options.grokSub2apiGrok2ApiUploadEnabled
+    ?? (typeof latestState !== 'undefined' ? (
+      latestState?.grokSub2apiGrok2ApiUploadEnabled
+      ?? latestState?.settingsState?.flows?.grok?.targets?.sub2api?.grok2apiUploadEnabled
+    ) : false)
+  );
   const settingsState = options.settingsState || (typeof latestState !== 'undefined' ? latestState?.settingsState : undefined);
   currentPlusPaymentMethod = normalizePlusPaymentMethod(rawPaymentMethod);
   currentPlusAccountAccessStrategy = normalizePlusAccountAccessStrategy(rawPlusAccountAccessStrategy);
@@ -1577,12 +1628,16 @@ function rebuildStepDefinitionState(plusModeEnabled = false, options = {}) {
   if (typeof currentStepDefinitionOpenAiWebchatUploadEnabled !== 'undefined') {
     currentStepDefinitionOpenAiWebchatUploadEnabled = Boolean(openaiWebchatUploadEnabled);
   }
+  if (typeof currentStepDefinitionGrokSub2apiGrok2ApiUploadEnabled !== 'undefined') {
+    currentStepDefinitionGrokSub2apiGrok2ApiUploadEnabled = Boolean(grokSub2apiGrok2ApiUploadEnabled);
+  }
   stepDefinitions = getStepDefinitionsForMode(currentPlusModeEnabled, {
     activeFlowId: nextActiveFlowId,
     targetId,
     plusPaymentMethod: currentPlusPaymentMethod,
     plusAccountAccessStrategy: currentPlusAccountAccessStrategy,
     openaiWebchatUploadEnabled,
+    grokSub2apiGrok2ApiUploadEnabled,
     settingsState,
     signupMethod: currentSignupMethod,
     phoneVerificationEnabled,
@@ -1596,6 +1651,7 @@ function rebuildStepDefinitionState(plusModeEnabled = false, options = {}) {
       plusPaymentMethod: currentPlusPaymentMethod,
       plusAccountAccessStrategy: currentPlusAccountAccessStrategy,
       openaiWebchatUploadEnabled,
+      grokSub2apiGrok2ApiUploadEnabled,
       settingsState,
       signupMethod: currentSignupMethod,
       phoneVerificationEnabled,
@@ -2019,6 +2075,7 @@ async function sendSidepanelMessage(message = {}) {
 window.sendSidepanelMessage = sendSidepanelMessage;
 
 const DEFAULT_SUB2API_GROUP_OPTIONS = ['codex', 'openai-plus'];
+const DEFAULT_GROK_SUB2API_GROUP_OPTIONS = [];
 const editableListPickerModule = window.SidepanelEditableListPicker || {};
 const normalizeEditableListValues = editableListPickerModule.normalizeEditableListValues
   || ((...sources) => {
@@ -2077,6 +2134,18 @@ function getSub2ApiGroupOptionsState(state = latestState) {
   return options.length ? options : [...DEFAULT_SUB2API_GROUP_OPTIONS];
 }
 
+function getSelectedGrokSub2ApiGroupName() {
+  return String(inputGrokSub2ApiGroup?.value || '').trim();
+}
+
+function getGrokSub2ApiGroupOptionsState(state = latestState) {
+  const options = normalizeSub2ApiGroupOptions(
+    state?.grokSub2apiGroupNames,
+    state?.grokSub2apiGroupName
+  );
+  return options;
+}
+
 const sub2ApiGroupPicker = createEditableListPicker({
   root: sub2ApiGroupPickerRoot,
   input: inputSub2ApiGroup,
@@ -2088,6 +2157,20 @@ const sub2ApiGroupPicker = createEditableListPicker({
   itemLabel: '分组',
   onDelete: handleDeleteSub2ApiGroup,
   onDeleteError: (error) => showToast(error?.message || '删除 SUB2API 分组失败。', 'error'),
+});
+
+const grokSub2ApiGroupPicker = createEditableListPicker({
+  root: grokSub2ApiGroupPickerRoot,
+  input: inputGrokSub2ApiGroup,
+  trigger: btnGrokSub2ApiGroupMenu,
+  current: grokSub2ApiGroupCurrent,
+  menu: grokSub2ApiGroupMenu,
+  emptyLabel: '请先添加分组',
+  fallbackItems: DEFAULT_GROK_SUB2API_GROUP_OPTIONS,
+  minItems: 0,
+  itemLabel: '分组',
+  onDelete: handleDeleteGrokSub2ApiGroup,
+  onDeleteError: (error) => showToast(error?.message || '删除 Grok SUB2API 分组失败。', 'error'),
 });
 
 const cfDomainPicker = createEditableListPicker({
@@ -2134,6 +2217,26 @@ function renderSub2ApiGroupOptions(state = latestState, selectedValue = '') {
 
   sub2ApiGroupPicker.render(options, selected || options[0] || DEFAULT_SUB2API_GROUP_OPTIONS[0]);
 }
+
+function renderGrokSub2ApiGroupOptions(state = latestState, selectedValue = '') {
+  if (!inputGrokSub2ApiGroup) {
+    return;
+  }
+
+  const selected = String(selectedValue || state?.grokSub2apiGroupName || '').trim();
+  const options = getGrokSub2ApiGroupOptionsState({
+    ...(state || {}),
+    grokSub2apiGroupName: selected || state?.grokSub2apiGroupName,
+  });
+  if (selected && !options.some((name) => name.toLowerCase() === selected.toLowerCase())) {
+    options.unshift(selected);
+  }
+
+  grokSub2ApiGroupPicker.render(
+    options,
+    selected || options[0] || ''
+  );
+}
 let customEmailPoolEntriesState = [];
 
 const EYE_OPEN_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -2150,12 +2253,15 @@ const TARGET_REPOSITORY_URLS = Object.freeze({
   }),
   grok: Object.freeze({
     webchat2api: 'https://github.com/zqbxdev/webchat2api',
+    grok2api: 'https://github.com/jiujiu532/grok2api',
+    sub2api: 'https://github.com/Wei-Shaw/sub2api',
   }),
 });
 const PRIVACY_MASKED_INPUT_IDS = Object.freeze([
   'input-sub2api-url',
   'input-sub2api-email',
   'input-sub2api-default-proxy',
+  'input-grok-sub2api-default-proxy',
   'input-codex2api-url',
   'input-openai-webchat-url',
   'input-openai-chatgpt2api-url',
@@ -3330,6 +3436,23 @@ function setKiroRsConnectionTestStatus(message = '') {
   kiroRsConnectionTestStatusText = nextText;
   if (typeof displayKiroRsTestStatus !== 'undefined' && displayKiroRsTestStatus) {
     displayKiroRsTestStatus.textContent = nextText;
+  }
+}
+
+function setSub2ApiConnectionTestStatus(message = '', tone = '') {
+  const nextText = String(message || '').trim() || '未测试';
+  const nextTone = ['ok', 'running', 'error'].includes(String(tone || '').trim())
+    ? String(tone).trim()
+    : '';
+  sub2ApiConnectionTestStatusText = nextText;
+  sub2ApiConnectionTestStatusTone = nextTone;
+  if (typeof displaySub2ApiConnectionTestStatus !== 'undefined' && displaySub2ApiConnectionTestStatus) {
+    displaySub2ApiConnectionTestStatus.textContent = nextText;
+    if (nextTone) {
+      displaySub2ApiConnectionTestStatus.dataset.tone = nextTone;
+    } else {
+      delete displaySub2ApiConnectionTestStatus.dataset.tone;
+    }
   }
 }
 
@@ -5813,6 +5936,27 @@ function collectSettingsPayload() {
   if (sub2apiGroupNames.length === 0) {
     appendSub2ApiGroupNames(['codex', 'openai-plus']);
   }
+  const selectedGrokSub2ApiGroupName = String(
+    typeof inputGrokSub2ApiGroup !== 'undefined' && inputGrokSub2ApiGroup
+      ? inputGrokSub2ApiGroup.value
+      : latestState?.grokSub2apiGroupName
+  ).trim();
+  const normalizeGrokSub2ApiGroupOptions = typeof normalizeSub2ApiGroupOptions === 'function'
+    ? normalizeSub2ApiGroupOptions
+    : ((...sources) => Array.from(new Set(
+      sources
+        .flatMap((value) => (Array.isArray(value) ? value : String(value || '').split(/[\r\n,，、]+/)))
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )));
+  const grokSub2apiGroupNames = normalizeGrokSub2ApiGroupOptions(
+    latestState?.grokSub2apiGroupNames,
+    latestState?.grokSub2apiGroupName,
+    selectedGrokSub2ApiGroupName
+  );
+  const grokSub2apiDefaultProxyName = typeof inputGrokSub2ApiDefaultProxy !== 'undefined' && inputGrokSub2ApiDefaultProxy
+    ? inputGrokSub2ApiDefaultProxy.value.trim()
+    : String(latestState?.grokSub2apiDefaultProxyName || '').trim();
   const sub2apiAccountPriorityNormalizer = typeof normalizeSub2ApiAccountPriorityValue === 'function'
     ? normalizeSub2ApiAccountPriorityValue
     : ((value) => {
@@ -5966,6 +6110,18 @@ function collectSettingsPayload() {
         : latestState?.sub2apiAccountPriority
     ),
     sub2apiDefaultProxyName: inputSub2ApiDefaultProxy.value.trim(),
+    grokSub2apiGroupName: selectedGrokSub2ApiGroupName,
+    grokSub2apiGroupNames,
+    grokSub2apiAccountPriority: sub2apiAccountPriorityNormalizer(
+      typeof inputGrokSub2ApiAccountPriority !== 'undefined' && inputGrokSub2ApiAccountPriority
+        ? inputGrokSub2ApiAccountPriority.value
+        : latestState?.grokSub2apiAccountPriority
+    ),
+    grokSub2apiDefaultProxyName,
+    grokSub2apiGrok2ApiUploadEnabled: Boolean(
+      typeof inputGrokSub2ApiGrok2ApiUploadEnabled !== 'undefined'
+      && inputGrokSub2ApiGrok2ApiUploadEnabled?.checked
+    ),
     ipProxyEnabled: getSelectedIpProxyEnabledSafe(),
     ipProxyService: selectedIpProxyService,
     ipProxyMode: currentIpProxyServiceProfile.mode,
@@ -12446,6 +12602,12 @@ function resolveStepDefinitionCapabilityState(state = latestState, options = {})
     openaiWebchatUploadEnabled: capabilityState
       ? Boolean(capabilityState.stepDefinitionOptions?.openaiWebchatUploadEnabled)
       : false,
+    grokSub2apiGrok2ApiUploadEnabled: capabilityState
+      ? Boolean(capabilityState.stepDefinitionOptions?.grokSub2apiGrok2ApiUploadEnabled)
+      : Boolean(
+        nextState?.grokSub2apiGrok2ApiUploadEnabled
+        ?? nextState?.settingsState?.flows?.grok?.targets?.sub2api?.grok2apiUploadEnabled
+      ),
   };
 }
 
@@ -13569,6 +13731,9 @@ function applyAutoRunStatus(payload = currentAutoRun) {
   if (typeof inputSub2ApiAccountPriority !== 'undefined' && inputSub2ApiAccountPriority) {
     inputSub2ApiAccountPriority.disabled = locked;
   }
+  if (typeof inputGrokSub2ApiAccountPriority !== 'undefined' && inputGrokSub2ApiAccountPriority) {
+    inputGrokSub2ApiAccountPriority.disabled = locked;
+  }
   inputAutoSkipFailures.disabled = locked;
 
   const isSyncPhase = typeof isAutoRunSourceSyncPhase === 'function'
@@ -13720,6 +13885,13 @@ function syncStepDefinitionsForMode(plusModeEnabled = false, plusPaymentMethodOr
     options.openaiWebchatUploadEnabled
       ?? (typeof latestState !== 'undefined' ? latestState?.openaiWebchatUploadEnabled : false)
   );
+  const nextGrokSub2apiGrok2ApiUploadEnabled = Boolean(
+    options.grokSub2apiGrok2ApiUploadEnabled
+      ?? (typeof latestState !== 'undefined' ? (
+        latestState?.grokSub2apiGrok2ApiUploadEnabled
+        ?? latestState?.settingsState?.flows?.grok?.targets?.sub2api?.grok2apiUploadEnabled
+      ) : false)
+  );
   const nextSettingsState = options.settingsState || (typeof latestState !== 'undefined' ? latestState?.settingsState : null);
   const nextPaymentMethod = normalizePlusPaymentMethod(rawPaymentMethod);
   const nextActiveFlowId = String(
@@ -13737,6 +13909,9 @@ function syncStepDefinitionsForMode(plusModeEnabled = false, plusPaymentMethodOr
   const currentOpenaiWebchatUploadEnabled = typeof currentStepDefinitionOpenAiWebchatUploadEnabled !== 'undefined'
     ? Boolean(currentStepDefinitionOpenAiWebchatUploadEnabled)
     : Boolean(typeof latestState !== 'undefined' ? latestState?.openaiWebchatUploadEnabled : false);
+  const currentGrokSub2apiGrok2ApiUploadEnabled = typeof currentStepDefinitionGrokSub2apiGrok2ApiUploadEnabled !== 'undefined'
+    ? Boolean(currentStepDefinitionGrokSub2apiGrok2ApiUploadEnabled)
+    : Boolean(typeof latestState !== 'undefined' ? latestState?.grokSub2apiGrok2ApiUploadEnabled : false);
   const rootScope = typeof window !== 'undefined' ? window : globalThis;
   const currentPaymentStep = stepDefinitions.find((step) => step.key === 'paypal-approve');
   const nextPaymentTitle = rootScope.MultiPageStepDefinitions?.getPlusPaymentStepTitle?.({
@@ -13746,6 +13921,7 @@ function syncStepDefinitionsForMode(plusModeEnabled = false, plusPaymentMethodOr
     plusPaymentMethod: nextPaymentMethod,
     plusAccountAccessStrategy: nextPlusAccountAccessStrategy,
     openaiWebchatUploadEnabled: nextOpenaiWebchatUploadEnabled,
+    grokSub2apiGrok2ApiUploadEnabled: nextGrokSub2apiGrok2ApiUploadEnabled,
     settingsState: nextSettingsState,
     signupMethod: nextSignupMethod,
     phoneVerificationEnabled: nextPhoneVerificationEnabled,
@@ -13761,6 +13937,7 @@ function syncStepDefinitionsForMode(plusModeEnabled = false, plusPaymentMethodOr
     || nextPhoneSignupReloginAfterBindEmailEnabled !== currentPhoneSignupReloginAfterBindEmailEnabled
     || nextAccountContributionEnabled !== Boolean(typeof latestState !== 'undefined' ? latestState?.accountContributionEnabled : false)
     || nextOpenaiWebchatUploadEnabled !== currentOpenaiWebchatUploadEnabled
+    || nextGrokSub2apiGrok2ApiUploadEnabled !== currentGrokSub2apiGrok2ApiUploadEnabled
     || nextActiveFlowId !== currentFlowId
     || normalizedNextTargetId !== currentTargetId
     || paymentTitleChanged;
@@ -13774,6 +13951,7 @@ function syncStepDefinitionsForMode(plusModeEnabled = false, plusPaymentMethodOr
     plusPaymentMethod: nextPaymentMethod,
     plusAccountAccessStrategy: nextPlusAccountAccessStrategy,
     openaiWebchatUploadEnabled: nextOpenaiWebchatUploadEnabled,
+    grokSub2apiGrok2ApiUploadEnabled: nextGrokSub2apiGrok2ApiUploadEnabled,
     settingsState: nextSettingsState,
     signupMethod: nextSignupMethod,
     phoneVerificationEnabled: nextPhoneVerificationEnabled,
@@ -13805,6 +13983,7 @@ function syncStepDefinitionsFromUiState(stateOverrides = {}) {
     plusPaymentMethod: getSelectedPlusPaymentMethod(nextState),
     plusAccountAccessStrategy: stepDefinitionState.plusAccountAccessStrategy,
     openaiWebchatUploadEnabled: stepDefinitionState.openaiWebchatUploadEnabled,
+    grokSub2apiGrok2ApiUploadEnabled: stepDefinitionState.grokSub2apiGrok2ApiUploadEnabled,
     settingsState: nextState?.settingsState,
     signupMethod: stepDefinitionState.signupMethod,
     phoneVerificationEnabled: Boolean(stepDefinitionState.phoneVerificationEnabled),
@@ -13835,6 +14014,7 @@ function applySettingsState(state) {
       signupMethod: stepDefinitionState.signupMethod,
       plusAccountAccessStrategy: stepDefinitionState.plusAccountAccessStrategy,
       openaiWebchatUploadEnabled: stepDefinitionState.openaiWebchatUploadEnabled,
+      grokSub2apiGrok2ApiUploadEnabled: stepDefinitionState.grokSub2apiGrok2ApiUploadEnabled,
       settingsState: state?.settingsState,
       phoneVerificationEnabled: Boolean(stepDefinitionState.phoneVerificationEnabled),
       phoneSignupReloginAfterBindEmailEnabled: Boolean(state?.phoneSignupReloginAfterBindEmailEnabled),
@@ -13945,6 +14125,18 @@ function applySettingsState(state) {
     inputSub2ApiAccountPriority.value = String(normalizeSub2ApiAccountPriorityValue(state?.sub2apiAccountPriority));
   }
   inputSub2ApiDefaultProxy.value = state?.sub2apiDefaultProxyName || '';
+  if (typeof renderGrokSub2ApiGroupOptions === 'function') {
+    renderGrokSub2ApiGroupOptions(state, state?.grokSub2apiGroupName || '');
+  }
+  if (typeof inputGrokSub2ApiAccountPriority !== 'undefined' && inputGrokSub2ApiAccountPriority) {
+    inputGrokSub2ApiAccountPriority.value = String(normalizeSub2ApiAccountPriorityValue(state?.grokSub2apiAccountPriority));
+  }
+  if (typeof inputGrokSub2ApiDefaultProxy !== 'undefined' && inputGrokSub2ApiDefaultProxy) {
+    inputGrokSub2ApiDefaultProxy.value = state?.grokSub2apiDefaultProxyName || '';
+  }
+  if (typeof inputGrokSub2ApiGrok2ApiUploadEnabled !== 'undefined' && inputGrokSub2ApiGrok2ApiUploadEnabled) {
+    inputGrokSub2ApiGrok2ApiUploadEnabled.checked = Boolean(state?.grokSub2apiGrok2ApiUploadEnabled);
+  }
   if (typeof inputKiroRsUrl !== 'undefined' && inputKiroRsUrl) {
     inputKiroRsUrl.value = String(state?.kiroRsUrl || '').trim();
   }
@@ -13991,6 +14183,12 @@ function applySettingsState(state) {
   }
   if (typeof displayGrok2ApiTestStatus !== 'undefined' && displayGrok2ApiTestStatus) {
     displayGrok2ApiTestStatus.textContent = grok2ApiConnectionTestStatusText;
+  }
+  if (typeof setSub2ApiConnectionTestStatus === 'function') {
+    setSub2ApiConnectionTestStatus(
+      sub2ApiConnectionTestStatusText,
+      sub2ApiConnectionTestStatusTone
+    );
   }
   const resolveKiroRuntimeState = typeof getKiroRuntimeState === 'function'
     ? getKiroRuntimeState
@@ -16150,6 +16348,86 @@ async function handleDeleteSub2ApiGroup(groupName) {
   showToast(`已删除 SUB2API 分组：${targetName}`, 'success', 1600);
 }
 
+async function handleAddGrokSub2ApiGroup() {
+  if (!sharedFormDialog?.open) {
+    showToast('表单弹窗未加载，请刷新扩展后重试。', 'error');
+    return;
+  }
+
+  const result = await sharedFormDialog.open({
+    title: '添加 Grok SUB2API 分组',
+    confirmLabel: '添加',
+    confirmVariant: 'btn-primary',
+    fields: [
+      {
+        key: 'groupName',
+        label: '分组',
+        type: 'text',
+        placeholder: '例如 grok-team',
+        autocomplete: 'off',
+        required: true,
+        requiredMessage: '请先填写 Grok SUB2API 分组名称。',
+        validate: (value) => (
+          normalizeSub2ApiGroupOptions(value).length
+            ? ''
+            : '请先填写 Grok SUB2API 分组名称。'
+        ),
+      },
+    ],
+  });
+  if (!result) {
+    return;
+  }
+
+  const newGroups = normalizeSub2ApiGroupOptions(result.groupName);
+  if (!newGroups.length) {
+    return;
+  }
+
+  const selectedGroup = newGroups[0];
+  const nextGroups = normalizeSub2ApiGroupOptions(
+    getGrokSub2ApiGroupOptionsState(latestState),
+    newGroups
+  );
+  syncLatestState({
+    grokSub2apiGroupName: selectedGroup,
+    grokSub2apiGroupNames: nextGroups,
+  });
+  renderGrokSub2ApiGroupOptions(latestState, selectedGroup);
+  markSettingsDirty(true);
+  await saveSettings({ silent: true }).catch(() => { });
+  showToast(`已添加并切换到 Grok SUB2API 分组：${selectedGroup}`, 'success', 1800);
+}
+
+async function handleDeleteGrokSub2ApiGroup(groupName) {
+  const targetName = String(groupName || '').trim();
+  if (!targetName) {
+    return;
+  }
+
+  const currentGroups = getGrokSub2ApiGroupOptionsState(latestState);
+  const targetKey = targetName.toLowerCase();
+  const nextGroups = currentGroups.filter((name) => name.toLowerCase() !== targetKey);
+  if (nextGroups.length === currentGroups.length) {
+    return;
+  }
+
+  const currentGroup = getSelectedGrokSub2ApiGroupName();
+  const nextSelectedGroup = currentGroup.toLowerCase() === targetKey
+    ? (nextGroups[0] || '')
+    : (nextGroups.find((name) => name.toLowerCase() === currentGroup.toLowerCase()) || nextGroups[0] || '');
+
+  syncLatestState({
+    grokSub2apiGroupName: nextSelectedGroup,
+    grokSub2apiGroupNames: nextGroups,
+  });
+  renderGrokSub2ApiGroupOptions(latestState, nextSelectedGroup);
+  grokSub2ApiGroupPicker.setOpen(nextGroups.length > 0);
+  markSettingsDirty(true);
+  await saveSettings({ silent: true }).catch(() => { });
+  showToast(`已删除 Grok SUB2API 分组：${targetName}`, 'success', 1600);
+}
+
 function updatePanelModeUI() {
   const activeFlowId = typeof getSelectedFlowId === 'function'
     ? getSelectedFlowId(latestState)
@@ -16187,6 +16465,9 @@ function updatePanelModeUI() {
   if (typeof applyFlowSettingsGroupVisibility === 'function') {
     applyFlowSettingsGroupVisibility(visibleGroupIds);
   }
+  if (typeof updateGrokSub2ApiGrok2ApiUploadUi === 'function') {
+    updateGrokSub2ApiGrok2ApiUploadUi(activeFlowId, effectiveTargetId);
+  }
   if (typeof updatePlusModeUI === 'function') {
     updatePlusModeUI();
   }
@@ -16220,6 +16501,36 @@ function updatePanelModeUI() {
       : (useCodex2Api ? 'Codex2API 回调验证' : 'CPA 回调验证');
   }
   renderDevinOAuthUI(latestState);
+}
+
+function updateGrokSub2ApiGrok2ApiUploadUi(activeFlowId = '', targetId = '') {
+  const normalizedFlowId = String(activeFlowId || '').trim().toLowerCase();
+  const normalizedTargetId = String(targetId || '').trim().toLowerCase();
+  const isGrok = normalizedFlowId === 'grok';
+  const isSub2Api = isGrok && normalizedTargetId === 'sub2api';
+  const enabled = Boolean(inputGrokSub2ApiGrok2ApiUploadEnabled?.checked);
+
+  if (rowGrokSub2ApiGrok2ApiUpload) {
+    rowGrokSub2ApiGrok2ApiUpload.style.display = isSub2Api ? '' : 'none';
+  }
+  if (!isSub2Api) {
+    return;
+  }
+
+  // Fork 适配：grok2api 相关行的显隐由 settingsGroups 统一管理，
+  // 这里仅在 SUB2API 目标下按「同时上传到 grok2api」开关微调。
+  [
+    rowGrok2ApiUrl,
+    rowGrok2ApiAdminUsername,
+    rowGrok2ApiAdminPassword,
+    rowGrok2ApiUploadMethod,
+    rowGrok2ApiTestStatus,
+    rowGrokSsoSettings,
+  ].forEach((row) => {
+    if (row) {
+      row.style.display = enabled ? '' : 'none';
+    }
+  });
 }
 
 // ============================================================
@@ -18263,6 +18574,75 @@ btnTestKiroRs?.addEventListener('click', async () => {
   }
 });
 
+btnTestSub2ApiConnection?.addEventListener('click', async () => {
+  const defaultLabel = btnTestSub2ApiConnection.textContent || '测试并同步分组';
+  btnTestSub2ApiConnection.disabled = true;
+  btnTestSub2ApiConnection.textContent = '测试中';
+  setSub2ApiConnectionTestStatus('正在登录并获取分组...', 'running');
+  try {
+    await persistCurrentSettingsForAction();
+    const activeFlowId = typeof getSelectedFlowId === 'function'
+      ? getSelectedFlowId(latestState)
+      : DEFAULT_ACTIVE_FLOW_ID;
+    const response = await sendSidepanelMessage({
+      type: 'CHECK_SUB2API_CONNECTION',
+      payload: {
+        activeFlowId,
+        sub2apiUrl: String(inputSub2ApiUrl?.value || '').trim(),
+        sub2apiEmail: String(inputSub2ApiEmail?.value || '').trim(),
+        sub2apiPassword: String(inputSub2ApiPassword?.value || ''),
+      },
+    });
+    if (response?.error) {
+      throw new Error(response.error);
+    }
+
+    const groupNames = normalizeSub2ApiGroupOptions(
+      (Array.isArray(response?.groups) ? response.groups : []).map((group) => group?.name)
+    );
+    if (!groupNames.length) {
+      throw new Error(response?.message || `SUB2API 中没有可用的 ${response?.platform || '目标'} 分组。`);
+    }
+
+    const isGrok = response?.platform === 'grok' || activeFlowId === 'grok';
+    if (isGrok) {
+      const current = getSelectedGrokSub2ApiGroupName();
+      const selected = groupNames.some((name) => name.toLowerCase() === current.toLowerCase())
+        ? current
+        : groupNames[0];
+      syncLatestState({
+        grokSub2apiGroupName: selected,
+        grokSub2apiGroupNames: groupNames,
+      });
+      renderGrokSub2ApiGroupOptions(latestState, selected);
+    } else {
+      const current = getSelectedSub2ApiGroupName();
+      const selected = groupNames.some((name) => name.toLowerCase() === current.toLowerCase())
+        ? current
+        : groupNames[0];
+      syncLatestState({
+        sub2apiGroupName: selected,
+        sub2apiGroupNames: groupNames,
+      });
+      renderSub2ApiGroupOptions(latestState, selected);
+    }
+    markSettingsDirty(true);
+    await saveSettings({ silent: true, force: true });
+
+    const message = String(response?.message || '').trim()
+      || `SUB2API 连接成功，已同步 ${groupNames.length} 个分组。`;
+    setSub2ApiConnectionTestStatus(message, 'ok');
+    showToast(message, 'success', 2600);
+  } catch (error) {
+    const message = error?.message || 'SUB2API 连接测试失败。';
+    setSub2ApiConnectionTestStatus(message, 'error');
+    showToast(message, 'error', 4200);
+  } finally {
+    btnTestSub2ApiConnection.disabled = false;
+    btnTestSub2ApiConnection.textContent = defaultLabel;
+  }
+});
+
 btnTestClaude2Api?.addEventListener('click', async () => {
   const defaultLabel = btnTestClaude2Api.textContent || '测试';
   btnTestClaude2Api.disabled = true;
@@ -18609,6 +18989,7 @@ checkboxAutoDeleteIcloud?.addEventListener('change', () => {
 });
 
 selectPanelMode.addEventListener('change', async () => {
+  setSub2ApiConnectionTestStatus('未测试');
   const activeFlowId = typeof getSelectedFlowId === 'function'
     ? getSelectedFlowId(latestState)
     : normalizeFlowId(latestState?.activeFlowId || latestState?.flowId || DEFAULT_ACTIVE_FLOW_ID);
@@ -19112,6 +19493,7 @@ inputTempEmailDomain.addEventListener('keydown', (event) => {
 
 inputSub2ApiUrl.addEventListener('input', () => {
   markSettingsDirty(true);
+  setSub2ApiConnectionTestStatus('未测试');
   scheduleSettingsAutoSave();
 });
 inputSub2ApiUrl.addEventListener('blur', () => {
@@ -19120,6 +19502,7 @@ inputSub2ApiUrl.addEventListener('blur', () => {
 
 inputSub2ApiEmail.addEventListener('input', () => {
   markSettingsDirty(true);
+  setSub2ApiConnectionTestStatus('未测试');
   scheduleSettingsAutoSave();
 });
 inputSub2ApiEmail.addEventListener('blur', () => {
@@ -19128,6 +19511,7 @@ inputSub2ApiEmail.addEventListener('blur', () => {
 
 inputSub2ApiPassword.addEventListener('input', () => {
   markSettingsDirty(true);
+  setSub2ApiConnectionTestStatus('未测试');
   scheduleSettingsAutoSave();
 });
 inputSub2ApiPassword.addEventListener('blur', () => {
@@ -19166,6 +19550,59 @@ inputSub2ApiDefaultProxy.addEventListener('input', () => {
   scheduleSettingsAutoSave();
 });
 inputSub2ApiDefaultProxy.addEventListener('blur', () => {
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputGrokSub2ApiGroup?.addEventListener('change', () => {
+  syncLatestState({
+    grokSub2apiGroupName: getSelectedGrokSub2ApiGroupName(),
+    grokSub2apiGroupNames: normalizeSub2ApiGroupOptions(
+      getGrokSub2ApiGroupOptionsState(latestState),
+      getSelectedGrokSub2ApiGroupName()
+    ),
+  });
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputGrokSub2ApiAccountPriority?.addEventListener('input', () => {
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputGrokSub2ApiAccountPriority?.addEventListener('blur', () => {
+  inputGrokSub2ApiAccountPriority.value = String(
+    normalizeSub2ApiAccountPriorityValue(inputGrokSub2ApiAccountPriority.value)
+  );
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+btnAddGrokSub2ApiGroup?.addEventListener('click', () => {
+  handleAddGrokSub2ApiGroup().catch((error) => {
+    showToast(error?.message || '添加 Grok SUB2API 分组失败。', 'error');
+  });
+});
+
+inputGrokSub2ApiDefaultProxy?.addEventListener('input', () => {
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputGrokSub2ApiDefaultProxy?.addEventListener('blur', () => {
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputGrokSub2ApiGrok2ApiUploadEnabled?.addEventListener('change', () => {
+  const enabled = Boolean(inputGrokSub2ApiGrok2ApiUploadEnabled.checked);
+  syncLatestState({ grokSub2apiGrok2ApiUploadEnabled: enabled });
+  updateGrokSub2ApiGrok2ApiUploadUi(
+    typeof getSelectedFlowId === 'function' ? getSelectedFlowId(latestState) : latestState?.activeFlowId,
+    typeof getSelectedTargetId === 'function' ? getSelectedTargetId('grok') : latestState?.targetId
+  );
+  syncStepDefinitionsFromUiState({
+    grokSub2apiGrok2ApiUploadEnabled: enabled,
+  });
+  renderStepStatuses(latestState);
+  updateButtonStates();
+  markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
 });
 
@@ -19587,6 +20024,7 @@ inputStepExecutionRangeEnabled?.addEventListener('change', () => {
 });
 
 selectFlow?.addEventListener('change', () => {
+  setSub2ApiConnectionTestStatus('未测试');
   const nextActiveFlowId = typeof normalizeFlowId === 'function'
     ? normalizeFlowId(selectFlow.value, latestState?.activeFlowId || latestState?.flowId || DEFAULT_ACTIVE_FLOW_ID)
     : (String(selectFlow.value || latestState?.activeFlowId || latestState?.flowId || DEFAULT_ACTIVE_FLOW_ID).trim().toLowerCase() || DEFAULT_ACTIVE_FLOW_ID);
@@ -21067,6 +21505,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         || message.payload.sub2apiGroupNames !== undefined
       ) {
         renderSub2ApiGroupOptions(latestState, latestState?.sub2apiGroupName || '');
+      }
+      if (
+        message.payload.grokSub2apiGroupName !== undefined
+        || message.payload.grokSub2apiGroupNames !== undefined
+      ) {
+        renderGrokSub2ApiGroupOptions(latestState, latestState?.grokSub2apiGroupName || '');
       }
       if (
         message.payload.ipProxyEnabled !== undefined
