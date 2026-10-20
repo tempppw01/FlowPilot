@@ -298,7 +298,8 @@ test('grok profile submission waits for human verification success before clicki
   assert.ok(waitIndex < buttonIndex);
   assert.ok(buttonIndex < clickIndex);
   assert.match(source, /input\[name="cf-turnstile-response"\]/);
-  assert.match(source, /GROK_HUMAN_VERIFICATION_SUCCESS_TIMEOUT_MS = 120 \* 1000/);
+  assert.match(source, /GROK_HUMAN_VERIFICATION_SUCCESS_TIMEOUT_MS = 5 \* 60 \* 1000/);
+  assert.match(source, /人机验证等待已达到 5 分钟/);
 });
 
 test('grok profile runner allows the content script to wait for human verification', async () => {
@@ -354,8 +355,77 @@ test('grok profile runner allows the content script to wait for human verificati
 
   const profileSubmitCall = sendCalls.find(({ message }) => message.nodeId === 'grok-submit-profile');
   assert.equal(profileSubmitCall.options.timeoutMs, api.GROK_PROFILE_SUBMIT_COMMAND_TIMEOUT_MS);
-  assert.equal(profileSubmitCall.options.timeoutMs, 150 * 1000);
+  assert.equal(profileSubmitCall.options.timeoutMs, 330 * 1000);
+  assert.equal(profileSubmitCall.options.responseTimeoutMs, api.GROK_PROFILE_SUBMIT_COMMAND_TIMEOUT_MS);
   assert.match(profileSubmitCall.options.logMessage, /等待人机验证成功/);
+});
+
+test('grok profile runner keeps waiting and logs while human verification is pending', async () => {
+  const api = loadGrokRunnerApi();
+  const logs = [];
+  const sleepCalls = [];
+  let resolveProfileSubmit = null;
+  const currentState = {
+    activeFlowId: 'grok',
+    grokRegisterTabId: 505,
+    runtimeState: { flowState: { grok: { session: { registerTabId: 505 } } } },
+  };
+  const runner = api.createGrokRegisterRunner({
+    addLog: async (message, level) => {
+      logs.push({ message, level });
+    },
+    chrome: {
+      tabs: {
+        get: async (tabId) => ({ id: tabId }),
+        update: async () => {},
+      },
+    },
+    completeNodeFromBackground: async () => {},
+    ensureContentScriptReadyOnTab: async () => {},
+    generatePassword: () => 'StrongPassword123!',
+    generateRandomName: () => ({ firstName: 'Alex', lastName: 'Morgan' }),
+    getState: async () => currentState,
+    getTabId: async () => 505,
+    isTabAlive: async () => true,
+    registerTab: async () => {},
+    sendToContentScriptResilient: async (_sourceId, message) => {
+      if (message.nodeId !== 'grok-submit-profile') {
+        throw new Error(`unexpected command ${message.nodeId}`);
+      }
+      return new Promise((resolve) => {
+        resolveProfileSubmit = () => resolve(grokHandlerResponse(message, {
+          submitted: true,
+          state: 'profile_submitted',
+          url: 'https://accounts.x.ai/sign-up',
+        }));
+      });
+    },
+    setPasswordState: async () => {},
+    setState: async () => {},
+    sleepWithStop: async (ms) => {
+      sleepCalls.push(ms);
+      if (sleepCalls.length >= 2 && typeof resolveProfileSubmit === 'function') {
+        resolveProfileSubmit();
+      }
+    },
+    waitForTabStableComplete: async () => {},
+  });
+
+  const runPromise = runner.executeGrokSubmitProfile({
+    nodeId: 'grok-submit-profile',
+    ...currentState,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.ok(
+    logs.some(({ message }) => message.includes('仍在等待 xAI 人机验证成功')),
+    'expected a pending-wait log while human verification is unresolved'
+  );
+  assert.equal(sleepCalls[0], 60 * 1000);
+
+  resolveProfileSubmit();
+  await runPromise;
 });
 
 test('grok profile runner advances immediately after the content script submits the verified form', () => {

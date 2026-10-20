@@ -8,7 +8,8 @@
   const GROK_REGISTER_PAGE_HANDLER_VERSION = 4;
   const GROK_VERIFICATION_PAGE_STATE = 'verification_code_entry';
   const GROK_VERIFICATION_READY_TIMEOUT_MS = 90 * 1000;
-  const GROK_PROFILE_SUBMIT_COMMAND_TIMEOUT_MS = 150 * 1000;
+  const GROK_PROFILE_SUBMIT_COMMAND_TIMEOUT_MS = 330 * 1000;
+  const GROK_PROFILE_WAIT_LOG_INTERVAL_MS = 60 * 1000;
   const GROK_PRE_SSO_EXTRACT_WAIT_MS = 10 * 1000;
   const MAIL_2925_FILTER_LOOKBACK_MS = 10 * 60 * 1000;
   const GROK_COOKIE_CLEAR_DOMAINS = Object.freeze([
@@ -49,6 +50,7 @@
       registerTab = async () => {},
       resolveSignupEmailForFlow = null,
       reuseOrCreateTab = async () => null,
+      sendToContentScript = null,
       sendToContentScriptResilient = null,
       setPasswordState = async () => {},
       setState = async () => {},
@@ -176,10 +178,14 @@
     }
 
     async function sendGrokCommand(nodeId, payload = {}, options = {}) {
-      if (typeof sendToContentScriptResilient !== 'function') {
+      const retryTransport = options.retryTransport !== false;
+      const sendCommand = retryTransport
+        ? sendToContentScriptResilient
+        : (typeof sendToContentScript === 'function' ? sendToContentScript : sendToContentScriptResilient);
+      if (typeof sendCommand !== 'function') {
         throw new Error('Grok 注册页通信能力不可用。');
       }
-      const result = await sendToContentScriptResilient(GROK_REGISTER_PAGE_SOURCE_ID, {
+      const result = await sendCommand(GROK_REGISTER_PAGE_SOURCE_ID, {
         type: GROK_REGISTER_PAGE_COMMAND_TYPE,
         nodeId,
         step: options.step || 0,
@@ -200,6 +206,36 @@
       if (result?.handlerVersion !== GROK_REGISTER_PAGE_HANDLER_VERSION || result?.command !== nodeId) {
         throw new Error('Grok 注册页仍在使用旧内容脚本，请在扩展管理页重新加载 FlowPilot 后重试当前步骤。');
       }
+      return result || {};
+    }
+
+    async function waitForGrokProfileSubmission(commandPromise, nodeId) {
+      let settled = false;
+      let result = null;
+      let failure = null;
+      const observedCommand = Promise.resolve(commandPromise).then(
+        (value) => {
+          settled = true;
+          result = value;
+        },
+        (error) => {
+          settled = true;
+          failure = error;
+        }
+      );
+
+      await Promise.resolve();
+      while (!settled) {
+        await Promise.race([
+          observedCommand,
+          sleepWithStop(GROK_PROFILE_WAIT_LOG_INTERVAL_MS),
+        ]);
+        if (!settled) {
+          await log('步骤 4：仍在等待 xAI 人机验证成功，不会重复填写注册资料...', 'info', nodeId);
+        }
+      }
+      await observedCommand;
+      if (failure) throw failure;
       return result || {};
     }
 
@@ -830,15 +866,20 @@
         }
         await activateTab(tabId);
         await ensureContentReady(tabId, { forceInject: true });
-        const result = await sendGrokCommand(nodeId, {
-          firstName: profile.firstName,
-          lastName: profile.lastName,
-          password,
-        }, {
-          step: 4,
-          timeoutMs: GROK_PROFILE_SUBMIT_COMMAND_TIMEOUT_MS,
-          logMessage: '步骤 4：正在填写 xAI 注册资料并等待人机验证成功...',
-        });
+        const result = await waitForGrokProfileSubmission(
+          sendGrokCommand(nodeId, {
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            password,
+          }, {
+            step: 4,
+            timeoutMs: GROK_PROFILE_SUBMIT_COMMAND_TIMEOUT_MS,
+            responseTimeoutMs: GROK_PROFILE_SUBMIT_COMMAND_TIMEOUT_MS,
+            retryTransport: false,
+            logMessage: '步骤 4：正在填写 xAI 注册资料并等待人机验证成功...',
+          }),
+          nodeId
+        );
         // The content script only submits after Cloudflare reports success.
         await log('步骤 4：已提交 Grok 注册资料，继续设备授权。', 'ok', nodeId);
         await completeNode(nodeId, {

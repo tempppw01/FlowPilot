@@ -15055,6 +15055,7 @@ const grokRegisterRunner = self.MultiPageBackgroundGrokRegisterRunner?.createGro
   registerTab,
   resolveSignupEmailForFlow,
   reuseOrCreateTab,
+  sendToContentScript,
   sendToContentScriptResilient,
   setPasswordState,
   setState,
