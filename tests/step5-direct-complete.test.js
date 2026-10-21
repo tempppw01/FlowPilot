@@ -74,7 +74,7 @@ function getStep5OutcomeBundle() {
     extractConstDeclaration('STEP5_REGISTRATION_READY_PAGE_PATTERN'),
     extractFunction('isStep5RegistrationReadyPage'),
     extractFunction('isStep5ProfileStillVisible'),
-    extractFunction('isStep5CompletionChatgptUrl'),
+    extractFunction('isRegistrationCompletionChatgptUrl'),
     extractFunction('getStep5PostSubmitSuccessState'),
     extractFunction('installStep5NavigationCompletionReporter'),
     extractFunction('waitForStep5SubmitOutcome'),
@@ -1163,7 +1163,7 @@ function isOAuthConsentPage() { return false; }
 function isAddPhonePageReady() { return false; }
 function isStep5ProfileStillVisible() { return false; }
 
-${extractFunction('isStep5CompletionChatgptUrl')}
+${extractFunction('isRegistrationCompletionChatgptUrl')}
 ${extractConstDeclaration('STEP5_REGISTRATION_READY_PAGE_PATTERN')}
 ${extractFunction('isStep5RegistrationReadyPage')}
 ${extractFunction('getStep5PostSubmitSuccessState')}
@@ -1195,7 +1195,7 @@ function getActionText(el) { return el.textContent || ''; }
 function isStep5ProfilePageUrl() { return false; }
 function isStep5Ready() { return true; }
 
-${extractFunction('isStep5CompletionChatgptUrl')}
+${extractFunction('isRegistrationCompletionChatgptUrl')}
 ${extractConstDeclaration('STEP5_REGISTRATION_READY_PAGE_PATTERN')}
 ${extractFunction('isStep5RegistrationReadyPage')}
 ${extractFunction('isStep5ProfileStillVisible')}
@@ -1233,7 +1233,7 @@ const location = {
 function getStep5AuthRetryPageState() { return null; }
 function isStep5ProfileStillVisible() { return false; }
 
-${extractFunction('isStep5CompletionChatgptUrl')}
+${extractFunction('isRegistrationCompletionChatgptUrl')}
 ${extractConstDeclaration('STEP5_REGISTRATION_READY_PAGE_PATTERN')}
 ${extractFunction('isStep5RegistrationReadyPage')}
 ${extractFunction('getStep5PostSubmitSuccessState')}
@@ -1244,7 +1244,7 @@ return {
     return getStep5PostSubmitSuccessState();
   },
   isCompletion(url) {
-    return isStep5CompletionChatgptUrl(url);
+    return isRegistrationCompletionChatgptUrl(url);
   },
 };
 `)();

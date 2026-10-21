@@ -2244,7 +2244,7 @@ test('verification flow waits for logged-in home DOM signal before skipping regi
   assert.equal(result.skipRegistrationWaitStep, true);
 });
 
-test('verification flow does not skip registration wait when fallback sees logged-out chatgpt home', async () => {
+test('verification flow keeps registration wait when fallback reaches registration success page', async () => {
   const helpers = api.createVerificationFlowHelpers({
     addLog: async () => {},
     chrome: {
@@ -2290,6 +2290,7 @@ test('verification flow does not skip registration wait when fallback sees logge
 
   assert.equal(result.success, true);
   assert.equal(result.skipProfileStep, true);
+  assert.equal(result.skipProfileStepReason, 'registration_success_page');
   assert.equal(result.skipRegistrationWaitStep, false);
   assert.equal(result.assumed, true);
 });

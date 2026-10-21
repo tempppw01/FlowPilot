@@ -9881,7 +9881,7 @@ function isLikelyLoggedInChatgptHomeUrl(rawUrl) {
   return !/^\/(?:auth\/|create-account\/|email-verification|log-in|add-phone)(?:[/?#]|$)/i.test(parsed.pathname || '');
 }
 
-function isStep5CompletionChatgptUrl(rawUrl) {
+function isRegistrationCompletionChatgptUrl(rawUrl) {
   const parsed = parseUrlSafely(rawUrl);
   if (!parsed) return false;
   const protocol = String(parsed.protocol || '').toLowerCase();
@@ -10355,20 +10355,20 @@ function isStopError(error) {
 
 function isRetryableContentScriptTransportError(error) {
   const message = String(typeof error === 'string' ? error : error?.message || '');
-  return /back\/forward cache|message channel is closed|Receiving end does not exist|port closed before a response was received|A listener indicated an asynchronous response|内容脚本\s+\d+(?:\.\d+)?\s*秒内未响应|did not respond in \d+s|failed to fetch|networkerror|network error|fetch failed|load failed/i.test(message);
+  return /back\/forward cache|message channel is closed|Receiving end does not exist|port closed before a response was received|A listener indicated an asynchronous response|内容脚本\s+\d+(?:\.\d+)?\s*秒内未响应|did not respond in \d+s|页面刚完成跳转或刷新，内容脚本还没有重新接回|failed to fetch|networkerror|network error|fetch failed|load failed/i.test(message);
 }
 
-function isStepFetchNetworkRetryableError(error) {
-  const message = String(getErrorMessage(error) || '').toLowerCase();
-  return /failed to fetch|networkerror|network error|fetch failed|load failed|net::err_/i.test(message);
+function isStepTransientTransportRetryableError(error) {
+  const message = String(getErrorMessage(error) || '');
+  return isRetryableContentScriptTransportError(error) || /net::err_/i.test(message);
 }
 
-function getStepFetchNetworkRetryPolicy(step) {
-  if (typeof STEP_FETCH_NETWORK_RETRY_POLICIES === 'undefined' || !(STEP_FETCH_NETWORK_RETRY_POLICIES instanceof Map)) {
+function getStepTransientTransportRetryPolicy(step) {
+  if (typeof STEP_TRANSIENT_TRANSPORT_RETRY_POLICIES === 'undefined' || !(STEP_TRANSIENT_TRANSPORT_RETRY_POLICIES instanceof Map)) {
     return null;
   }
 
-  const policy = STEP_FETCH_NETWORK_RETRY_POLICIES.get(Number(step));
+  const policy = STEP_TRANSIENT_TRANSPORT_RETRY_POLICIES.get(Number(step));
   if (!policy) {
     return null;
   }
@@ -12483,7 +12483,7 @@ async function completeStep5FromTabUrlAfterTransportError(sourceError = null) {
     initialDelayMs: 300,
   }).catch(() => null);
   const currentUrl = String(tab?.url || '').trim();
-  if (currentUrl && isStep5CompletionChatgptUrl(currentUrl)) {
+  if (currentUrl && isRegistrationCompletionChatgptUrl(currentUrl)) {
     const payload = {
       profileSubmitted: true,
       postSubmitChecked: true,
@@ -12823,7 +12823,7 @@ async function requestStop(options = {}) {
 // Step Execution
 // ============================================================
 
-const STEP_FETCH_NETWORK_RETRY_POLICIES = new Map([
+const STEP_TRANSIENT_TRANSPORT_RETRY_POLICIES = new Map([
   [4, { maxAttempts: 3, cooldownMs: 12000 }],
   [8, { maxAttempts: 3, cooldownMs: 12000 }],
   [9, { maxAttempts: 3, cooldownMs: 12000 }],
@@ -12852,12 +12852,12 @@ async function executeNode(nodeId, options = {}) {
     await setNodeStatus(normalizedNodeId, 'running');
     await addLog('开始执行', 'info', { nodeId: normalizedNodeId });
     await humanStepDelay();
-    const fetchRetryPolicy = typeof getStepFetchNetworkRetryPolicy === 'function'
-      ? getStepFetchNetworkRetryPolicy(step)
+    const transientTransportRetryPolicy = typeof getStepTransientTransportRetryPolicy === 'function'
+      ? getStepTransientTransportRetryPolicy(step)
       : null;
-    const isFetchRetryable = (error) => {
-      if (typeof isStepFetchNetworkRetryableError === 'function') {
-        return isStepFetchNetworkRetryableError(error);
+    const isTransientTransportRetryable = (error) => {
+      if (typeof isStepTransientTransportRetryableError === 'function') {
+        return isStepTransientTransportRetryableError(error);
       }
       return isRetryableContentScriptTransportError(error);
     };
@@ -12888,21 +12888,21 @@ async function executeNode(nodeId, options = {}) {
 
         if (attempt > 1) {
           await addLog(
-            `[NETWORK_FETCH_RETRY] 节点 ${normalizedNodeId}：网络请求异常已恢复，当前重试成功（${attempt}/${fetchRetryPolicy?.maxAttempts || attempt}）。`,
+            `[TRANSIENT_TRANSPORT_RETRY] 节点 ${normalizedNodeId}：页面跳转后的通信异常已恢复，当前重试成功（${attempt}/${transientTransportRetryPolicy?.maxAttempts || attempt}）。`,
             'ok'
           );
         }
         break;
       } catch (attemptError) {
-        if (!fetchRetryPolicy || !isFetchRetryable(attemptError) || attempt >= fetchRetryPolicy.maxAttempts) {
+        if (!transientTransportRetryPolicy || !isTransientTransportRetryable(attemptError) || attempt >= transientTransportRetryPolicy.maxAttempts) {
           throw attemptError;
         }
 
         const nextAttempt = attempt + 1;
-        const cooldownMs = fetchRetryPolicy.cooldownMs;
+        const cooldownMs = transientTransportRetryPolicy.cooldownMs;
         const cooldownSeconds = Math.max(1, Math.ceil(cooldownMs / 1000));
         await addLog(
-          `[NETWORK_FETCH_RETRY] 节点 ${normalizedNodeId}：检测到网络请求异常（${getErrorMessage(attemptError)}），${cooldownSeconds} 秒后重试（${nextAttempt}/${fetchRetryPolicy.maxAttempts}）。`,
+          `[TRANSIENT_TRANSPORT_RETRY] 节点 ${normalizedNodeId}：检测到页面跳转后的通信异常（${getErrorMessage(attemptError)}），${cooldownSeconds} 秒后重新确认当前节点（${nextAttempt}/${transientTransportRetryPolicy.maxAttempts}）。`,
           'warn'
         );
         if (cooldownMs > 0) {
@@ -14885,6 +14885,7 @@ const step4Executor = self.MultiPageBackgroundStep4?.createStep4Executor({
   addLog,
   chrome,
   completeNodeFromBackground,
+  confirmStep4PostSubmitState: verificationFlowHelpers.confirmStep4PostSubmitState,
   confirmCustomVerificationStepBypass: verificationFlowHelpers.confirmCustomVerificationStepBypass,
   generateRandomBirthday,
   generateRandomName,
@@ -16531,7 +16532,7 @@ async function validateStep5PostCompletion(tabId, completionPayload = {}) {
   while (true) {
     const tab = await chrome.tabs.get(tabId).catch(() => null);
     const currentUrl = String(tab?.url || completionPayload?.url || '').trim();
-    if (currentUrl && isStep5CompletionChatgptUrl(currentUrl)) {
+    if (currentUrl && isRegistrationCompletionChatgptUrl(currentUrl)) {
       await debugLog('后台直接通过标签页 URL 确认已进入 chatgpt.com，步骤 5 完成。', {
         completionOutcome: String(completionPayload?.outcome || '').trim(),
         completionUrl: String(completionPayload?.url || '').trim(),
@@ -16564,7 +16565,7 @@ async function validateStep5PostCompletion(tabId, completionPayload = {}) {
         initialDelayMs: 300,
       }).catch(() => null);
       const stableUrl = String(stableTab?.url || currentUrl || completionPayload?.url || '').trim();
-      if (stableUrl && isStep5CompletionChatgptUrl(stableUrl)) {
+      if (stableUrl && isRegistrationCompletionChatgptUrl(stableUrl)) {
         await debugLog('后台复核时内容脚本通信中断，但标签页已进入 chatgpt.com，步骤 5 按提交成功处理。', {
           completionOutcome: String(completionPayload?.outcome || '').trim(),
           completionUrl: String(completionPayload?.url || '').trim(),
@@ -16655,7 +16656,7 @@ async function validateStep5PostCompletion(tabId, completionPayload = {}) {
       return pageState;
     }
 
-    if (pageState.successState === 'logged_in_home' && isStep5CompletionChatgptUrl(pageState.url)) {
+    if (pageState.successState === 'logged_in_home' && isRegistrationCompletionChatgptUrl(pageState.url)) {
       await debugLog(`后台复核确认成功状态：${pageState.successState}`, {
         completionOutcome: String(completionPayload?.outcome || '').trim(),
         completionUrl: String(completionPayload?.url || '').trim(),
