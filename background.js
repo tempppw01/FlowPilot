@@ -12,6 +12,9 @@ importScripts(
   'flows/devin/index.js',
   'flows/devin/workflow.js',
   'flows/devin/mail-rules.js',
+  'flows/tokenharbor/index.js',
+  'flows/tokenharbor/workflow.js',
+  'flows/tokenharbor/mail-rules.js',
   'flows/index.js',
   'core/flow-kernel/flow-registry.js',
   'shared/contribution-registry.js',
@@ -54,6 +57,7 @@ importScripts(
   'flows/claude/background/claude2api-client.js',
   'flows/claude/background/register-runner.js',
   'flows/devin/background/register-runner.js',
+  'flows/tokenharbor/background/register-runner.js',
   'flows/kiro/background/desktop-client.js',
   'flows/kiro/background/desktop-authorize-runner.js',
   'flows/kiro/background/publisher-kiro-rs.js',
@@ -574,8 +578,8 @@ const DEFAULT_SUB2API_GROUP_NAMES = [
 ];
 const DEFAULT_SUB2API_REDIRECT_URI = 'http://localhost:1455/auth/callback';
 const DEFAULT_IP_PROXY_SERVICE = '711proxy';
-const IP_PROXY_SERVICE_VALUES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy'];
-const IP_PROXY_ENABLED_SERVICE_VALUES = ['711proxy'];
+const IP_PROXY_SERVICE_VALUES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy', 'custom'];
+const IP_PROXY_ENABLED_SERVICE_VALUES = ['711proxy', 'custom'];
 const DEFAULT_IP_PROXY_MODE = 'account';
 const IP_PROXY_MODE_VALUES = ['api', 'account'];
 const DEFAULT_IP_PROXY_PROTOCOL = 'http';
@@ -596,7 +600,7 @@ const IP_PROXY_FORCE_DIRECT_HOST_PATTERNS = [
   '*.luckyous.com',
 ];
 const IP_PROXY_FORCE_DIRECT_FALLBACK = 'PROXY 127.0.0.1:7897';
-const IP_PROXY_ACCOUNT_LIST_ENABLED = false;
+const IP_PROXY_ACCOUNT_LIST_ENABLED = true;
 const IP_PROXY_INIT_ENABLE_EXIT_PROBE = false;
 const IP_PROXY_INIT_SUPPRESS_AUTH_REBIND = true;
 const IP_PROXY_INIT_AUTO_APPLY = false;
@@ -10856,6 +10860,12 @@ function hasSavedProgress(statuses = {}, stateOverride = null) {
 
 function getDownstreamStateResets(step, state = {}) {
   const stepKey = getStepExecutionKeyForState(step, state);
+  if (String(stepKey || '').trim().toLowerCase().startsWith('tokenharbor-')) {
+    if (stepKey === 'tokenharbor-open-signup') return { flowStartTime: null, password: null, tokenHarborRegisterTabId: null, tokenHarborEmail: null, tokenHarborVerificationRequestedAt: null, tokenHarborVerificationLink: null, tokenHarborVerificationMessageId: null, tokenHarborRegistrationStatus: 'idle', tokenHarborVerifiedAt: null };
+    if (stepKey === 'tokenharbor-submit-signup') return { password: null, tokenHarborVerificationRequestedAt: null, tokenHarborVerificationLink: null, tokenHarborVerificationMessageId: null, tokenHarborRegistrationStatus: 'started', tokenHarborVerifiedAt: null };
+    if (stepKey === 'tokenharbor-fetch-verification-link') return { tokenHarborVerificationLink: null, tokenHarborVerificationMessageId: null, tokenHarborRegistrationStatus: 'verification_pending', tokenHarborVerifiedAt: null };
+    return { tokenHarborRegistrationStatus: 'verification_link_received', tokenHarborVerifiedAt: null };
+  }
   if (String(stepKey || '').trim().toLowerCase().startsWith('kiro-')) {
     const kiroResets = typeof kiroStateHelpers?.buildDownstreamResetPatch === 'function'
       ? kiroStateHelpers.buildDownstreamResetPatch(stepKey, state)
@@ -14608,6 +14618,7 @@ const KIRO_DESKTOP_AUTHORIZE_INJECT_FILES = ['flows/openai/index.js', 'flows/kir
 const GROK_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'content/utils.js', 'flows/grok/content/register-page.js'];
 const GROK_SUB2API_OAUTH_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'content/utils.js', 'flows/grok/content/sub2api-oauth-page.js'];
 const DEVIN_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/devin/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'flows/devin/content/register-page.js'];
+const TOKENHARBOR_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/devin/index.js', 'flows/tokenharbor/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'flows/tokenharbor/content/register-page.js'];
 const CLAUDE_REGISTER_INJECT_FILES = ['flows/openai/index.js', 'flows/kiro/index.js', 'flows/grok/index.js', 'flows/claude/index.js', 'flows/index.js', 'core/flow-kernel/flow-registry.js', 'core/flow-kernel/source-registry.js', 'content/utils.js', 'flows/claude/content/register-page.js'];
 const panelBridge = self.MultiPageBackgroundPanelBridge?.createPanelBridge({
   chrome,
@@ -14677,6 +14688,7 @@ const devinMailRules = self.MultiPageDevinMailRules?.createDevinMailRules({
   MAIL_2925_VERIFICATION_INTERVAL_MS,
   MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
 });
+const tokenHarborMailRules = self.MultiPageTokenHarborMailRules?.createTokenHarborMailRules();
 const mailRuleRegistry = self.MultiPageBackgroundMailRuleRegistry?.createMailRuleRegistry({
   defaultFlowId: DEFAULT_ACTIVE_FLOW_ID,
   flowBuilders: {
@@ -14684,6 +14696,7 @@ const mailRuleRegistry = self.MultiPageBackgroundMailRuleRegistry?.createMailRul
     kiro: kiroMailRules,
     grok: grokMailRules,
     devin: devinMailRules,
+    tokenharbor: tokenHarborMailRules,
   },
 });
 const flowMailPollingService = self.MultiPageBackgroundFlowMailPolling?.createFlowMailPollingService({
@@ -15154,6 +15167,14 @@ const devinRegisterRunner = self.MultiPageBackgroundDevinRegisterRunner?.createD
   },
   DEVIN_REGISTER_INJECT_FILES,
 });
+const tokenHarborRegisterRunner = self.MultiPageBackgroundTokenHarborRegisterRunner?.createTokenHarborRegisterRunner({
+  addLog, chrome, completeNodeFromBackground, ensureContentScriptReadyOnTab, fetchGeneratedEmail,
+  generatePassword, getTabId, getState, isTabAlive, markCurrentRegistrationAccountUsed, pollSmsBowerMailLink,
+  registerTab, resolveSignupEmailForFlow, reuseOrCreateTab, sendToContentScriptResilient, setPasswordState, setState,
+  sleepWithStop, throwIfStopped, waitForTabStableComplete,
+  SMSBOWER_MAIL_PROVIDER, SMSBOWER_MAIL_SERVICE_CODE: 'acz',
+  TOKENHARBOR_REGISTER_INJECT_FILES,
+});
 const claudeRegisterRunner = self.MultiPageBackgroundClaudeRegisterRunner?.createClaudeRegisterRunner({
   addLog,
   chrome,
@@ -15416,6 +15437,10 @@ const stepExecutorsByKey = {
   'devin-enter-email-code': (state) => devinRegisterRunner.execute(state),
   'devin-start-cpa-oauth': (state) => devinRegisterRunner.execute(state),
   'devin-submit-callback': (state) => devinRegisterRunner.execute(state),
+  'tokenharbor-open-signup': (state) => tokenHarborRegisterRunner.execute(state),
+  'tokenharbor-submit-signup': (state) => tokenHarborRegisterRunner.execute(state),
+  'tokenharbor-fetch-verification-link': (state) => tokenHarborRegisterRunner.execute(state),
+  'tokenharbor-open-verification-link': (state) => tokenHarborRegisterRunner.execute(state),
   'claude-open-official-page': (state) => claudeRegisterRunner.executeClaudeOpenOfficialPage(state),
   'claude-wait-official-page': (state) => claudeRegisterRunner.executeClaudeWaitOfficialPageLoaded(state),
   'claude-fill-email': (state) => claudeRegisterRunner.executeClaudeFillEmail(state),

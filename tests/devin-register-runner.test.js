@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const vm = require('node:vm');
 
 const source = fs.readFileSync('flows/devin/background/register-runner.js', 'utf8');
 function createRunner(deps) {
@@ -252,4 +253,63 @@ test('Devin step 1 stops when a cookie remains after the removal request', async
   );
   assert.deepEqual(opens, []);
   assert.ok(logs.some((message) => message.includes('仍有 1 个 Devin cookies 未能删除')));
+});
+
+test('Devin email submission checks the terms and privacy checkbox before signing up', async () => {
+  const source = fs.readFileSync('flows/devin/content/register-page.js', 'utf8');
+  const listeners = [];
+  const context = {
+    console: { log() {}, warn() {} },
+    HTMLElement: class HTMLElement {},
+    HTMLInputElement: null,
+    HTMLTextAreaElement: null,
+    InputEvent: class InputEvent {},
+    Event: class Event {},
+    getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }),
+    location: { href: 'https://app.devin.ai/auth/signup', hostname: 'app.devin.ai' },
+    window: null,
+    chrome: { runtime: { onMessage: { addListener: (listener) => listeners.push(listener) } } },
+    document: { body: { innerText: '', textContent: '' }, querySelector: () => null, documentElement: { hasAttribute: () => false, setAttribute() {} } },
+    resetStopState() {},
+    throwIfStopped() {},
+    sleep: async () => {},
+  };
+  context.HTMLInputElement = class HTMLInputElement extends context.HTMLElement {};
+  context.HTMLTextAreaElement = class HTMLTextAreaElement extends context.HTMLElement {};
+  context.window = context;
+  const email = new context.HTMLInputElement();
+  email.type = 'email'; email.value = ''; email.disabled = false;
+  email.focus = () => {};
+  email.getBoundingClientRect = () => ({ width: 100, height: 20 });
+  email.getAttribute = () => '';
+  email.dispatchEvent = () => {};
+  const checkbox = new context.HTMLElement();
+  checkbox.checked = false; checkbox.disabled = false;
+  checkbox.getBoundingClientRect = () => ({ width: 16, height: 16 });
+  checkbox.scrollIntoView = () => {};
+  checkbox.getAttribute = (name) => name === 'aria-checked' ? (checkbox.checked ? 'true' : 'false') : '';
+  checkbox.closest = () => checkbox.parentElement;
+  checkbox.parentElement = { innerText: 'I have read and agree to the Terms of Service and the Privacy Policy', textContent: 'I have read and agree to the Terms of Service and the Privacy Policy' };
+  checkbox.click = () => { checkbox.checked = true; };
+  const signup = new context.HTMLElement();
+  signup.disabled = false; signup.innerText = 'Sign up'; signup.textContent = 'Sign up';
+  signup.getBoundingClientRect = () => ({ width: 100, height: 30 });
+  signup.scrollIntoView = () => {};
+  signup.getAttribute = () => '';
+  let submitted = false;
+  signup.click = () => { submitted = true; };
+  context.document.querySelectorAll = (selector) => {
+    if (selector.includes('checkbox')) return [checkbox];
+    if (selector.includes('input[type="email"]')) return [email];
+    if (selector.includes('button')) return [signup];
+    return [];
+  };
+  email.matches = () => true;
+  Object.defineProperty(email, 'type', { value: 'email' });
+  vm.createContext(context);
+  vm.runInContext(source, context);
+  const response = await context.window.MultiPageDevinRegisterPage.execute('submit-email', { email: 'user@example.com' });
+  assert.equal(response.termsAccepted, true);
+  assert.equal(checkbox.checked, true);
+  assert.equal(submitted, true);
 });

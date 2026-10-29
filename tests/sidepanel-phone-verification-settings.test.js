@@ -79,6 +79,7 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /data-signup-method="phone"/);
   assert.match(html, /id="row-phone-sms-provider"/);
   assert.match(html, /id="select-phone-sms-provider"/);
+  assert.match(html, /id="btn-open-phone-sms-provider-repository"[^>]*hidden>GitHub<\/button>/);
   assert.match(html, /id="row-phone-sms-provider-order"/);
   assert.match(html, /id="select-phone-sms-provider-order"[^>]*multiple/);
   assert.match(html, /id="btn-phone-sms-provider-order-menu"/);
@@ -213,6 +214,12 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /id="input-smsbower-max-price"/);
   assert.doesNotMatch(html, /id="btn-open-madao-github"/);
   assert.doesNotMatch(html, /id="input-account-run-history-text-enabled"/);
+});
+
+test('MaDao provider repository button is wired to the upstream project URL', () => {
+  assert.match(sidepanelSource, /\[PHONE_SMS_PROVIDER_MADAO\]:\s*'https:\/\/github\.com\/QLHazyCoder\/MaDao'/);
+  assert.match(sidepanelSource, /btnOpenPhoneSmsProviderRepository\?\.addEventListener\('click'/);
+  assert.match(sidepanelSource, /updatePhoneSmsProviderRepositoryButton\(normalizedNextProvider\)/);
 });
 
 test('SMSBower country dropdown only exposes low-price candidates and keeps ordered summaries', () => {
@@ -933,6 +940,29 @@ test('settings expand buttons are hidden while their switches are off', () => {
     ipProxyPanelSource,
     /btnToggleIpProxySection\.style\.display\s*=\s*enabled\s*\?\s*''\s*:\s*'none';/
   );
+});
+
+test('custom IP proxy mode hides provider-specific credentials and session controls', () => {
+  const ipProxyPanelSource = fs.readFileSync('sidepanel/ip-proxy-panel.js', 'utf8');
+  assert.match(ipProxyPanelSource, /const isCustomService = service === 'custom'/);
+  for (const row of [
+    'rowIpProxyAccountSessionPrefix', 'rowIpProxyAccountLifeMinutes',
+    'rowIpProxyHost', 'rowIpProxyPort',
+    'rowIpProxyUsername', 'rowIpProxyPassword', 'rowIpProxyRegion',
+  ]) {
+    assert.match(ipProxyPanelSource, new RegExp(`${row}\.style\.display = showSettings && (?:showSessionOptions|isAccountMode)[^;]*!isCustomService`));
+  }
+  assert.match(ipProxyPanelSource, /rowIpProxyProtocol\.style\.display = showSettings && !isCustomService/);
+  assert.match(ipProxyPanelSource, /btnIpProxyChange.hidden = isCustomService/);
+  assert.match(ipProxyPanelSource, /btnIpProxyServiceLogin.hidden = isCustomService/);
+  assert.match(ipProxyPanelSource, /rowIpProxyMode.style.display = showSettings && !isCustomService/);
+});
+
+test('manual IP proxy probe shows the diagnostic when no exit IP is detected', () => {
+  const ipProxyPanelSource = fs.readFileSync('sidepanel/ip-proxy-panel.js', 'utf8');
+  const probeFunction = ipProxyPanelSource.slice(ipProxyPanelSource.indexOf('async function probeIpProxyExit('));
+  assert.ok(probeFunction.includes("const diagnostic = String(routing?.exitError || routing?.error || '').trim()"));
+  assert.ok(probeFunction.includes('出口检测失败，未获取到出口 IP${diagnosticHint}'));
 });
 
 test('phone signup relogin-after-bind-email switch is wired into UI and step definitions', () => {

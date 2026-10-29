@@ -9,8 +9,8 @@ function loadIpProxyCore({ accountListEnabled = true } = {}) {
 const self = {};
 const chrome = {};
 const DEFAULT_IP_PROXY_SERVICE = '711proxy';
-const IP_PROXY_SERVICE_VALUES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy'];
-const IP_PROXY_ENABLED_SERVICE_VALUES = ['711proxy'];
+const IP_PROXY_SERVICE_VALUES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy', 'custom'];
+const IP_PROXY_ENABLED_SERVICE_VALUES = ['711proxy', 'custom'];
 const DEFAULT_IP_PROXY_MODE = 'account';
 const IP_PROXY_MODE_VALUES = ['api', 'account'];
 const DEFAULT_IP_PROXY_PROTOCOL = 'http';
@@ -94,6 +94,29 @@ test('IP proxy parser ignores disabled lines and normalizes proxy entries', () =
   });
   assert.equal(pool[1].host, 'us.proxy.example');
   assert.equal(pool[1].port, 8080);
+});
+
+test('IP proxy custom pool parser accepts URL credentials and strips pool labels', () => {
+  const api = loadIpProxyCore();
+  const source = 'http://user%40name:p%40ss@209.50.172.205:3129#pool';
+  const parsed = api.parseIpProxyLine(source, 'custom');
+  assert.deepStrictEqual(parsed, {
+    host: '209.50.172.205', port: 3129, username: 'user@name', password: 'p@ss',
+    protocol: 'http', region: '', provider: 'custom',
+  });
+  const withoutScheme = api.parseIpProxyLine('pooluser:poolpass@209.50.172.205:3129#pool', 'custom');
+  assert.deepStrictEqual(withoutScheme, {
+    host: '209.50.172.205', port: 3129, username: 'pooluser', password: 'poolpass',
+    protocol: 'http', region: '', provider: 'custom',
+  });
+  assert.equal(api.parseIpProxyLine('http://bad.example:not-a-port#pool', 'custom'), null);
+});
+
+test('IP proxy custom provider remains enabled through provider normalization', () => {
+  const api = loadIpProxyCore();
+  const parsed = api.parseIpProxyLine('http://u:p@203.0.113.10:3128#pool', 'custom');
+  assert.equal(parsed?.provider, 'custom');
+  assert.equal(parsed?.host, '203.0.113.10');
 });
 
 test('IP proxy probe payload parser extracts country from common probe endpoints', () => {
@@ -286,6 +309,8 @@ test('711 sticky session keeps IP probe on ipinfo but separately checks ChatGPT 
   );
 
   assert.deepStrictEqual(api.resolveTargetReachabilityEndpoints(), ['https://chatgpt.com/']);
+  assert.deepStrictEqual(api.resolveTargetReachabilityEndpoints({ state: { activeFlowId: 'tokenharbor' } }), ['https://tokenharbor.ai/login?mode=signup']);
+  assert.deepStrictEqual(api.resolveTargetReachabilityEndpoints({ state: { flowId: 'openai' } }), ['https://chatgpt.com/']);
 });
 
 test('target reachability failure turns detected exit IP into connectivity_failed', () => {

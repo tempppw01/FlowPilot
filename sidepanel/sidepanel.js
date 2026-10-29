@@ -503,6 +503,7 @@ const rowHeroSmsOperator = document.getElementById('row-hero-sms-operator');
 const rowHeroSmsApiKey = document.getElementById('row-hero-sms-api-key');
 const rowHeroSmsMaxPrice = document.getElementById('row-hero-sms-max-price');
 const rowPhoneSmsProvider = document.getElementById('row-phone-sms-provider');
+const btnOpenPhoneSmsProviderRepository = document.getElementById('btn-open-phone-sms-provider-repository');
 const rowPhoneSmsProviderOrder = document.getElementById('row-phone-sms-provider-order');
 const rowPhoneSmsProviderOrderActions = document.getElementById('row-phone-sms-provider-order-actions');
 const rowFiveSimApiKey = document.getElementById('row-five-sim-api-key');
@@ -1726,14 +1727,15 @@ const NEX_SMS_FALLBACK_COUNTRY_ITEMS = Object.freeze([
   { id: 7, label: 'Malaysia (#7)', searchText: 'Malaysia 7 MY' },
 ]);
 const DEFAULT_IP_PROXY_SERVICE = '711proxy';
-const SUPPORTED_IP_PROXY_SERVICES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy'];
-const IP_PROXY_ENABLED_SERVICES = ['711proxy'];
+const SUPPORTED_IP_PROXY_SERVICES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy', 'custom'];
+const IP_PROXY_ENABLED_SERVICES = ['711proxy', 'custom'];
+globalThis.IP_PROXY_ENABLED_SERVICES = IP_PROXY_ENABLED_SERVICES;
 const DEFAULT_IP_PROXY_MODE = 'account';
 const SUPPORTED_IP_PROXY_MODES = ['api', 'account'];
 const DEFAULT_IP_PROXY_PROTOCOL = 'http';
 const SUPPORTED_IP_PROXY_PROTOCOLS = ['http', 'https', 'socks4', 'socks5'];
 const IP_PROXY_API_MODE_ENABLED = false;
-const IP_PROXY_ACCOUNT_LIST_ENABLED = false;
+const IP_PROXY_ACCOUNT_LIST_ENABLED = true;
 
 function getManagedAliasUtils() {
   return window.MultiPageManagedAliasUtils || null;
@@ -2264,6 +2266,9 @@ const TARGET_REPOSITORY_URLS = Object.freeze({
     grok2api: 'https://github.com/jiujiu532/grok2api',
     sub2api: 'https://github.com/Wei-Shaw/sub2api',
   }),
+});
+const PHONE_SMS_PROVIDER_REPOSITORY_URLS = Object.freeze({
+  [PHONE_SMS_PROVIDER_MADAO]: 'https://github.com/QLHazyCoder/MaDao',
 });
 const PRIVACY_MASKED_INPUT_IDS = Object.freeze([
   'input-sub2api-url',
@@ -12422,6 +12427,24 @@ function updateTargetRepositoryButton(flowId = getSelectedFlowId(), targetId = g
   btnOpenTargetRepository.title = title;
 }
 
+function getPhoneSmsProviderRepositoryUrl(provider = getSelectedPhoneSmsProvider()) {
+  const normalizedProvider = normalizePhoneSmsProvider(provider);
+  return PHONE_SMS_PROVIDER_REPOSITORY_URLS[normalizedProvider] || '';
+}
+
+function updatePhoneSmsProviderRepositoryButton(provider = getSelectedPhoneSmsProvider()) {
+  if (!btnOpenPhoneSmsProviderRepository) return;
+  const repositoryUrl = getPhoneSmsProviderRepositoryUrl(provider);
+  const hasRepositoryUrl = Boolean(repositoryUrl);
+  btnOpenPhoneSmsProviderRepository.hidden = !hasRepositoryUrl;
+  btnOpenPhoneSmsProviderRepository.disabled = !hasRepositoryUrl;
+  btnOpenPhoneSmsProviderRepository.dataset.repositoryUrl = repositoryUrl;
+  const providerLabel = getPhoneSmsProviderLabel(provider);
+  const title = hasRepositoryUrl ? `打开 ${providerLabel} 项目 GitHub 仓库` : `${providerLabel} 暂未配置项目仓库`;
+  btnOpenPhoneSmsProviderRepository.setAttribute('aria-label', title);
+  btnOpenPhoneSmsProviderRepository.title = title;
+}
+
 function renderFlowSelectorOptions(selectedFlowId = getSelectedFlowId()) {
   if (!selectFlow) {
     return [];
@@ -12847,6 +12870,9 @@ function updatePhoneVerificationSettingsUI() {
     ) {
       setSignupMethod(capabilityState?.effectiveSignupMethod || SIGNUP_METHOD_EMAIL);
     }
+  }
+  if (typeof updatePhoneSmsProviderRepositoryButton === 'function') {
+    updatePhoneSmsProviderRepositoryButton();
   }
   const enabled = canShowPhoneSettings && rawEnabled;
   const showSettings = enabled && phoneVerificationSectionExpanded;
@@ -15315,6 +15341,8 @@ function syncPasswordField(state) {
     ? 'Devin 使用邮箱验证码注册，无需账户密码'
     : activeFlowId === 'claude'
       ? 'Claude 使用邮箱魔法登录，无需账户密码'
+      : activeFlowId === 'tokenharbor'
+        ? 'Token Harbor 密码（至少 12 个字符），留空则自动生成'
       : '账户密码，留空则自动生成';
   inputPassword.value = (accountContributionEnabled || passwordNotUsed) ? '' : (state.customPassword || state.password || '');
   if (btnTogglePassword) {
@@ -18577,6 +18605,12 @@ btnOpenTargetRepository?.addEventListener('click', () => {
   }
 });
 
+btnOpenPhoneSmsProviderRepository?.addEventListener('click', () => {
+  const repositoryUrl = btnOpenPhoneSmsProviderRepository.dataset.repositoryUrl
+    || getPhoneSmsProviderRepositoryUrl();
+  if (repositoryUrl) openExternalUrl(repositoryUrl);
+});
+
 btnTestCpa?.addEventListener('click', async () => {
   const defaultLabel = btnTestCpa.textContent || '测试';
   btnTestCpa.disabled = true;
@@ -20641,6 +20675,9 @@ async function switchPhoneSmsProvider(nextProvider) {
 
   syncLatestState(patch);
   setPhoneSmsProviderSelectValue(normalizedNextProvider);
+  if (typeof updatePhoneSmsProviderRepositoryButton === 'function') {
+    updatePhoneSmsProviderRepositoryButton(normalizedNextProvider);
+  }
   const nextProviderOrder = setPhoneSmsProviderOrderPrimary(normalizedNextProvider);
   syncLatestState({ phoneSmsProviderOrder: nextProviderOrder });
   heroSmsCountrySelectionOrder = [];

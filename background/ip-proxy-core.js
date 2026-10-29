@@ -124,6 +124,9 @@ const IP_PROXY_GUARD_REGEX = '^https?:\\/\\/([^\\/]+\\.)?(chatgpt\\.com|openai\\
 
 function normalizeIpProxyProviderValue(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'custom' && IP_PROXY_SERVICE_VALUES.includes('custom')) {
+    return 'custom';
+  }
   const enabledValues = Array.isArray(globalThis.IP_PROXY_ENABLED_SERVICE_VALUES)
     ? globalThis.IP_PROXY_ENABLED_SERVICE_VALUES
     : [];
@@ -788,6 +791,46 @@ function parseIpProxyLine(line, provider = DEFAULT_IP_PROXY_SERVICE) {
   const schemaMatch = text.match(/^(https?|socks4|socks5):\/\/(.+)$/i);
   const protocol = normalizeIpProxyProtocol(schemaMatch ? schemaMatch[1] : '');
   const rawBody = schemaMatch ? schemaMatch[2] : text;
+  if (schemaMatch && normalizeIpProxyProviderValue(provider) === 'custom') {
+    try {
+      const parsed = new URL(text.split('#', 1)[0]);
+      const host = String(parsed.hostname || '').trim();
+      const port = normalizeIpProxyPort(parsed.port);
+      if (!host || !port) return null;
+      const decodeCredential = (value) => {
+        try { return decodeURIComponent(value || ''); } catch { return value || ''; }
+      };
+      return {
+        host, port,
+        username: decodeCredential(parsed.username),
+        password: decodeCredential(parsed.password),
+        protocol, region: '',
+        provider: 'custom',
+      };
+    } catch {
+      return null;
+    }
+  }
+  if (!schemaMatch && normalizeIpProxyProviderValue(provider) === 'custom' && text.includes('@')) {
+    try {
+      const parsed = new URL(`http://${text.split('#', 1)[0]}`);
+      const host = String(parsed.hostname || '').trim();
+      const port = normalizeIpProxyPort(parsed.port);
+      if (!host || !port) return null;
+      const decodeCredential = (value) => {
+        try { return decodeURIComponent(value || ''); } catch { return value || ''; }
+      };
+      return {
+        host, port,
+        username: decodeCredential(parsed.username),
+        password: decodeCredential(parsed.password),
+        protocol: DEFAULT_IP_PROXY_PROTOCOL, region: '',
+        provider: 'custom',
+      };
+    } catch {
+      return null;
+    }
+  }
   const firstSegment = rawBody.split(/[/?#]/)[0];
   const parts = firstSegment.split(':');
   if (parts.length < 2) {
@@ -1582,9 +1625,18 @@ function resolveTargetReachabilityEndpoints(options = {}) {
   const configured = Array.isArray(options?.targetReachabilityEndpoints)
     ? options.targetReachabilityEndpoints.map((item) => String(item || '').trim()).filter(Boolean)
     : [];
-  return configured.length
-    ? configured
-    : IP_PROXY_TARGET_REACHABILITY_ENDPOINTS.slice();
+  if (configured.length) return configured;
+  const state = options?.state || {};
+  const flowId = String(state.activeFlowId || state.flowId || '').trim().toLowerCase();
+  const flowTargets = {
+    openai: 'https://chatgpt.com/',
+    tokenharbor: 'https://tokenharbor.ai/login?mode=signup',
+    claude: 'https://claude.ai/login',
+    grok: 'https://grok.com/',
+    devin: 'https://devin.ai/',
+    kiro: 'https://kiro.dev/',
+  };
+  return [flowTargets[flowId] || IP_PROXY_TARGET_REACHABILITY_ENDPOINTS[0]];
 }
 
 function applyExitRegionExpectation(status = {}, expectedRegion = '') {
@@ -1762,12 +1814,12 @@ function buildTargetReachabilityFailureMessage(status = {}, reachability = {}) {
   const exitIp = String(status?.exitIp || '').trim();
   const exitRegion = String(status?.exitRegion || '').trim();
   const endpoint = String(reachability?.endpoint || reachability?.url || IP_PROXY_TARGET_REACHABILITY_ENDPOINTS[0] || '').trim();
-  const targetHost = extractProbeHostFromTabUrl(endpoint) || endpoint || 'chatgpt.com';
+  const targetHost = extractProbeHostFromTabUrl(endpoint) || endpoint || '所选渠道';
   const diagnostic = String(reachability?.error || reachability?.diagnostics || '').trim();
   const diagnosticSuffix = diagnostic ? ` 诊断：${diagnostic}` : '';
   const exitRegionSuffix = exitRegion ? ` [${exitRegion}]` : '';
-  return `已检测到出口 IP ${exitIp}${exitRegionSuffix}，但真实目标 ${targetHost} 不可达。`
-    + `这说明代理只通过了 IP 探测，无法打开步骤 1 的 ChatGPT 页面；请更换支持 chatgpt.com CONNECT/TLS 的节点。`
+  return `已检测到出口 IP ${exitIp}${exitRegionSuffix}，但真实目标 ${targetHost} 不可达（当前注册渠道）。`
+    + `这说明代理只通过了 IP 探测，无法打开所选渠道页面；请检查代理节点对该站点的 CONNECT/TLS 连通性，或重试。`
     + diagnosticSuffix;
 }
 

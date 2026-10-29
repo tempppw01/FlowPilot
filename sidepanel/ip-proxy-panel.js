@@ -1257,6 +1257,7 @@ function updateIpProxyUI(state = latestState) {
   const showSettings = enabled && ipProxySectionExpanded;
   const mode = getSelectedIpProxyMode();
   const service = normalizeIpProxyService(selectIpProxyService?.value || state?.ipProxyService || DEFAULT_IP_PROXY_SERVICE);
+  const isCustomService = service === 'custom';
   const apiModeAvailable = isIpProxyApiModeAvailable();
   const accountListAvailable = isIpProxyAccountListAvailable();
   const isApiMode = mode === 'api' && apiModeAvailable;
@@ -1287,8 +1288,12 @@ function updateIpProxyUI(state = latestState) {
   if (rowIpProxyService) {
     rowIpProxyService.style.display = showSettings ? '' : 'none';
   }
+  if (btnIpProxyServiceLogin) {
+    btnIpProxyServiceLogin.hidden = isCustomService;
+    btnIpProxyServiceLogin.style.display = isCustomService ? 'none' : '';
+  }
   if (rowIpProxyMode) {
-    rowIpProxyMode.style.display = showSettings ? '' : 'none';
+    rowIpProxyMode.style.display = showSettings && !isCustomService ? '' : 'none';
   }
   if (rowIpProxyLayout) {
     rowIpProxyLayout.style.display = showSettings ? '' : 'none';
@@ -1298,12 +1303,14 @@ function updateIpProxyUI(state = latestState) {
   }
   if (rowIpProxyAccountList) {
     rowIpProxyAccountList.style.display = showSettings && isAccountMode && accountListAvailable ? '' : 'none';
+    const label = rowIpProxyAccountList.querySelector?.('.data-label');
+    if (label) label.textContent = isCustomService ? '代理池列表' : '账号代理列表';
   }
   if (rowIpProxyAccountSessionPrefix) {
-    rowIpProxyAccountSessionPrefix.style.display = showSettings && showSessionOptions ? '' : 'none';
+    rowIpProxyAccountSessionPrefix.style.display = showSettings && showSessionOptions && !isCustomService ? '' : 'none';
   }
   if (rowIpProxyAccountLifeMinutes) {
-    rowIpProxyAccountLifeMinutes.style.display = showSettings && showSessionOptions ? '' : 'none';
+    rowIpProxyAccountLifeMinutes.style.display = showSettings && showSessionOptions && !isCustomService ? '' : 'none';
   }
   if (rowIpProxyPoolTargetCount) {
     rowIpProxyPoolTargetCount.style.display = showSettings ? '' : 'none';
@@ -1311,28 +1318,28 @@ function updateIpProxyUI(state = latestState) {
   const autoSyncEnabledRow = typeof rowIpProxyAutoSyncEnabled !== 'undefined' ? rowIpProxyAutoSyncEnabled : null;
   const autoSyncIntervalRow = typeof rowIpProxyAutoSyncInterval !== 'undefined' ? rowIpProxyAutoSyncInterval : null;
   if (autoSyncEnabledRow) {
-    autoSyncEnabledRow.style.display = showSettings ? '' : 'none';
+    autoSyncEnabledRow.style.display = showSettings && !isCustomService ? '' : 'none';
   }
   if (autoSyncIntervalRow) {
-    autoSyncIntervalRow.style.display = showSettings ? '' : 'none';
+    autoSyncIntervalRow.style.display = showSettings && !isCustomService ? '' : 'none';
   }
   if (rowIpProxyHost) {
-    rowIpProxyHost.style.display = showSettings && isAccountMode ? '' : 'none';
+    rowIpProxyHost.style.display = showSettings && isAccountMode && !isCustomService ? '' : 'none';
   }
   if (rowIpProxyPort) {
-    rowIpProxyPort.style.display = showSettings && isAccountMode ? '' : 'none';
+    rowIpProxyPort.style.display = showSettings && isAccountMode && !isCustomService ? '' : 'none';
   }
   if (rowIpProxyProtocol) {
-    rowIpProxyProtocol.style.display = showSettings ? '' : 'none';
+    rowIpProxyProtocol.style.display = showSettings && !isCustomService ? '' : 'none';
   }
   if (rowIpProxyUsername) {
-    rowIpProxyUsername.style.display = showSettings && isAccountMode ? '' : 'none';
+    rowIpProxyUsername.style.display = showSettings && isAccountMode && !isCustomService ? '' : 'none';
   }
   if (rowIpProxyPassword) {
-    rowIpProxyPassword.style.display = showSettings && isAccountMode ? '' : 'none';
+    rowIpProxyPassword.style.display = showSettings && isAccountMode && !isCustomService ? '' : 'none';
   }
   if (rowIpProxyRegion) {
-    rowIpProxyRegion.style.display = showSettings && isAccountMode ? '' : 'none';
+    rowIpProxyRegion.style.display = showSettings && isAccountMode && !isCustomService ? '' : 'none';
   }
   if (rowIpProxyActions) {
     rowIpProxyActions.style.display = showSettings ? '' : 'none';
@@ -1348,7 +1355,7 @@ function updateIpProxyUI(state = latestState) {
   }
   if (selectIpProxyService) {
     selectIpProxyService.value = service;
-    selectIpProxyService.disabled = true;
+    selectIpProxyService.disabled = !isIpProxyAccountListAvailable();
   }
   if (typeof updateIpProxyServiceLoginButtonState === 'function') {
     updateIpProxyServiceLoginButtonState({
@@ -1361,7 +1368,7 @@ function updateIpProxyUI(state = latestState) {
     const apiButton = buttonMode === 'api';
     button.disabled = apiButton && !apiModeAvailable;
     if (apiButton) {
-      button.hidden = false;
+      button.hidden = isCustomService;
     }
   });
   if (ipProxyApiPanel) {
@@ -1449,6 +1456,8 @@ function updateIpProxyUI(state = latestState) {
     btnIpProxyNext.title = nextActionTitle;
   }
   if (btnIpProxyChange) {
+    btnIpProxyChange.hidden = isCustomService;
+    btnIpProxyChange.style.display = isCustomService ? 'none' : '';
     btnIpProxyChange.disabled = actionBusy || !enabled || !canOperate || !changeAvailable;
     btnIpProxyChange.textContent = busyAction === 'change' ? 'Change中...' : 'Change';
     btnIpProxyChange.title = changeAvailable
@@ -1469,7 +1478,9 @@ function updateIpProxyUI(state = latestState) {
       poolCount: runtimePoolCount,
       changeAvailable,
     });
-    ipProxyActionHint.textContent = actionHint;
+    ipProxyActionHint.textContent = isCustomService
+      ? (runtimePoolCount > 1 ? `下一条：共 ${runtimePoolCount} 条自定义代理，切换到下一条。` : '下一条：当前只有一条自定义代理，将重新应用并检测该代理。')
+      : actionHint;
     ipProxyActionHint.title = actionHint;
   }
 }
@@ -1660,7 +1671,9 @@ async function probeIpProxyExit(options = {}) {
     if (exitIp) {
       showToast(`出口检测成功：${exitIp}${exitRegion ? ` [${exitRegion}]` : ''}${sourceHint}`, 'success', 2600);
     } else {
-      showToast('出口检测完成，但未获取到出口 IP', 'warn', 2200);
+      const diagnostic = String(routing?.exitError || routing?.error || '').trim();
+      const diagnosticHint = diagnostic ? `：${diagnostic.slice(0, 180)}` : '';
+      showToast(`出口检测失败，未获取到出口 IP${diagnosticHint}`, 'warn', diagnostic ? 6000 : 3500);
     }
   }
   return response;

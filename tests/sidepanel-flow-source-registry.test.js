@@ -46,6 +46,7 @@ test('sidepanel html exposes flow selector and kiro source fields', () => {
     'class="data-metrics-label"',
     '<option value="grok">Grok</option>',
     '<option value="claude">Claude</option>',
+    '<option value="tokenharbor">Token Harbor</option>',
     '<option value="devin">Devin</option>',
     'id="devin-oauth-card"',
     'id="label-source-selector"',
@@ -101,6 +102,8 @@ test('sidepanel html exposes flow selector and kiro source fields', () => {
     '<script src="../flows/grok/workflow.js"></script>',
     '<script src="../flows/claude/index.js"></script>',
     '<script src="../flows/claude/workflow.js"></script>',
+    '<script src="../flows/tokenharbor/index.js"></script>',
+    '<script src="../flows/tokenharbor/workflow.js"></script>',
   ].forEach((snippet) => {
     assert.match(visibleHtml, new RegExp(snippet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   });
@@ -267,7 +270,7 @@ const TARGET_REPOSITORY_URLS = Object.freeze({
   }),
 });
 function normalizeFlowId(value) {
-  return ['openai', 'kiro', 'grok', 'claude'].includes(value) ? value : 'openai';
+  return ['openai', 'kiro', 'grok', 'claude', 'tokenharbor'].includes(value) ? value : 'openai';
 }
 function getDefaultTargetIdForFlow(flowId) {
   return flowId === 'claude' ? 'claude' : (flowId === 'grok' ? 'webchat2api' : (flowId === 'kiro' ? 'kiro-rs' : 'cpa'));
@@ -459,7 +462,7 @@ function getDefaultTargetIdForFlow(flowId = DEFAULT_ACTIVE_FLOW_ID) {
 }
 function normalizeFlowId(value = '', fallback = DEFAULT_ACTIVE_FLOW_ID) {
   const normalized = String(value || fallback || DEFAULT_ACTIVE_FLOW_ID).trim().toLowerCase();
-  return ['openai', 'kiro', 'grok', 'claude'].includes(normalized) ? normalized : DEFAULT_ACTIVE_FLOW_ID;
+  return ['openai', 'kiro', 'grok', 'claude', 'tokenharbor'].includes(normalized) ? normalized : DEFAULT_ACTIVE_FLOW_ID;
 }
 function getFlowRegistry() {
   return {

@@ -21,6 +21,7 @@
       path: 'flows/claude/',
     },
     devin: { id: 'devin', path: 'flows/devin/' },
+    tokenharbor: { id: 'tokenharbor', path: 'flows/tokenharbor/' },
   });
 
   function normalizeFlowId(value = '') {
@@ -47,7 +48,9 @@
             ? (rootScope.MultiPageGrokFlowDefinition || null)
             : (normalized === 'devin'
               ? (rootScope.MultiPageDevinFlowDefinition || null)
-              : (rootScope.MultiPageClaudeFlowDefinition || null)))),
+              : (normalized === 'tokenharbor'
+                ? (rootScope.MultiPageTokenHarborFlowDefinition || null)
+                : (rootScope.MultiPageClaudeFlowDefinition || null))))),
       workflow: normalized === 'openai'
         ? (rootScope.MultiPageOpenAiWorkflow || null)
         : (normalized === 'kiro'
@@ -56,7 +59,9 @@
             ? (rootScope.MultiPageGrokWorkflow || null)
             : (normalized === 'devin'
               ? (rootScope.MultiPageDevinWorkflow || null)
-              : (rootScope.MultiPageClaudeWorkflow || null)))),
+              : (normalized === 'tokenharbor'
+                ? (rootScope.MultiPageTokenHarborWorkflow || null)
+                : (rootScope.MultiPageClaudeWorkflow || null))))),
     };
   }
 

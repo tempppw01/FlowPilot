@@ -6,6 +6,7 @@ const FLOW_DEFINITION_FILES = Object.freeze([
   'flows/grok/index.js',
   'flows/claude/index.js',
   'flows/devin/index.js',
+  'flows/tokenharbor/index.js',
   'flows/index.js',
 ]);
 
@@ -15,6 +16,7 @@ const FLOW_WORKFLOW_FILES = Object.freeze([
   'flows/grok/workflow.js',
   'flows/claude/workflow.js',
   'flows/devin/workflow.js',
+  'flows/tokenharbor/workflow.js',
 ]);
 
 function readBundle(files = []) {

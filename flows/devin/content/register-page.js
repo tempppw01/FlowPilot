@@ -3,7 +3,7 @@
   const SOURCE_ID = 'devin-register-page';
   const LISTENER_SENTINEL = '__multipageDevinRegisterPageListener__';
   const CAPTCHA_PATTERN = /captcha|recaptcha|hcaptcha|verify you are human|security challenge|人机验证|安全验证/i;
-  const CONTINUE_PATTERN = /^(continue|next|submit|continue with email|继续|下一步|提交|确认)$/i;
+  const CONTINUE_PATTERN = /^(continue|next|submit|sign\s*up|register|continue with email|继续|下一步|提交|确认)$/i;
   function textOf(el) { return String(el?.innerText || el?.textContent || el?.getAttribute?.('aria-label') || el?.value || '').replace(/\s+/g, ' ').trim(); }
   function visible(el) {
     if (!(el instanceof HTMLElement)) return false;
@@ -16,6 +16,27 @@
   }
   function actionable() { return [...document.querySelectorAll('button, a, [role="button"], input[type="submit"]')].filter((el) => visible(el) && !el.disabled); }
   function choose(pattern, exclude = /google|apple|github|microsoft|sso|登录|sign\s*in|log\s*in/i) { return actionable().find((el) => pattern.test(textOf(el)) && !exclude.test(textOf(el))); }
+  function findTermsCheckbox() {
+    const candidates = [...document.querySelectorAll('input[type="checkbox"], [role="checkbox"]')].filter(visible);
+    if (!candidates.length) return null;
+    const termsPattern = /agree|terms|privacy|policy|同意|条款|隐私/i;
+    return candidates.find((el) => {
+      const label = el.labels?.[0];
+      const container = el.closest?.('label, [role="group"]') || el.parentElement;
+      const nearbyText = [textOf(el), textOf(label), textOf(container)].join(' ');
+      return termsPattern.test(nearbyText);
+    }) || candidates[0];
+  }
+  function isCheckboxChecked(checkbox) {
+    return checkbox?.checked === true || checkbox?.getAttribute?.('aria-checked') === 'true';
+  }
+  function ensureTermsAccepted() {
+    const checkbox = findTermsCheckbox();
+    if (!checkbox) throw new Error('当前页面未找到 Devin 服务条款同意复选框。');
+    if (!isCheckboxChecked(checkbox)) click(checkbox);
+    if (!isCheckboxChecked(checkbox)) throw new Error('无法勾选 Devin 服务条款与隐私政策，请手动勾选后重试。');
+    return true;
+  }
   function click(el) { if (!el) return false; el.scrollIntoView({ block: 'center', inline: 'center' }); el.click(); return true; }
   function setValue(el, value) {
     const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -32,8 +53,9 @@
       const input = [...document.querySelectorAll('input[type="email"], input[autocomplete="email"], input[name*="email" i]')].find(visible);
       if (!input) throw new Error('当前页面未找到邮箱输入框。');
       input.focus(); setValue(input, email);
+      ensureTermsAccepted();
       const button = choose(CONTINUE_PATTERN); if (button) click(button); else input.form?.requestSubmit?.();
-      return response({ emailSubmitted: true });
+      return response({ emailSubmitted: true, termsAccepted: true });
     }
     if (action === 'submit-code') {
       const code = String(payload.code || '').replace(/\s/g, ''); if (!code) throw new Error('缺少邮箱验证码。');

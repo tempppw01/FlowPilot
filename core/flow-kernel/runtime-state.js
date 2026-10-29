@@ -94,6 +94,18 @@
     });
     const FLOW_FIELD_GROUPS = Object.freeze({
       openai: OPENAI_FLOW_FIELD_GROUPS,
+      tokenharbor: Object.freeze({
+        registration: Object.freeze([
+          'tokenHarborRegisterTabId',
+          'tokenHarborEmail',
+          'tokenHarborVerificationRequestedAt',
+          'tokenHarborVerificationLink',
+          'tokenHarborVerificationMessageId',
+          'tokenHarborRegistrationStatus',
+          'tokenHarborVerifiedAt',
+          'tokenHarborPageUrl',
+        ]),
+      }),
     });
 
     function isPlainObject(value) {
@@ -407,6 +419,7 @@
             luckmail: {},
             identity: {},
           },
+        tokenharbor: { registration: {} },
         },
       };
     }

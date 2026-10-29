@@ -111,6 +111,7 @@
             <option value="kiro">Kiro</option>
             <option value="grok">Grok</option>
             <option value="claude">Claude</option>
+            <option value="tokenharbor">Token Harbor</option>
           </select>
           <div id="flow-execution-stats" class="data-metrics-label" title="当前 Flow 的注册成功率与平均耗时"></div>
         </div>
@@ -1374,8 +1375,9 @@
             <div class="data-row" id="row-ip-proxy-service" style="display:none;">
               <span class="data-label">代理服务</span>
               <div class="data-inline">
-                <select id="select-ip-proxy-service" class="data-select" disabled>
+                <select id="select-ip-proxy-service" class="data-select">
                   <option value="711proxy">711Proxy（首版）</option>
+                  <option value="custom">自定义代理池</option>
                 </select>
                 <button id="btn-ip-proxy-service-login" class="btn btn-outline btn-sm data-inline-btn" type="button">
                   注册
@@ -1396,7 +1398,7 @@
                   <div class="data-row ip-proxy-column-row" id="row-ip-proxy-account-list" style="display:none;">
                     <span class="data-label">账号代理列表</span>
                     <textarea id="input-ip-proxy-account-list" class="data-textarea mono"
-                      placeholder="每行一条：host:port 或 host:port:username:password&#10;例如 global.rotgb.711proxy.com:10000:username:password"></textarea>
+                      placeholder="每行一条代理 URL：scheme://username:password@host:port#tag&#10;例如 http://user:pass@203.0.113.10:3128#pool"></textarea>
                   </div>
                   <div class="data-row ip-proxy-column-row" id="row-ip-proxy-account-session-prefix" style="display:none;">
                     <span class="data-label">会话(session)</span>
@@ -1578,6 +1580,7 @@
             </div>
             <div class="data-row" id="row-phone-sms-provider" style="display:none;">
               <span class="data-label">接码服务商</span>
+              <div class="data-inline">
               <select id="select-phone-sms-provider" class="data-select mono">
                 <option value="hero-sms">HeroSMS</option>
                 <option value="5sim">5sim</option>
@@ -1586,6 +1589,8 @@
                 <option value="custom-url">自定义 URL 接码</option>
                 <option value="smsbower">SMSBower</option>
               </select>
+                <button id="btn-open-phone-sms-provider-repository" class="btn btn-outline btn-sm data-inline-btn" type="button" aria-label="打开 MaDao 项目 GitHub 仓库" title="打开 MaDao 项目 GitHub 仓库" hidden>GitHub</button>
+              </div>
             </div>
             <div class="data-row" id="row-phone-sms-provider-order" style="display:none;">
               <span class="data-label">服务商顺序</span>
@@ -2299,6 +2304,8 @@
   <script src="../flows/claude/workflow.js"></script>
   <script src="../flows/devin/index.js"></script>
   <script src="../flows/devin/workflow.js"></script>
+  <script src="../flows/tokenharbor/index.js"></script>
+  <script src="../flows/tokenharbor/workflow.js"></script>
   <script src="../flows/index.js"></script>
   <script src="../core/flow-kernel/flow-registry.js"></script>
   <script src="../shared/contribution-registry.js"></script>

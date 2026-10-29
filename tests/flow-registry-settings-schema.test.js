@@ -26,7 +26,7 @@ test('Devin registration exposes the shared CPA configuration rows', () => {
 test('flow registry exposes canonical flow and target metadata', () => {
   const { flowRegistry } = loadApis();
 
-  assert.deepEqual(flowRegistry.getRegisteredFlowIds(), ['openai', 'kiro', 'grok', 'claude', 'devin']);
+  assert.deepEqual(flowRegistry.getRegisteredFlowIds(), ['openai', 'kiro', 'grok', 'claude', 'devin', 'tokenharbor']);
   assert.equal(flowRegistry.normalizeFlowId('kiro'), 'kiro');
   assert.equal(flowRegistry.normalizeFlowId('grok'), 'grok');
   assert.equal(flowRegistry.normalizeFlowId('claude'), 'claude');
