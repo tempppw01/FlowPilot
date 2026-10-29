@@ -49,6 +49,7 @@ return {
   buildIpProxyRoutingStatePatch,
   applyTargetReachabilityExpectation,
   getAccountModeProxyPoolFromState,
+  getIpProxyRuntimeSnapshot,
   normalizeIpProxyAccountList,
   normalizeProxyPoolEntries,
   parseProxyExitProbePayload,
@@ -117,6 +118,20 @@ test('IP proxy custom provider remains enabled through provider normalization', 
   const parsed = api.parseIpProxyLine('http://u:p@203.0.113.10:3128#pool', 'custom');
   assert.equal(parsed?.provider, 'custom');
   assert.equal(parsed?.host, '203.0.113.10');
+});
+
+test('IP proxy runtime snapshot falls back to the shared index for custom account pools', () => {
+  const api = loadIpProxyCore();
+  const snapshot = api.getIpProxyRuntimeSnapshot({
+    ipProxyMode: 'account',
+    ipProxyService: 'custom',
+    ipProxyAccountPool: [
+      { host: 'one.example', port: 3128 },
+      { host: 'two.example', port: 3128 },
+    ],
+    ipProxyCurrentIndex: 1,
+  });
+  assert.equal(snapshot.index, 1);
 });
 
 test('IP proxy probe payload parser extracts country from common probe endpoints', () => {

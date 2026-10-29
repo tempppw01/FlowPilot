@@ -583,7 +583,9 @@ function getIpProxyRuntimeSnapshot(state = latestState, mode = normalizeIpProxyM
   const allowAccountRuntimeCache = normalizedMode !== 'account' || hasAccountListConfigured;
   const pool = hasModePool && allowAccountRuntimeCache ? modePool : [];
   const current = hasModeCurrent && allowAccountRuntimeCache ? state?.[fields.currentKey] : null;
-  const rawIndex = hasModeIndex && allowAccountRuntimeCache ? state?.[fields.indexKey] : 0;
+  const rawIndex = hasModeIndex && allowAccountRuntimeCache
+    ? state?.[fields.indexKey]
+    : (state?.ipProxyCurrentIndex !== undefined ? state.ipProxyCurrentIndex : 0);
   const index = Number.isFinite(Number(rawIndex)) ? Math.max(0, Math.floor(Number(rawIndex))) : 0;
   return {
     mode: normalizedMode,

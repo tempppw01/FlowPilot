@@ -1260,7 +1260,9 @@ function getIpProxyRuntimeSnapshot(
   )[0] || null;
   const pool = hasModePool ? modePool : [];
   const current = hasModeCurrent ? modeCurrent : null;
-  const indexSource = hasModeIndex ? state?.[fields.indexKey] : 0;
+  const indexSource = hasModeIndex
+    ? state?.[fields.indexKey]
+    : (state?.ipProxyCurrentIndex !== undefined ? state.ipProxyCurrentIndex : 0);
   return {
     mode: normalizedMode,
     provider: normalizedProvider,
