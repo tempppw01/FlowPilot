@@ -25,8 +25,8 @@
 # 1. 获取上游最新提交
 git fetch upstream --prune
 
-# 2. 列出尚未处理的上游提交
-git log --oneline --date=short --pretty=format:"%h|%ad|%s" upstream/master ^master
+# 2. 列出尚未处理的上游提交(上游最新开发线在 dev)
+git log --oneline --date=short --pretty=format:"%h|%ad|%s" upstream/dev ^master
 
 # 3. 逐条对照本文 表A / 表B / 表C 判定
 #    - 命中表 A/B → 跳过，确认 fork 侧无遗漏即可
@@ -58,16 +58,16 @@ git add -A && git commit -m "..." && git push origin master
 |---|---|
 | 仓库 | `https://github.com/tempppw01/FlowPilot.git`（fork，remote 名 `origin`） |
 | 上游 | `https://github.com/QLHazyCoder/FlowPilot.git`（remote 名 `upstream`） |
-| 当前 fork HEAD | `f2780f4` — `test(openai): 固化 fork 注册流程差异化行为` |
-| 上游基线 HEAD | `2696510` — `chore(release): bump version to FlowPilot3.2` |
-| 版本号 | `manifest.json` → `version: "3.2"` / `version_name: "FlowPilot3.2"` |
-| 上游领先提交数 | 48（`git log upstream/master ^master`） |
-| fork 领先上游提交数 | 94 |
-| 测试基线 | `node --test tests/*.test.js` → **1498 tests / 1480 pass / 0 fail / 18 skipped** |
-| 同步工作分支 | `codex/port-upstream-grok-and-oauth-fixes`（内容与 `master` 相同） |
+| 当前 fork HEAD(本次移植前) | `fca3f40` — 当前 `master` 同步基线 |
+| 上游基线 HEAD | `a42d436` — `chore(release): bump version to FlowPilot3.5.1` |
+| 版本号 | fork `manifest.json` → `version: "3.4"` / `version_name: "FlowPilot3.4"`;上游基线 → `3.5.1` |
+| 上游领先提交数 | 59（`git log upstream/dev ^master`） |
+| fork 领先上游提交数 | 97 |
+| 测试基线 | 移植前为 1511 tests / 1493 pass / 0 fail / 18 skipped;本次移植后的全量结果见变更记录 |
+| 同步工作分支 | `master`（本次手工移植尚未提交） |
 | 回滚点分支 | `codex/before-upstream-3.2-integration`（`82d724a`，3.2 整合前的状态） |
 
-> 本文档对应的同步批次：上游 `2696510`（FlowPilot3.2），同步完成于 2026-10-21。
+> 本文档对应的同步批次：上游 `a42d436`（FlowPilot3.5.1），同步完成于 2026-11-06。
 
 ---
 
@@ -94,6 +94,10 @@ git add -A && git commit -m "..." && git push origin master
 | `5ba614d` | 09-09 | fix(ui): adjust luckmail and icloud item layout | `b8f325d` | 逐字移植（`sidepanel/sidepanel.css`） |
 | `816e19c` | 09-09 | feat(phone): remove max limit for phone number replacement count | `306ab62` | 逐字移植 |
 | `729ac79` | 09-09 | feat(ui): add collapse/expand toggle for email pool list | `3c96a47` | 逐字移植 |
+| `024407e` | 11-01 | 修复 Cloudflare Temp Email 注册邮箱查信 | 本次手工移植(未提交) | 注册邮箱模式使用 `original_recipient` 服务端筛选,同时保留旧部署的本地兼容筛选 |
+| `95080df` | 11-02 | 优化 Cloudflare Temp Email 查询:每页1封,最多5页 | 本次手工移植(未提交) | **仅移植查询语义**,拒绝原提交的 BOM、CRLF、乱码和整文件改写 |
+| `c3fa797` | 11-05 | fix(openai): 跳过已停用邮箱并自动切换下一轮 | 本次手工移植(未提交) | 按 fork 的自动运行状态机实现停用账号跳过、邮件线程终止和下一轮切换 |
+| `64c37af` | 11-05 | fix(openai): 避免步骤4错误页被误判成功 | 本次手工移植(未提交) | 保留步骤 4 错误页恢复语义,同时维持 fork 的注册差异链 |
 
 ---
 
@@ -112,6 +116,11 @@ git add -A && git commit -m "..." && git push origin master
 | `6c1e5fd` | 07-23 | merge: 同步本地 master 的 Grok 修复 | merge 提交，内容已在表 B/A 覆盖 |
 | `7b83926` | 08-16 | Merge branch 'dev' ... | merge 提交，无独立代码语义 |
 | `d395111` | 08-16 | merge(release): include current dev in FlowPilot3.1 | merge 提交，无独立代码语义 |
+| `bb2d5d5` | 10-19 | chore(release): bump version to FlowPilot3.3 | 版本号提交：fork 已自行推进到 3.4，无需按上游逐次回退或覆盖 |
+| `e17130f` | 10-28 | feat(sidepanel): MaDao 接码增加项目仓库入口 | fork 已提前实现同等入口与仓库按钮，无需重复移植 |
+| `f245a9d` | 10-28 | chore(release): bump version to FlowPilot3.4 | 版本号提交：fork 已为 3.4 |
+| `2857a58` | 11-05 | chore(release): bump version to FlowPilot3.5 | 版本号提交：fork 未采用上游 3.5 版本号，`manifest.json` 保持 3.4 |
+| `a42d436` | 11-05 | chore(release): bump version to FlowPilot3.5.1 | 版本号提交：仅作为本次同步基线记录，不覆盖 fork 的 `manifest.json` |
 
 ---
 
@@ -139,6 +148,8 @@ git add -A && git commit -m "..." && git push origin master
 | `465b2ba` | 10-09 | 重构邮箱注册接码与 OAuth 恢复流程 | 与 fork 的手机验证改造直接冲突，会覆盖 SMSBower 链路 | 同时改 `background.js`、`auto-run-controller.js`、`phone-verification-flow.js`、`flow-capabilities.js` 等 15+ 文件 |
 | `56ffca6`（部分） | 09-09 | fix: correct signup entry state priority | 上游删除了 `profile_page` 状态，fork 依赖它实现**步骤 5 资料页**与**注册成功等待页** | 只移植核心顺序（`00836eb`），删除部分不移植 |
 | `517dbd0`（部分） | 09-09 | fix(openai): stabilize signup registration flow | 上游删除了 `ensureSignupEntryPageReady` 链（6 处），fork 靠入口页探测实现 SMSBower 免清 cookie、已登录态重试 | 只移植注册成功等待页识别与传输异常重试（`eb529a1`），删除链不移植 |
+| `97785b4` | 10-19 | refactor: 移除账号贡献体系并保留官网教程 | 整批删除会移除 fork 仍需保留的 dormant 账号贡献 OAuth、注册表和 Kiro 交付代码；fork 已先行移除贡献模式 UI 并保留官网教程/Portal service | **不做整批 6785 行删除**，仅确认 fork 侧 UI 裁剪与 Portal service 命名已符合约束 |
+| `d004bf8` | 10-29 | fix(README): 更新扩展描述，添加对 Kiro 和 Grok 的支持说明 | 上游 README 已丢失 fork 的 Plus 状态、OpenAI 账号交付和差异说明；整段改写会把 fork 文档改回上游口径 | 保留 fork README，只确认 Kiro/Grok 支持描述与 fork 能力一致 |
 
 ---
 
@@ -198,7 +209,7 @@ fork 有数十个提交专门改造 SMSBower，上游没有对应实现。移植
 
 ### 6.5 版本号
 
-`manifest.json` 第 4–5 行必须保持 `"version": "3.2"` / `"version_name": "FlowPilot3.2"`，与上游基线一致。上游后续发版时，在同步该批次的同时更新。
+`manifest.json` 第 4–5 行当前保持 `"version": "3.4"` / `"version_name": "FlowPilot3.4"`。上游 `3.5` / `3.5.1` 的版本号提交不直接覆盖 fork；后续只有在 fork 自己完成对应整合和发布验证时，才同步更新 fork 版本号。
 
 ---
 
@@ -233,7 +244,7 @@ fork 有数十个提交专门改造 SMSBower，上游没有对应实现。移植
 
 ---
 
-## 9. 附录：上游 48 个提交完整对照表
+## 9. 附录：上游 59 个提交完整对照表
 
 按上游提交时间正序。`—` 表示该提交属于表 B 或 C，无需 fork 侧对应提交。
 
@@ -287,10 +298,21 @@ fork 有数十个提交专门改造 SMSBower，上游没有对应实现。移植
 | 46 | `56fa837` | 09-09 | refactor(email-pool): unify customMailProviderPool and customEmailPool | C | — |
 | 47 | `465b2ba` | 10-09 | 重构邮箱注册接码与 OAuth 恢复流程 | C | — |
 | 48 | `2696510` | 10-09 | chore(release): bump version to FlowPilot3.2 | B | — |
+| 49 | `bb2d5d5` | 10-19 | chore(release): bump version to FlowPilot3.3 | B | — |
+| 50 | `97785b4` | 10-19 | refactor: 移除账号贡献体系并保留官网教程 | C | — |
+| 51 | `e17130f` | 10-28 | feat(sidepanel): MaDao 接码增加项目仓库入口 | B | — |
+| 52 | `f245a9d` | 10-28 | chore(release): bump version to FlowPilot3.4 | B | — |
+| 53 | `d004bf8` | 10-29 | fix(README): 更新扩展描述，添加对 Kiro 和 Grok 的支持说明 | C | — |
+| 54 | `024407e` | 11-01 | 修复 Cloudflare Temp Email 注册邮箱查信 | A | 本次手工移植(未提交) |
+| 55 | `95080df` | 11-02 | 优化 Cloudflare Temp Email 查询：每页1封，最多5页 | A | 本次手工移植(仅语义，未提交) |
+| 56 | `c3fa797` | 11-05 | fix(openai): 跳过已停用邮箱并自动切换下一轮 | A | 本次手工移植(未提交) |
+| 57 | `2857a58` | 11-05 | chore(release): bump version to FlowPilot3.5 | B | — |
+| 58 | `64c37af` | 11-05 | fix(openai): 避免步骤4错误页被误判成功 | A | 本次手工移植(未提交) |
+| 59 | `a42d436` | 11-05 | chore(release): bump version to FlowPilot3.5.1 | B | — |
 
-**统计**：A 类 19（其中 `517dbd0`、`56ffca6` 为部分移植）、B 类 11、C 类 18，合计 48，与 `git log upstream/master ^master` 的提交总数一致。
+**统计**：A 类 23（其中 `517dbd0`、`56ffca6` 为部分移植）、B 类 16、C 类 20，合计 59，与 `git log upstream/dev ^master` 的提交总数一致。
 
-> 说明：表 C 中的 `56ffca6（部分）` 与 `517dbd0（部分）` 两行描述的是这两个上游提交中**被刻意拒绝的片段**，它们在附录里仍归入 A 类（因为主体已移植），所以不重复计入 48 的总数。
+> 说明：表 C 中的 `56ffca6（部分）` 与 `517dbd0（部分）` 两行描述的是这两个上游提交中**被刻意拒绝的片段**，它们在附录里仍归入 A 类（因为主体已移植），所以不重复计入 59 的总数。`95080df` 只采用查询语义，原始文件的 BOM、CRLF、乱码和整文件改写不作为补丁搬运。
 
 ---
 
@@ -299,4 +321,5 @@ fork 有数十个提交专门改造 SMSBower，上游没有对应实现。移植
 | 日期 | 同步批次 | 结果 | 说明 |
 |---|---|---|---|
 | 2026-10-21 | 上游 `2696510`（FlowPilot3.2） | 全部 48 个提交完成分类 | 19 条已移植（含 2 条部分移植）、11 条已在 fork、18 条刻意不移植；新增本对照文档 |
+| 2026-11-06 | 上游 `a42d436`（FlowPilot3.5.1） | 59 个提交完成分类；本轮新增 11 条 | A 类新增 4 条语义移植（`024407e`、`95080df`、`c3fa797`、`64c37af`）；B 类新增 5 条（`bb2d5d5`、`e17130f`、`f245a9d`、`2857a58`、`a42d436`）；C 类新增 2 条（`97785b4`、`d004bf8`）。`95080df` 仅移植查询语义，拒绝 BOM、CRLF、乱码和整文件改写 |
 

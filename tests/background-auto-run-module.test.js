@@ -182,3 +182,12 @@ test('auto-run controller notifies after all rounds finish', async () => {
   ]);
   assert.equal(events.statuses.some(({ phase }) => phase === 'complete'), true);
 });
+
+test('background treats account_deactivated as terminal for fetch-signup-code', () => {
+  const source = fs.readFileSync('background.js', 'utf8');
+  const blockStart = source.indexOf("if (nodeId === 'fetch-signup-code') {");
+  assert.notEqual(blockStart, -1);
+  const block = source.slice(blockStart, blockStart + 600);
+  assert.match(block, /isSignupAccountDeactivatedFailure\(err\)/);
+  assert.match(block, /throw err;/);
+});

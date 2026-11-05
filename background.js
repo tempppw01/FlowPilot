@@ -665,6 +665,7 @@ const DEFAULT_MAIL_2925_MODE = MAIL_2925_MODE_PROVIDE;
 const CLOUDFLARE_TEMP_EMAIL_LOOKUP_MODE_RECEIVE_MAILBOX = 'receive-mailbox';
 const CLOUDFLARE_TEMP_EMAIL_LOOKUP_MODE_REGISTRATION_EMAIL = 'registration-email';
 const DEFAULT_CLOUDFLARE_TEMP_EMAIL_LOOKUP_MODE = CLOUDFLARE_TEMP_EMAIL_LOOKUP_MODE_RECEIVE_MAILBOX;
+const MAX_CLOUDFLARE_TEMP_EMAIL_SCAN_PAGES = 5;
 const HOTMAIL_SERVICE_MODE_REMOTE = 'remote';
 const HOTMAIL_SERVICE_MODE_LOCAL = 'local';
 const DEFAULT_HOTMAIL_REMOTE_BASE_URL = '';
@@ -8029,6 +8030,26 @@ function summarizeCloudflareTempEmailMessagesForLog(messages) {
     .join(' || ');
 }
 
+function buildCloudflareTempEmailMailSearchParams(options = {}) {
+  const {
+    address = '',
+    originalRecipient = '',
+    limit,
+    offset,
+    useRegistrationLookup = false,
+  } = options;
+  const searchParams = {
+    limit: Number(limit) || CLOUDFLARE_TEMP_EMAIL_DEFAULT_PAGE_SIZE,
+    offset: Number(offset) || 0,
+    address: useRegistrationLookup ? '' : normalizeCloudflareTempEmailAddress(address),
+  };
+  const normalizedOriginalRecipient = normalizeCloudflareTempEmailReceiveMailbox(originalRecipient);
+  if (useRegistrationLookup && normalizedOriginalRecipient) {
+    searchParams.original_recipient = normalizedOriginalRecipient;
+  }
+  return searchParams;
+}
+
 async function deleteCloudflareTempEmailMail(config, mailId) {
   const normalizedMailId = String(mailId || '').trim();
   if (!normalizedMailId) return false;
@@ -8050,32 +8071,53 @@ async function listCloudflareTempEmailMessages(state, options = {}) {
   );
   const useRegistrationLookup = lookupMode === CLOUDFLARE_TEMP_EMAIL_LOOKUP_MODE_REGISTRATION_EMAIL
     && Boolean(originalRecipient);
-  const queryAddress = useRegistrationLookup ? '' : address;
-  const payload = await requestCloudflareTempEmailJson(config, '/admin/mails', {
-    method: 'GET',
-    searchParams: {
-      limit: Number(options.limit) || CLOUDFLARE_TEMP_EMAIL_DEFAULT_PAGE_SIZE,
-      offset: Number(options.offset) || 0,
-      address: queryAddress,
-    },
-  });
+  const allMessages = [];
+  const requestLimit = Number(options.limit) || CLOUDFLARE_TEMP_EMAIL_DEFAULT_PAGE_SIZE;
+  const maxPages = options.maxPages || MAX_CLOUDFLARE_TEMP_EMAIL_SCAN_PAGES;
+  let hasOriginalRecipient = false;
 
-  const normalizedMessages = normalizeCloudflareTempEmailMailApiMessages(payload);
-  const hasOriginalRecipient = normalizedMessages.some((message) => normalizeCloudflareTempEmailReceiveMailbox(message.originalRecipient));
-  const messages = normalizedMessages.filter((message) => {
-    if (useRegistrationLookup) {
-      return normalizeCloudflareTempEmailReceiveMailbox(message.originalRecipient) === originalRecipient;
+  for (let page = 0; page < maxPages; page += 1) {
+    const currentOffset = (Number(options.offset) || 0) + page * requestLimit;
+    const searchParams = buildCloudflareTempEmailMailSearchParams({
+      address,
+      originalRecipient,
+      limit: requestLimit,
+      offset: currentOffset,
+      useRegistrationLookup,
+    });
+    const payload = await requestCloudflareTempEmailJson(config, '/admin/mails', {
+      method: 'GET',
+      searchParams,
+    });
+    const normalizedMessages = normalizeCloudflareTempEmailMailApiMessages(payload);
+    if (normalizedMessages.length === 0) break;
+
+    if (!hasOriginalRecipient) {
+      hasOriginalRecipient = normalizedMessages.some((message) => (
+        normalizeCloudflareTempEmailReceiveMailbox(message.originalRecipient)
+      ));
     }
-    if (!address) return true;
-    return !message.address || normalizeCloudflareTempEmailAddress(message.address) === address;
-  });
+
+    const filteredMessages = normalizedMessages.filter((message) => {
+      if (useRegistrationLookup) {
+        return normalizeCloudflareTempEmailReceiveMailbox(message.originalRecipient) === originalRecipient;
+      }
+      if (!address) return true;
+      return !message.address || normalizeCloudflareTempEmailAddress(message.address) === address;
+    });
+    allMessages.push(...filteredMessages);
+
+    if (filteredMessages.length > 0 || normalizedMessages.length < requestLimit) {
+      break;
+    }
+  }
 
   return {
     config,
-    messages,
+    messages: allMessages,
     lookupMode,
     originalRecipient,
-    missingOriginalRecipient: useRegistrationLookup && normalizedMessages.length > 0 && !hasOriginalRecipient,
+    missingOriginalRecipient: useRegistrationLookup && allMessages.length === 0 && hasOriginalRecipient === false,
   };
 }
 
@@ -8118,7 +8160,7 @@ async function pollCloudflareTempEmailVerificationCode(step, state, pollPayload 
         offset: pollPayload.offset || 0,
       });
       if (useRegistrationLookup && missingOriginalRecipient) {
-        throw new Error('Cloudflare Temp Email 当前接口未返回 original_recipient，注册邮箱查信需要部署本扩展作者修改后的 Cloudflare Temp Email，或切回“邮件接收”。');
+        throw new Error('Cloudflare Temp Email 当前接口未返回 original_recipient;注册邮箱模式需要支持该字段的部署。旧部署可切换到“邮件接收”模式。');
       }
       const matchResult = pickVerificationMessageWithTimeFallback(messages, {
         afterTimestamp: pollPayload.filterAfterTimestamp || 0,
@@ -10697,6 +10739,14 @@ function isSignupUserAlreadyExistsFailure(error) {
   }
   const message = getErrorMessage(error);
   return /SIGNUP_USER_ALREADY_EXISTS::|user_already_exists/i.test(message);
+}
+
+function isSignupAccountDeactivatedFailure(error) {
+  if (typeof loggingStatus !== 'undefined' && loggingStatus?.isSignupAccountDeactivatedFailure) {
+    return loggingStatus.isSignupAccountDeactivatedFailure(error);
+  }
+  const message = getErrorMessage(error);
+  return /SIGNUP_ACCOUNT_DEACTIVATED::|account_deactivated/i.test(message);
 }
 
 function isKiroProxyFailure(error) {
@@ -13603,6 +13653,7 @@ const autoRunController = self.MultiPageBackgroundAutoRunController?.createAutoR
   isKiroProxyFailure,
   isRestartCurrentAttemptError,
   isStep4Route405RecoveryLimitFailure,
+  isSignupAccountDeactivatedFailure,
   isSignupUserAlreadyExistsFailure,
   isStopError,
   launchAutoRunTimerPlan,
@@ -14391,7 +14442,7 @@ async function runAutoSequenceFromNodeGraph(startNodeId, context = {}) {
       }
 
       if (nodeId === 'fetch-signup-code') {
-        if (isSignupUserAlreadyExistsFailure(err)) {
+        if (isSignupAccountDeactivatedFailure(err) || isSignupUserAlreadyExistsFailure(err)) {
           throw err;
         }
         if (isMail2925ThreadTerminatedError(err)) {
@@ -14917,6 +14968,8 @@ const step4Executor = self.MultiPageBackgroundStep4?.createStep4Executor({
   sendToContentScript,
   sendToContentScriptResilient,
   isRetryableContentScriptTransportError,
+  isSignupAccountDeactivatedFailure,
+  markCurrentRegistrationAccountUsed,
   shouldUseCustomRegistrationEmail,
   shouldUseCustomMailHelper,
   STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS,
