@@ -14898,25 +14898,14 @@ const step2Executor = self.MultiPageBackgroundStep2?.createStep2Executor({
   chrome,
   completeNodeFromBackground,
   ensureContentScriptReadyOnTab,
-  ensureSignupEntryPageReady,
+  openSignupEntryTab,
   ensureSignupPostEmailPageReadyInTab,
   ensureSignupPostIdentityPageReadyInTab: signupFlowHelpers.ensureSignupPostIdentityPageReadyInTab,
   getTabId,
-  getState,
   isTabAlive,
   phoneVerificationHelpers,
   resolveSignupMethod,
   resolveSignupEmailForFlow,
-  discardSignupEmailForRetry: async (state, email, details = {}) => {
-    const latestState = await getState();
-    if (typeof isSmsBowerMailProvider === 'function' && isSmsBowerMailProvider(latestState)) {
-      return cancelSmsBowerMailActivationForRetry(latestState, {
-        logPrefix: `步骤 2：SMSBower TempMail ${String(email || '').trim()}`,
-        reason: details?.reason || '',
-      });
-    }
-    return { discarded: false, reason: 'unsupported_provider' };
-  },
   sendToContentScriptResilient,
   OPENAI_AUTH_INJECT_FILES,
   waitForTabStableComplete,
@@ -15818,10 +15807,6 @@ async function requestSub2ApiOAuthUrl(state, options = {}) {
 
 async function openSignupEntryTab(step = 1) {
   return signupFlowHelpers.openSignupEntryTab(step);
-}
-
-async function ensureSignupEntryPageReady(step = 1) {
-  return signupFlowHelpers.ensureSignupEntryPageReady(step);
 }
 
 async function ensureSignupPasswordPageReadyInTab(tabId, step = 2, options = {}) {

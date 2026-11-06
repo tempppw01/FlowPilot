@@ -88,6 +88,7 @@ const completions = [];
 function inspectSignupEntryState() { return ${JSON.stringify(snapshot)}; }
 function log(message, level = 'info') { logs.push({ message, level }); }
 function reportComplete(step, payload) { completions.push({ step, payload }); }
+async function ensureSignupPasswordPageReady() { throw new Error('UPSTREAM_PASSWORD_PAGE_REQUIRED'); }
 
 ${extractFunction('step3_fillEmailPassword')}
 
@@ -100,7 +101,7 @@ return {
 `)();
 }
 
-test('signup flow helper keeps the step 5 profile page as a valid step 2 landing state', async () => {
+test('signup flow helper follows upstream state machine and rejects profile as a step 2 landing state', async () => {
   let ensureCalls = 0;
 
   const helpers = signupFlowApi.createSignupFlowHelpers({
@@ -136,29 +137,23 @@ test('signup flow helper keeps the step 5 profile page as a valid step 2 landing
     ),
   });
 
-  const result = await helpers.ensureSignupPostEmailPageReadyInTab(24, 2);
-
-  assert.deepStrictEqual(result, {
-    ready: true,
-    state: 'profile_page',
-    url: 'https://auth.openai.com/create-account/profile',
-  });
-  assert.equal(ensureCalls, 1);
+  await assert.rejects(helpers.ensureSignupPostEmailPageReadyInTab(24, 2), /超时|未能识别当前页面/);
+  assert.equal(ensureCalls, 0);
 });
 
-test('signup entry state still reports the step 5 profile page', () => {
+test('signup entry state no longer reports profile as an upstream entry state', () => {
   const api = createEntryStateInspector({
     state: 'step5',
     url: 'https://auth.openai.com/create-account/profile',
   });
 
   assert.deepStrictEqual(api.inspect(), {
-    state: 'profile_page',
+    state: 'unknown',
     url: 'https://auth.openai.com/create-account/profile',
   });
 });
 
-test('step 3 treats an already finished registration as a skipped password step', async () => {
+test('step 3 does not skip the password page based on fork-only completion state', async () => {
   const api = createStep3Runner({
     state: 'registration_success_page',
     skipProfileStep: true,
@@ -166,24 +161,13 @@ test('step 3 treats an already finished registration as a skipped password step'
     url: 'https://chatgpt.com/',
   });
 
-  const { result, completions, logs } = await api.run({
+  await assert.rejects(api.run({
     email: 'user@example.com',
     password: 'Secret123!',
-  });
-
-  assert.equal(completions.length, 1);
-  assert.equal(completions[0].step, 3);
-  assert.equal(result.skippedPasswordPage, true);
-  assert.equal(result.skipProfileStep, true);
-  assert.equal(result.skipProfileStepReason, 'registration_success_page');
-  assert.equal(result.signupVerificationRequestedAt, null);
-  assert.equal(
-    logs.some((entry) => /密码页按已跳过处理/.test(entry.message)),
-    true
-  );
+  }), /UPSTREAM_PASSWORD_PAGE_REQUIRED/);
 });
 
-test('step 3 treats the logged in home page as a skipped password step', async () => {
+test('step 3 does not skip the password page based on logged-in home state', async () => {
   const api = createStep3Runner({
     state: 'logged_in_home',
     skipProfileStep: true,
@@ -191,13 +175,9 @@ test('step 3 treats the logged in home page as a skipped password step', async (
     url: 'https://chatgpt.com/',
   });
 
-  const { result, completions } = await api.run({
+  await assert.rejects(api.run({
     email: 'user@example.com',
     password: 'Secret123!',
-  });
-
-  assert.equal(completions.length, 1);
-  assert.equal(result.skippedPasswordPage, true);
-  assert.equal(result.skipProfileStep, true);
-  assert.equal(result.skipRegistrationWaitStep, true);
+  }), /UPSTREAM_PASSWORD_PAGE_REQUIRED/);
+  // The step fails before reporting completion, matching upstream behavior.
 });

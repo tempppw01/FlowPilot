@@ -37,7 +37,6 @@ if (document.documentElement.getAttribute(OPENAI_AUTH_LISTENER_SENTINEL) !== '1'
       || message.type === 'RESEND_PHONE_VERIFICATION_CODE'
       || message.type === 'CHECK_PHONE_RESEND_ERROR'
       || message.type === 'RETURN_TO_ADD_PHONE'
-      || message.type === 'ENSURE_SIGNUP_ENTRY_READY'
       || message.type === 'ENSURE_SIGNUP_PHONE_ENTRY_READY'
       || message.type === 'ENSURE_SIGNUP_PASSWORD_PAGE_READY'
     ) {
@@ -159,8 +158,6 @@ async function handleCommand(message) {
       return phoneAuthHelpers.checkPhoneResendError();
     case 'RETURN_TO_ADD_PHONE':
       return await phoneAuthHelpers.returnToAddPhone();
-    case 'ENSURE_SIGNUP_ENTRY_READY':
-      return await ensureSignupEntryReady();
     case 'ENSURE_SIGNUP_PHONE_ENTRY_READY':
       return await ensureSignupPhoneEntryReady();
     case 'ENSURE_SIGNUP_PASSWORD_PAGE_READY':
@@ -899,13 +896,6 @@ function inspectSignupEntryState() {
   const postVerificationState = typeof getStep4PostVerificationState === 'function'
     ? getStep4PostVerificationState()
     : null;
-  if (postVerificationState?.state === 'step5') {
-    return {
-      state: 'profile_page',
-      url: postVerificationState.url || location.href,
-    };
-  }
-
   if (postVerificationState?.state === 'logged_in_home') {
     return {
       state: 'logged_in_home',
@@ -1338,20 +1328,6 @@ async function waitForSignupEntryState(options = {}) {
     log(`步骤 ${step}：等待注册入口状态超时，最终状态快照：${JSON.stringify(getSignupEntryStateSummary(finalSnapshot))}`, 'warn');
   }
   return finalSnapshot;
-}
-
-async function ensureSignupEntryReady(timeout = 15000) {
-  const snapshot = await waitForSignupEntryState({ timeout, autoOpenEntry: false });
-  if (snapshot.state === 'entry_home' || snapshot.state === 'phone_entry' || snapshot.state === 'email_entry' || snapshot.state === 'password_page') {
-    return {
-      ready: true,
-      state: snapshot.state,
-      url: snapshot.url || location.href,
-    };
-  }
-
-  log(`注册入口识别失败，诊断快照：${JSON.stringify(getSignupEntryDiagnostics())}`, 'warn');
-  throw new Error('当前页面没有可用的注册入口，也不在邮箱/密码页。URL: ' + location.href);
 }
 
 async function ensureSignupPhoneEntryReady(timeout = 25000) {
@@ -2792,9 +2768,6 @@ async function step3_fillEmailPassword(payload) {
   if (
     snapshot.state === 'phone_verification_page'
     || snapshot.state === 'verification_page'
-    || snapshot.state === 'profile_page'
-    || snapshot.state === 'logged_in_home'
-    || snapshot.state === 'registration_success_page'
   ) {
     const completionPayload = {
       email: email || '',

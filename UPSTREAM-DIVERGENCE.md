@@ -60,7 +60,7 @@ git add -A && git commit -m "..." && git push origin master
 | 上游 | `https://github.com/QLHazyCoder/FlowPilot.git`（remote 名 `upstream`） |
 | 当前 fork HEAD(本次移植前) | `fca3f40` — 当前 `master` 同步基线 |
 | 上游基线 HEAD | `a42d436` — `chore(release): bump version to FlowPilot3.5.1` |
-| 版本号 | fork `manifest.json` → `version: "3.4"` / `version_name: "FlowPilot3.4"`;上游基线 → `3.5.1` |
+| 版本号 | fork `manifest.json` → `version: "3.5.2"` / `version_name: "FlowPilot3.5.2"`，与上游标签保持一致 |
 | 上游领先提交数 | 59（`git log upstream/dev ^master`） |
 | fork 领先上游提交数 | 97 |
 | 测试基线 | 移植前为 1511 tests / 1493 pass / 0 fail / 18 skipped;本次移植后的全量结果见变更记录 |
@@ -146,8 +146,8 @@ git add -A && git commit -m "..." && git push origin master
 | `94901cc` | 08-16 | fix(phone): recover auth page and release current SMS activation safely | 同上（内容重复） | 同上 |
 | `56fa837` | 09-09 | refactor(email-pool): unify customMailProviderPool and customEmailPool into single pool | 会合并掉 fork 的**双结构**邮箱池（fork 目前 `customMailProviderPool` 与 `customEmailPool` 并存，各有独立 UI 与持久化） | 改 `background.js` / `auto-run-controller.js` / `sidepanel` |
 | `465b2ba` | 10-09 | 重构邮箱注册接码与 OAuth 恢复流程 | 与 fork 的手机验证改造直接冲突，会覆盖 SMSBower 链路 | 同时改 `background.js`、`auto-run-controller.js`、`phone-verification-flow.js`、`flow-capabilities.js` 等 15+ 文件 |
-| `56ffca6`（部分） | 09-09 | fix: correct signup entry state priority | 上游删除了 `profile_page` 状态，fork 依赖它实现**步骤 5 资料页**与**注册成功等待页** | 只移植核心顺序（`00836eb`），删除部分不移植 |
-| `517dbd0`（部分） | 09-09 | fix(openai): stabilize signup registration flow | 上游删除了 `ensureSignupEntryPageReady` 链（6 处），fork 靠入口页探测实现 SMSBower 免清 cookie、已登录态重试 | 只移植注册成功等待页识别与传输异常重试（`eb529a1`），删除链不移植 |
+| `56ffca6` | 09-09 | fix: correct signup entry state priority | 本轮按用户授权采用上游状态机；移除 fork 独有的 `profile_page` 入口状态分支 | 已按上游 3.5.2 语义落地 |
+| `517dbd0` | 09-09 | fix(openai): stabilize signup registration flow | 本轮按用户授权移除 `ensureSignupEntryPageReady` / `ENSURE_SIGNUP_ENTRY_READY` 探测链与 Google 登录换邮箱分支 | 已按上游 3.5.2 语义落地，保留 SMSBower 等独立能力 |
 | `97785b4` | 10-19 | refactor: 移除账号贡献体系并保留官网教程 | 整批删除会移除 fork 仍需保留的 dormant 账号贡献 OAuth、注册表和 Kiro 交付代码；fork 已先行移除贡献模式 UI 并保留官网教程/Portal service | **不做整批 6785 行删除**，仅确认 fork 侧 UI 裁剪与 Portal service 命名已符合约束 |
 | `d004bf8` | 10-29 | fix(README): 更新扩展描述，添加对 Kiro 和 Grok 的支持说明 | 上游 README 已丢失 fork 的 Plus 状态、OpenAI 账号交付和差异说明；整段改写会把 fork 文档改回上游口径 | 保留 fork README，只确认 Kiro/Grok 支持描述与 fork 能力一致 |
 
@@ -161,12 +161,12 @@ git add -A && git commit -m "..." && git push origin master
 
 | 能力 | 位置 | 说明 |
 |---|---|---|
-| 步骤 5 资料页（`profile_page`） | `background/signup-flow-helpers.js`、`flows/openai/content/openai-auth.js` | 上游已删除该状态；fork 保留，并接到 `flows/openai/background/steps/fill-profile.js` |
+| 步骤 5 资料页（`profile_page`） | `background/verification-flow.js`、`flows/openai/background/steps/fill-profile.js` | 仍保留实际资料页处理；已不再把它作为上游注册入口状态机的额外分支 |
 | 注册成功等待页（`registration_success_page`） | `flows/openai/content/openai-auth.js`、`background/message-router.js` | 阶段 7 移植自上游 3.2，但 fork 的落地点（`profile_page`）依赖自身实现 |
 | 已登录态（`logged_in_home`） | `flows/openai/content/openai-auth.js` | 上游没有此状态 |
 | `google_login_page` | `background/signup-flow-helpers.js` | 上游完全没有的状态识别（Google 登录入口页） |
 | 步骤 3 跳过密码页白名单 | `flows/openai/content/openai-auth.js` | fork 白名单额外含 `profile_page` / `logged_in_home` / `registration_success_page` |
-| 步骤 1 入口页探测（`ENSURE_SIGNUP_ENTRY_READY`） | `background/signup-flow-helpers.js` | 上游 `517dbd0` 删掉了 `ensureSignupEntryPageReady` 链，fork 保留 |
+| 步骤 1 入口页探测（`ENSURE_SIGNUP_ENTRY_READY`） | — | 已按上游 3.5.2 移除，统一使用入口标签打开与稳定等待 |
 
 ### 6.2 SMSBower 手机验证全链路
 

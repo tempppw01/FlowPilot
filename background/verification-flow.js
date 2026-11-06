@@ -298,6 +298,22 @@
       let lastUrl = '';
       let pendingRegistrationSuccessUrl = '';
 
+      async function inspectOpenAiAuthErrorState() {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: () => {
+            const pageText = String(document.body?.innerText || document.body?.textContent || '')
+              .replace(/\s+/g, ' ')
+              .trim();
+            return {
+              accountDeactivatedBlocked: /account_deactivated/i.test(pageText),
+              userAlreadyExistsBlocked: /user_already_exists/i.test(pageText),
+            };
+          },
+        });
+        return results?.[0]?.result || null;
+      }
+
       while (Date.now() - startedAt < timeoutMs) {
         throwIfStopped();
         try {
@@ -305,6 +321,16 @@
           const currentUrl = String(tab?.url || '').trim();
           if (currentUrl) {
             lastUrl = currentUrl;
+          }
+
+          if (/^https:\/\/(?:auth|auth0|accounts)\.openai\.com\//i.test(currentUrl)) {
+            const errorState = await inspectOpenAiAuthErrorState();
+            if (errorState?.accountDeactivatedBlocked) {
+              throw new Error('SIGNUP_ACCOUNT_DEACTIVATED::步骤 4：检测到 account_deactivated，当前邮箱对应账号已被删除或停用，本轮将直接终止并切换下一个邮箱。');
+            }
+            if (errorState?.userAlreadyExistsBlocked) {
+              throw new Error('SIGNUP_USER_ALREADY_EXISTS::步骤 4：检测到 user_already_exists，说明当前用户已存在，当前轮将直接停止。');
+            }
           }
 
           if (isRegistrationCompletionChatgptUrl(currentUrl)) {
@@ -332,7 +358,10 @@
               url: currentUrl,
             };
           }
-        } catch {
+        } catch (error) {
+          if (/^SIGNUP_ACCOUNT_DEACTIVATED::|^SIGNUP_USER_ALREADY_EXISTS::/i.test(String(error?.message || error || ''))) {
+            throw error;
+          }
           // Keep polling until timeout; tab may be mid-navigation.
         }
 

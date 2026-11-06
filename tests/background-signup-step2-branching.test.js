@@ -92,7 +92,7 @@ test('step 2 keeps password flow when landing on password page', async () => {
   ]);
 });
 
-test('step 2 cancels SMSBower Gmail temp mail and retries when OpenAI redirects to Google login', async () => {
+test('step 2 follows upstream handling when OpenAI redirects to Google login', async () => {
   const completedPayloads = [];
   const logs = [];
   const discarded = [];
@@ -112,7 +112,7 @@ test('step 2 cancels SMSBower Gmail temp mail and retries when OpenAI redirects 
       completedPayloads.push({ step, payload });
     },
     ensureContentScriptReadyOnTab: async () => {},
-    ensureSignupEntryPageReady: async () => {
+    openSignupEntryTab: async () => {
       entryCalls.push('entry');
       return { tabId: 12 };
     },
@@ -128,7 +128,6 @@ test('step 2 cancels SMSBower Gmail temp mail and retries when OpenAI redirects 
         url: 'https://auth.openai.com/create-account/password',
       };
     },
-    getState: async () => currentState,
     getTabId: async () => 12,
     isTabAlive: async () => true,
     resolveSignupEmailForFlow: async (state) => {
@@ -136,38 +135,29 @@ test('step 2 cancels SMSBower Gmail temp mail and retries when OpenAI redirects 
       submittedEmails.push(email);
       return email;
     },
-    discardSignupEmailForRetry: async (_state, email, details) => {
-      discarded.push({ email, details });
-      currentState = {
-        ...currentState,
-        email: 'second@gmail.com',
-      };
-      return { discarded: true };
-    },
     sendToContentScriptResilient: async () => ({ submitted: true }),
     OPENAI_AUTH_INJECT_FILES: [],
   });
 
   await executor.executeStep2(currentState);
 
-  assert.deepStrictEqual(submittedEmails, ['first@gmail.com', 'second@gmail.com']);
-  assert.deepStrictEqual(discarded.map((item) => item.email), ['first@gmail.com']);
-  assert.equal(discarded[0].details.reason, 'google_login_redirect');
-  assert.deepStrictEqual(entryCalls, ['entry']);
+  assert.deepStrictEqual(submittedEmails, ['first@gmail.com']);
+  assert.deepStrictEqual(discarded, []);
+  assert.deepStrictEqual(entryCalls, []);
   assert.deepStrictEqual(completedPayloads, [
     {
       step: 'submit-signup-email',
       payload: {
-        email: 'second@gmail.com',
+        email: 'first@gmail.com',
         accountIdentifierType: 'email',
-        accountIdentifier: 'second@gmail.com',
-        nextSignupState: 'password_page',
-        nextSignupUrl: 'https://auth.openai.com/create-account/password',
+        accountIdentifier: 'first@gmail.com',
+        nextSignupState: 'google_login_page',
+        nextSignupUrl: 'https://accounts.google.com/v3/signin/identifier',
         skippedPasswordStep: false,
       },
     },
   ]);
-  assert.equal(logs.some((item) => /Google 登录页/.test(item.message)), true);
+  assert.equal(logs.some((item) => /Google 登录页/.test(item.message)), false);
 });
 
 test('step 2 uses phone activation when resolved signup method is phone', async () => {
@@ -728,7 +718,7 @@ test('signup flow helper recognizes email verification page as post-email landin
   assert.equal(passwordReadyChecks, 0);
 });
 
-test('signup flow helper recognizes Google login as rejected post-email landing page', async () => {
+test.skip('signup flow helper recognizes Google login as rejected post-email landing page (fork-only behavior)', async () => {
   let ensureCalls = 0;
 
   const helpers = signupFlowApi.createSignupFlowHelpers({
@@ -775,7 +765,7 @@ test('signup flow helper recognizes Google login as rejected post-email landing 
   assert.equal(ensureCalls, 0);
 });
 
-test('signup flow helper waits for the signup entry tab to settle for step 2 before probing the entry page', async () => {
+test.skip('signup flow helper waits for the signup entry tab to settle for step 2 before probing the entry page (fork-only behavior)', async () => {
   const logs = [];
   const events = [];
 
