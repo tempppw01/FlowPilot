@@ -232,8 +232,25 @@ if (shouldHandlePollEmailInCurrentFrame) {
     return {
       ...header,
       bodyText,
+      links: Array.from(bodyRoot?.querySelectorAll('a[href]') || [])
+        .map((anchor) => String(anchor.href || '').trim())
+        .filter(Boolean),
       combinedText: normalizeText([header.sender, header.recipients, header.timestamp, bodyText].filter(Boolean).join(' ')),
     };
+  }
+
+  function extractVerificationLink(opened, payload = {}) {
+    const candidates = [...(opened?.links || [])];
+    const text = String(opened?.combinedText || opened?.bodyText || '');
+    for (const match of text.matchAll(/https?:\/\/[^\s<>"']+/gi)) candidates.push(match[0].replace(/[),.;]+$/, ''));
+    const hostFilters = (Array.isArray(payload.hostFilters) ? payload.hostFilters : [])
+      .map((host) => String(host || '').trim().toLowerCase()).filter(Boolean);
+    return candidates.find((candidate) => {
+      try {
+        const url = new URL(candidate);
+        return url.protocol === 'https:' && (!hostFilters.length || hostFilters.includes(url.hostname.toLowerCase()));
+      } catch { return false; }
+    }) || '';
   }
 
   async function refreshInbox() {
@@ -370,10 +387,11 @@ if (shouldHandlePollEmailInCurrentFrame) {
           continue;
         }
 
-        let code = extractVerificationCode(meta.combinedText, { codePatterns });
+        const wantsLink = String(payload?.artifactType || '').toLowerCase() === 'link';
+        let code = wantsLink ? null : extractVerificationCode(meta.combinedText, { codePatterns });
         let opened = null;
 
-        if (!code) {
+        if (!code || wantsLink) {
           opened = await openMailItemAndRead(item);
           const openedSender = opened.sender.toLowerCase();
           const openedBody = opened.bodyText.toLowerCase();
@@ -382,7 +400,15 @@ if (shouldHandlePollEmailInCurrentFrame) {
           if (!openedSenderMatch && !openedSubjectMatch && !senderMatch && !subjectMatch) {
             continue;
           }
-          code = extractVerificationCode(opened.combinedText, { codePatterns });
+          if (!wantsLink) code = extractVerificationCode(opened.combinedText, { codePatterns });
+        }
+
+        if (wantsLink) {
+          const link = extractVerificationLink(opened, payload);
+          if (!link) continue;
+          log(`步骤 ${step}：已找到邮件验证链接。`, 'ok');
+          persistPollSessionBaseline(pollSessionKey, new Set(collectThreadItems().map(buildItemSignature)), 0);
+          return { ok: true, link, emailTimestamp: Date.now(), preview: (opened?.combinedText || meta.combinedText).slice(0, 160) };
         }
 
         if (!code) {

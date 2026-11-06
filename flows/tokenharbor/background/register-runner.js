@@ -14,13 +14,30 @@
   function clean(value) { return String(value ?? '').trim(); }
   function errorText(error) { return error instanceof Error ? error.message : clean(error) || 'Unknown error'; }
   function createTokenHarborRegisterRunner(deps = {}) {
-    const { addLog = async () => {}, chrome = globalThis.chrome, completeNodeFromBackground, ensureContentScriptReadyOnTab = null, fetchGeneratedEmail = null, generatePassword = null, getState = async () => ({}), getTabId = async () => null, isTabAlive = async () => false, markCurrentRegistrationAccountUsed = null, pollSmsBowerMailLink = null, registerTab = async () => {}, resolveSignupEmailForFlow = null, reuseOrCreateTab = async () => null, sendToContentScriptResilient = null, setState = async () => {}, sleepWithStop = async (ms) => new Promise((resolve) => setTimeout(resolve, ms)), throwIfStopped = () => {}, waitForTabStableComplete = null, setPasswordState = async () => {}, SMSBOWER_MAIL_PROVIDER = 'smsbower-mail', SMSBOWER_MAIL_SERVICE_CODE = 'acz', TOKENHARBOR_REGISTER_INJECT_FILES = INJECT_FILES } = deps;
+    const { addLog = async () => {}, chrome = globalThis.chrome, completeNodeFromBackground, ensureContentScriptReadyOnTab = null, fetchGeneratedEmail = null, generatePassword = null, getState = async () => ({}), getTabId = async () => null, isTabAlive = async () => false, markCurrentRegistrationAccountUsed = null, pollFlowVerificationCode = null, pollSmsBowerMailLink = null, queryTabsInAutomationWindow = null, registerTab = async () => {}, resolveSignupEmailForFlow = null, reuseOrCreateTab = async () => null, sendToContentScriptResilient = null, setState = async () => {}, sleepWithStop = async (ms) => new Promise((resolve) => setTimeout(resolve, ms)), throwIfStopped = () => {}, waitForTabStableComplete = null, setPasswordState = async () => {}, SMSBOWER_MAIL_PROVIDER = 'smsbower-mail', SMSBOWER_MAIL_SERVICE_CODE = 'acz', TOKENHARBOR_REGISTER_INJECT_FILES = INJECT_FILES } = deps;
     async function log(message, level = 'info', nodeId = '') { await addLog(message, level, nodeId ? { nodeId } : {}); }
     async function complete(nodeId, patch = {}) { await setState(patch); await completeNodeFromBackground(nodeId, patch); }
     async function getTab(state = {}, openIfMissing = false) {
       let tabId = Number(state.tokenHarborRegisterTabId || state.tabRegistry?.[SOURCE_ID]?.tabId || 0);
       if (tabId > 0 && chrome?.tabs?.get && (await chrome.tabs.get(tabId).catch(() => null))?.id !== tabId) tabId = 0;
       if (!tabId) tabId = Number(await getTabId(SOURCE_ID) || 0);
+      if (!tabId && typeof queryTabsInAutomationWindow === 'function') {
+        const tabs = await queryTabsInAutomationWindow({});
+        const matchingTab = tabs.find((tab) => {
+          if (!Number.isInteger(tab?.id)) return false;
+          try {
+            const url = new URL(tab.url || '');
+            return url.protocol === 'https:'
+              && ['tokenharbor.ai', 'www.tokenharbor.ai'].includes(url.hostname.toLowerCase());
+          } catch { return false; }
+        });
+        if (matchingTab) {
+          tabId = matchingTab.id;
+          await registerTab(SOURCE_ID, tabId);
+          await setState({ tokenHarborRegisterTabId: tabId });
+          await log('已识别当前自动化窗口中手动打开的 Token Harbor 标签页。', 'info');
+        }
+      }
       if (tabId > 0) return tabId;
       if (!openIfMissing) throw new Error('找不到 Token Harbor 注册标签页，请重新执行步骤 1。');
       tabId = await reuseOrCreateTab(SOURCE_ID, SIGNUP_URL, { inject: TOKENHARBOR_REGISTER_INJECT_FILES, injectSource: SOURCE_ID });
@@ -92,23 +109,34 @@
           const tabId = await getTab(current); if (chrome?.tabs?.update) await chrome.tabs.update(tabId, { active: true }).catch(() => {}); await ready(tabId);
           if (typeof fetchGeneratedEmail !== 'function') throw new Error('Token Harbor 注册缺少共享邮箱生成能力。');
           const configuredEmail = clean(current.email).toLowerCase();
-          const emailState = { ...current, mailProvider: SMSBOWER_MAIL_PROVIDER, smsbowerMailServiceCode: SMSBOWER_MAIL_SERVICE_CODE };
-          const email = clean(await fetchGeneratedEmail(emailState, { generateNew: !configuredEmail, preserveAccountIdentity: true, mailProvider: SMSBOWER_MAIL_PROVIDER, generator: SMSBOWER_MAIL_PROVIDER, smsbowerMailServiceCode: SMSBOWER_MAIL_SERVICE_CODE })).toLowerCase();
+          const useIcloud = clean(current.emailGenerator).toLowerCase() === 'icloud';
+          const mailProvider = useIcloud ? 'icloud' : SMSBOWER_MAIL_PROVIDER;
+          const emailState = { ...current, mailProvider, ...(useIcloud ? {} : { smsbowerMailServiceCode: SMSBOWER_MAIL_SERVICE_CODE }) };
+          const emailOptions = { generateNew: !configuredEmail, preserveAccountIdentity: true, mailProvider, generator: useIcloud ? 'icloud' : SMSBOWER_MAIL_PROVIDER };
+          if (!useIcloud) emailOptions.smsbowerMailServiceCode = SMSBOWER_MAIL_SERVICE_CODE;
+          const email = clean(await fetchGeneratedEmail(emailState, emailOptions)).toLowerCase();
           if (!email) throw new Error('未能从邮箱配置获取 Token Harbor 注册邮箱。');
           let password = clean(current.password || current.customPassword);
           if (password.length < 12 || new TextEncoder().encode(password).length > 72) password = clean(typeof generatePassword === 'function' ? generatePassword() : '');
           if (!password || password.length < 12 || new TextEncoder().encode(password).length > 72) throw new Error('无法生成符合 Token Harbor 要求的密码（至少 12 个字符且不超过 72 字节）。');
-          await setState({ mailProvider: SMSBOWER_MAIL_PROVIDER, smsbowerMailServiceCode: SMSBOWER_MAIL_SERVICE_CODE, email, accountIdentifierType: 'email', accountIdentifier: email });
+          const providerState = { mailProvider, ...(useIcloud ? {} : { smsbowerMailServiceCode: SMSBOWER_MAIL_SERVICE_CODE }) };
+          await setState({ ...providerState, email, emailGenerator: useIcloud ? 'icloud' : SMSBOWER_MAIL_PROVIDER, accountIdentifierType: 'email', accountIdentifier: email });
           const result = await command(nodeId, 'submit-signup', { email, password }); const requestedAt = Date.now(); await setPasswordState(password);
-          await setState({ mailProvider: SMSBOWER_MAIL_PROVIDER, smsbowerMailServiceCode: SMSBOWER_MAIL_SERVICE_CODE, email, accountIdentifierType: 'email', accountIdentifier: email });
-          const patch = { email, tokenHarborEmail: email, mailProvider: SMSBOWER_MAIL_PROVIDER, smsbowerMailServiceCode: SMSBOWER_MAIL_SERVICE_CODE, accountIdentifierType: 'email', accountIdentifier: email, tokenHarborVerificationRequestedAt: requestedAt, tokenHarborRegistrationStatus: 'verification_pending', tokenHarborPageUrl: result.url || '' };
+          await setState({ ...providerState, email, emailGenerator: useIcloud ? 'icloud' : SMSBOWER_MAIL_PROVIDER, accountIdentifierType: 'email', accountIdentifier: email });
+          const patch = { email, tokenHarborEmail: email, ...providerState, emailGenerator: useIcloud ? 'icloud' : SMSBOWER_MAIL_PROVIDER, accountIdentifierType: 'email', accountIdentifier: email, tokenHarborVerificationRequestedAt: requestedAt, tokenHarborRegistrationStatus: 'verification_pending', tokenHarborPageUrl: result.url || '' };
           await log(`步骤 2：已提交 Token Harbor 注册信息（${email}），邀请码留空。`, 'ok', nodeId); await complete(nodeId, patch); return;
         }
         if (nodeId === 'tokenharbor-fetch-verification-link') {
-          if (typeof pollSmsBowerMailLink !== 'function') throw new Error('Token Harbor 邮箱链接验证需要 SMSBower TempMail 能力。');
           const email = clean(current.tokenHarborEmail || current.email).toLowerCase(); if (!email) throw new Error('缺少 Token Harbor 注册邮箱，请先执行步骤 2。');
-          if (!current.currentSmsBowerMailActivation?.id) throw new Error('未找到 SMSBower TempMail 邮箱激活记录；请重新执行步骤 2。');
-          const polled = await pollSmsBowerMailLink(3, { ...current, mailProvider: SMSBOWER_MAIL_PROVIDER, activeFlowId: 'tokenharbor', flowId: 'tokenharbor', email, tokenHarborEmail: email }, { actionLabel: 'Token Harbor 邮箱验证链接', hostFilters: ['tokenharbor.ai'], targetEmail: email, intervalMs: LINK_INTERVAL_MS, maxAttempts: LINK_MAX_ATTEMPTS });
+          let polled;
+          if (clean(current.emailGenerator).toLowerCase() === 'icloud' || clean(current.mailProvider).toLowerCase() === 'icloud') {
+            if (typeof pollFlowVerificationCode !== 'function') throw new Error('Token Harbor iCloud 邮箱链接轮询能力不可用。');
+            polled = await pollFlowVerificationCode({ actionLabel: 'Token Harbor 邮箱验证链接', flowId: 'tokenharbor', nodeId, state: { ...current, mailProvider: 'icloud', activeFlowId: 'tokenharbor', email, tokenHarborEmail: email }, step: 3 });
+          } else {
+            if (typeof pollSmsBowerMailLink !== 'function') throw new Error('Token Harbor 邮箱链接验证需要 SMSBower TempMail 能力。');
+            if (!current.currentSmsBowerMailActivation?.id) throw new Error('未找到 SMSBower TempMail 邮箱激活记录；请重新执行步骤 2。');
+            polled = await pollSmsBowerMailLink(3, { ...current, mailProvider: SMSBOWER_MAIL_PROVIDER, activeFlowId: 'tokenharbor', flowId: 'tokenharbor', email, tokenHarborEmail: email }, { actionLabel: 'Token Harbor 邮箱验证链接', hostFilters: ['tokenharbor.ai'], targetEmail: email, intervalMs: LINK_INTERVAL_MS, maxAttempts: LINK_MAX_ATTEMPTS });
+          }
           const link = clean(polled?.link || polled?.url); if (!link) throw new Error('未能从邮件中获取 Token Harbor 验证链接。');
           const parsed = new URL(link); if (parsed.protocol !== 'https:' || !['tokenharbor.ai', 'www.tokenharbor.ai'].includes(parsed.hostname) || !/^\/verify-email\/?$/.test(parsed.pathname)) throw new Error('邮件中的链接不是受信任的 Token Harbor 邮箱验证链接。');
           const patch = { tokenHarborVerificationLink: link, tokenHarborVerificationMessageId: clean(polled?.messageId || polled?.mailId), tokenHarborRegistrationStatus: 'verification_link_received' };

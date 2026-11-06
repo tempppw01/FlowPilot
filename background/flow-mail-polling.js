@@ -171,9 +171,14 @@
       });
     }
 
-    function assertPollResult(result, notFoundMessage) {
+    function assertPollResult(result, notFoundMessage, artifactType = 'code') {
       if (result?.error) {
         throw new Error(result.error);
+      }
+      if (artifactType === 'link') {
+        const link = cleanString(result?.link || result?.url);
+        if (!link) throw new Error(notFoundMessage || '邮箱轮询结束，但未获取到验证链接。');
+        return { ...result, link };
       }
       if (!result?.code) {
         throw new Error(notFoundMessage || '邮箱轮询结束，但未获取到验证码。');
@@ -215,7 +220,7 @@
         options.logOptions
       );
       const result = await handler.poll(step, state, pollPayload);
-      return assertPollResult(result, options.notFoundMessage);
+      return assertPollResult(result, options.notFoundMessage, pollPayload?.artifactType);
     }
 
     async function ensureBrowserMailSession(step, state, mail, options) {
@@ -278,7 +283,7 @@
             logStepKey: options.logStepKey || options.nodeId || '',
           }
         );
-        return assertPollResult(result, options.notFoundMessage);
+        return assertPollResult(result, options.notFoundMessage, pollPayload?.artifactType);
       } catch (error) {
         if (typeof isStopError === 'function' && isStopError(error)) {
           throw error;

@@ -15211,7 +15211,7 @@ const devinRegisterRunner = self.MultiPageBackgroundDevinRegisterRunner?.createD
 });
 const tokenHarborRegisterRunner = self.MultiPageBackgroundTokenHarborRegisterRunner?.createTokenHarborRegisterRunner({
   addLog, chrome, completeNodeFromBackground, ensureContentScriptReadyOnTab, fetchGeneratedEmail,
-  generatePassword, getTabId, getState, isTabAlive, markCurrentRegistrationAccountUsed, pollSmsBowerMailLink,
+  generatePassword, getTabId, getState, isTabAlive, markCurrentRegistrationAccountUsed, pollFlowVerificationCode: flowMailPollingService?.pollFlowVerificationCode, pollSmsBowerMailLink, queryTabsInAutomationWindow,
   registerTab, resolveSignupEmailForFlow, reuseOrCreateTab, sendToContentScriptResilient, setPasswordState, setState,
   sleepWithStop, throwIfStopped, waitForTabStableComplete,
   SMSBOWER_MAIL_PROVIDER, SMSBOWER_MAIL_SERVICE_CODE: 'acz',
