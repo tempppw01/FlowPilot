@@ -1385,7 +1385,40 @@
       };
       let result;
       const shouldAvoidReplaySubmit = step === 8;
-      if (typeof sendToContentScriptResilient === 'function' && !shouldAvoidReplaySubmit) {
+      if (step === 4) {
+        try {
+          result = await sendToContentScript('openai-auth', message, {
+            responseTimeoutMs: baseResponseTimeoutMs,
+          });
+        } catch (err) {
+          if (!isRetryableVerificationTransportError(err)) {
+            throw err;
+          }
+          await addLog('认证页正在切换，仅检查页面状态以确认验证码提交结果，不会重发验证码...', 'warn', {
+            step: completionStep,
+            stepKey: 'fetch-signup-code',
+          });
+          const fallback = await confirmStep4PostSubmitState(signupTabId, {
+            timeoutMs: 30000,
+            pollIntervalMs: 300,
+          });
+          if (fallback?.success) {
+            const fallbackLabel = fallback.reason === 'logged_in_home'
+              ? 'ChatGPT 已登录首页'
+              : (fallback.reason === 'registration_success_page' ? '注册成功等待页' : '注册资料页');
+            await addLog(`步骤 4：验证码提交后页面已切换到${fallbackLabel}，按提交成功继续。`, 'warn');
+            return {
+              success: true,
+              transportRecovered: true,
+              skipProfileStep: Boolean(fallback.skipProfileStep),
+              skipRegistrationWaitStep: Boolean(fallback.skipRegistrationWaitStep),
+              ...(fallback.skipProfileStepReason ? { skipProfileStepReason: fallback.skipProfileStepReason } : {}),
+              url: fallback.url,
+            };
+          }
+          throw new Error(`STEP4_POST_SUBMIT_UNKNOWN_STATE::步骤 4：验证码提交后无法确认页面状态。URL: ${fallback?.url || ''}`);
+        }
+      } else if (typeof sendToContentScriptResilient === 'function' && !shouldAvoidReplaySubmit) {
         try {
           result = await sendToContentScriptResilient('openai-auth', message, {
             timeoutMs: Math.max(baseResponseTimeoutMs + 15000, 30000),
@@ -1396,27 +1429,6 @@
             logStepKey: step === 4 ? 'fetch-signup-code' : 'fetch-login-code',
           });
         } catch (err) {
-          if (step === 4 && isRetryableVerificationTransportError(err)) {
-            const fallback = await confirmStep4PostSubmitState(signupTabId, {
-              timeoutMs: 9000,
-              pollIntervalMs: 300,
-            });
-            if (fallback.success) {
-              const fallbackLabel = fallback.reason === 'logged_in_home'
-                ? 'ChatGPT 已登录首页'
-                : (fallback.reason === 'registration_success_page' ? '注册成功等待页' : '注册资料页');
-              await addLog(`步骤 4：验证码提交后页面已切换到${fallbackLabel}，按提交成功继续。`, 'warn');
-              return {
-                success: true,
-                assumed: true,
-                transportRecovered: true,
-                skipProfileStep: Boolean(fallback.skipProfileStep),
-                skipRegistrationWaitStep: Boolean(fallback.skipRegistrationWaitStep),
-                ...(fallback.skipProfileStepReason ? { skipProfileStepReason: fallback.skipProfileStepReason } : {}),
-                url: fallback.url,
-              };
-            }
-          }
           if (step === 8 && isRetryableVerificationTransportError(err)) {
             const fallback = await detectStep8PostSubmitFallback({
               step,

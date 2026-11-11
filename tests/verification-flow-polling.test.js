@@ -1631,8 +1631,8 @@ test('verification flow notifies onResendRequestedAt when resend is triggered', 
   );
 });
 
-test('verification flow uses resilient openai-auth transport when submitting verification code', async () => {
-  const resilientCalls = [];
+test('verification flow uses single-shot openai-auth transport for step 4 code submission', async () => {
+  const directCalls = [];
 
   const helpers = api.createVerificationFlowHelpers({
     addLog: async () => {},
@@ -1656,12 +1656,12 @@ test('verification flow uses resilient openai-auth transport when submitting ver
     pollCloudflareTempEmailVerificationCode: async () => ({}),
     pollHotmailVerificationCode: async () => ({}),
     pollLuckmailVerificationCode: async () => ({}),
-    sendToContentScript: async () => {
-      throw new Error('should not use non-resilient channel');
-    },
-    sendToContentScriptResilient: async (_source, message, options) => {
-      resilientCalls.push({ message, options });
+    sendToContentScript: async (_source, message, options) => {
+      directCalls.push({ message, options });
       return { success: true };
+    },
+    sendToContentScriptResilient: async () => {
+      throw new Error('step 4 code submit should not use resilient transport');
     },
     sendToMailContentScriptResilient: async () => ({}),
     setState: async () => {},
@@ -1674,10 +1674,10 @@ test('verification flow uses resilient openai-auth transport when submitting ver
   const result = await helpers.submitVerificationCode(4, '654321');
 
   assert.deepStrictEqual(result, { success: true });
-  assert.equal(resilientCalls.length, 1);
-  assert.equal(resilientCalls[0].message.type, 'FILL_CODE');
-  assert.equal(resilientCalls[0].message.payload.code, '654321');
-  assert.ok(resilientCalls[0].options.timeoutMs >= 30000);
+  assert.equal(directCalls.length, 1);
+  assert.equal(directCalls[0].message.type, 'FILL_CODE');
+  assert.equal(directCalls[0].message.payload.code, '654321');
+  assert.ok(directCalls[0].options.responseTimeoutMs >= 30000);
 });
 
 test('verification flow does not replay step 8 code submit after transient auth-page transport failure', async () => {
@@ -1742,6 +1742,72 @@ test('verification flow does not replay step 8 code submit after transient auth-
   });
   assert.deepStrictEqual(directMessages, ['FILL_CODE']);
   assert.deepStrictEqual(resilientMessages, ['GET_LOGIN_AUTH_STATE']);
+});
+
+test('verification flow does not replay step 4 code submit after transient auth-page transport failure', async () => {
+  const directMessages = [];
+  const resilientMessages = [];
+  const logs = [];
+
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async (message) => {
+      logs.push(message);
+    },
+    chrome: {
+      tabs: {
+        update: async () => {},
+        get: async () => ({ url: 'https://chatgpt.com/' }),
+      },
+      scripting: {
+        executeScript: async () => [{
+          result: { loggedInHome: true, reason: 'no_logged_out_entry', url: 'https://chatgpt.com/' },
+        }],
+      },
+    },
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    completeNodeFromBackground: async () => {},
+    confirmCustomVerificationStepBypassRequest: async () => ({ confirmed: true }),
+    getHotmailVerificationPollConfig: () => ({}),
+    getHotmailVerificationRequestTimestamp: () => 0,
+    getState: async () => ({}),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isRetryableContentScriptTransportError: (error) => /message channel is closed/i.test(String(error?.message || error || '')),
+    isStopError: () => false,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+    MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+    pollCloudflareTempEmailVerificationCode: async () => ({}),
+    pollHotmailVerificationCode: async () => ({}),
+    pollLuckmailVerificationCode: async () => ({}),
+    sendToContentScript: async (_source, message) => {
+      directMessages.push(message.type);
+      throw new Error('The page keeping the extension port is moved into back/forward cache, so the message channel is closed.');
+    },
+    sendToContentScriptResilient: async (_source, message) => {
+      resilientMessages.push(message.type);
+      throw new Error('step 4 code submit should not be replayed through resilient transport');
+    },
+    sendToMailContentScriptResilient: async () => ({}),
+    setState: async () => {},
+    setStepStatus: async () => {},
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+    VERIFICATION_POLL_MAX_ROUNDS: 5,
+  });
+
+  const result = await helpers.submitVerificationCode(4, '654321');
+
+  assert.deepStrictEqual(result, {
+    success: true,
+    transportRecovered: true,
+    skipProfileStep: true,
+    skipRegistrationWaitStep: true,
+    url: 'https://chatgpt.com/',
+  });
+  assert.deepStrictEqual(directMessages, ['FILL_CODE']);
+  assert.deepStrictEqual(resilientMessages, []);
+  assert.equal(logs.some((message) => /不会重发验证码/.test(message)), true);
 });
 
 test('verification flow forwards dynamic completion node id when submitting bound-email login code', async () => {
@@ -1928,7 +1994,7 @@ test('verification flow requests a new code immediately after Cloudflare Temp Em
 });
 
 test('verification flow forwards optional signup profile payload when submitting signup verification code', async () => {
-  const resilientCalls = [];
+  const directCalls = [];
 
   const helpers = api.createVerificationFlowHelpers({
     addLog: async () => {},
@@ -1952,12 +2018,12 @@ test('verification flow forwards optional signup profile payload when submitting
     pollCloudflareTempEmailVerificationCode: async () => ({}),
     pollHotmailVerificationCode: async () => ({}),
     pollLuckmailVerificationCode: async () => ({}),
-    sendToContentScript: async () => {
-      throw new Error('should not use non-resilient channel');
-    },
-    sendToContentScriptResilient: async (_source, message) => {
-      resilientCalls.push(message);
+    sendToContentScript: async (_source, message) => {
+      directCalls.push(message);
       return { success: true, skipProfileStep: true };
+    },
+    sendToContentScriptResilient: async () => {
+      throw new Error('step 4 code submit should not use resilient transport');
     },
     sendToMailContentScriptResilient: async () => ({}),
     setState: async () => {},
@@ -1978,7 +2044,7 @@ test('verification flow forwards optional signup profile payload when submitting
   });
 
   assert.deepStrictEqual(result, { success: true, skipProfileStep: true });
-  assert.deepStrictEqual(resilientCalls[0].payload.signupProfile, {
+  assert.deepStrictEqual(directCalls[0].payload.signupProfile, {
     firstName: 'Ada',
     lastName: 'Lovelace',
     year: 2003,
@@ -1989,7 +2055,7 @@ test('verification flow forwards optional signup profile payload when submitting
 
 test('verification flow keeps combined signup profile skip reason when completing signup verification', async () => {
   const completed = [];
-  const resilientCalls = [];
+  const directCalls = [];
 
   const helpers = api.createVerificationFlowHelpers({
     addLog: async () => {},
@@ -2015,16 +2081,16 @@ test('verification flow keeps combined signup profile skip reason when completin
     pollCloudflareTempEmailVerificationCode: async () => ({}),
     pollHotmailVerificationCode: async () => ({}),
     pollLuckmailVerificationCode: async () => ({}),
-    sendToContentScript: async () => {
-      throw new Error('should not use non-resilient channel');
-    },
-    sendToContentScriptResilient: async (_source, message) => {
-      resilientCalls.push(message);
+    sendToContentScript: async (_source, message) => {
+      directCalls.push(message);
       return {
         success: true,
         skipProfileStep: true,
         skipProfileStepReason: 'combined_verification_profile',
       };
+    },
+    sendToContentScriptResilient: async () => {
+      throw new Error('step 4 code submit should not use resilient transport');
     },
     sendToMailContentScriptResilient: async () => ({
       code: '654321',
@@ -2052,7 +2118,7 @@ test('verification flow keeps combined signup profile skip reason when completin
     }
   );
 
-  assert.equal(resilientCalls[0].payload.signupProfile.firstName, 'Ada');
+  assert.equal(directCalls[0].payload.signupProfile.firstName, 'Ada');
   assert.deepStrictEqual(completed, [
     {
       nodeId: 'fetch-signup-code',
@@ -2095,14 +2161,14 @@ test('verification flow forwards registration wait skip when completing signup v
     pollCloudflareTempEmailVerificationCode: async () => ({}),
     pollHotmailVerificationCode: async () => ({}),
     pollLuckmailVerificationCode: async () => ({}),
-    sendToContentScript: async () => {
-      throw new Error('should not use non-resilient channel');
-    },
-    sendToContentScriptResilient: async () => ({
+    sendToContentScript: async () => ({
       success: true,
       skipProfileStep: true,
       skipRegistrationWaitStep: true,
     }),
+    sendToContentScriptResilient: async () => {
+      throw new Error('step 4 code submit should not use resilient transport');
+    },
     sendToMailContentScriptResilient: async () => ({
       code: '654321',
       emailTimestamp: 123,
@@ -2163,10 +2229,10 @@ test('verification flow treats retryable submit transport failure as success whe
     pollHotmailVerificationCode: async () => ({}),
     pollLuckmailVerificationCode: async () => ({}),
     sendToContentScript: async () => {
-      throw new Error('should not use non-resilient channel');
+      throw new Error('The page keeping the extension port is moved into back/forward cache, so the message channel is closed.');
     },
     sendToContentScriptResilient: async () => {
-      throw new Error('The page keeping the extension port is moved into back/forward cache, so the message channel is closed.');
+      throw new Error('step 4 code submit should not be replayed through resilient transport');
     },
     sendToMailContentScriptResilient: async () => ({}),
     setState: async () => {},
@@ -2181,7 +2247,6 @@ test('verification flow treats retryable submit transport failure as success whe
   assert.equal(result.success, true);
   assert.equal(result.skipProfileStep, true);
   assert.equal(result.skipRegistrationWaitStep, true);
-  assert.equal(result.assumed, true);
   assert.equal(result.transportRecovered, true);
   assert.equal(logs.some(({ message }) => /验证码提交后页面已切换到ChatGPT 已登录首页/.test(message)), true);
 });
@@ -2223,7 +2288,7 @@ test('verification flow waits for logged-in home DOM signal before skipping regi
     pollHotmailVerificationCode: async () => ({}),
     pollLuckmailVerificationCode: async () => ({}),
     sendToContentScript: async () => {
-      throw new Error('should not use non-resilient channel');
+      throw new Error('The page keeping the extension port is moved into back/forward cache, so the message channel is closed.');
     },
     sendToContentScriptResilient: async () => {
       throw new Error('The page keeping the extension port is moved into back/forward cache, so the message channel is closed.');
@@ -2273,7 +2338,7 @@ test('verification flow keeps registration wait when fallback reaches registrati
     pollHotmailVerificationCode: async () => ({}),
     pollLuckmailVerificationCode: async () => ({}),
     sendToContentScript: async () => {
-      throw new Error('should not use non-resilient channel');
+      throw new Error('The page keeping the extension port is moved into back/forward cache, so the message channel is closed.');
     },
     sendToContentScriptResilient: async () => {
       throw new Error('The page keeping the extension port is moved into back/forward cache, so the message channel is closed.');
@@ -2292,7 +2357,6 @@ test('verification flow keeps registration wait when fallback reaches registrati
   assert.equal(result.skipProfileStep, true);
   assert.equal(result.skipProfileStepReason, 'registration_success_page');
   assert.equal(result.skipRegistrationWaitStep, false);
-  assert.equal(result.assumed, true);
 });
 
 test('verification flow avoids resend storms when iCloud polling keeps hitting transport errors', async () => {
