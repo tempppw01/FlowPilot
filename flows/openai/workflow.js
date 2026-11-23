@@ -2079,6 +2079,11 @@
     if (!isPhoneVerificationEnabled(options)) {
       steps = omitPostLoginPhoneVerificationSteps(steps);
     }
+    if (steps.some((step) => POST_LOGIN_PHONE_VERIFICATION_STEP_KEYS.includes(step.key))) {
+      steps = steps.map((step) => step.key === 'confirm-oauth'
+        ? { ...step, title: '等待本地回调' }
+        : step);
+    }
     if (isOpenAiRemotePublicationTarget(options)) {
       steps = omitOpenAiWebchatPublicationSteps(steps);
     }

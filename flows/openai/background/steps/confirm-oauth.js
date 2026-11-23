@@ -35,6 +35,7 @@
       setStep8TabUpdatedListener,
       shouldDeferStep9CallbackTimeout,
       getStepIdByKeyForState = null,
+      getNodeIdByStepForState = null,
     } = deps;
 
     const LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS = 240000;
@@ -63,20 +64,38 @@
       return addLog(message, level, { step, stepKey: 'confirm-oauth' });
     }
 
+    function didCompletePhoneVerification(state = {}) {
+      if (typeof getStepIdByKeyForState !== 'function' || typeof getNodeIdByStepForState !== 'function') {
+        return false;
+      }
+      return ['post-login-phone-verification', 'post-bound-email-phone-verification'].some((stepKey) => {
+        const stepId = Number(getStepIdByKeyForState(stepKey, state));
+        if (!Number.isInteger(stepId) || stepId < 1) return false;
+        const nodeId = getNodeIdByStepForState(stepId, state);
+        return Boolean(nodeId) && state?.nodeStatuses?.[nodeId] === 'completed';
+      });
+    }
+
     async function executeStep9(state) {
       const visibleStep = getVisibleStep(state, 9);
       let activeState = state;
+      const phoneVerificationAlreadyCompleted = didCompletePhoneVerification(state);
 
-      if (!activeState.oauthUrl) {
+      if (!activeState.oauthUrl && !phoneVerificationAlreadyCompleted) {
         const authLoginStep = getAuthLoginStepForState(activeState, visibleStep);
         throw new Error(`缺少登录用 OAuth 链接，请先完成步骤 ${authLoginStep}。`);
       }
 
-      await addStepLog(visibleStep, '正在监听 localhost 回调地址...');
+      await addStepLog(
+        visibleStep,
+        phoneVerificationAlreadyCompleted
+          ? '手机号验证已完成，等待认证页自动跳转到 localhost 回调...'
+          : '正在监听 localhost 回调地址...'
+      );
 
       let callbackTimeoutMs = LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS;
       let timeoutRecoveryAttempted = false;
-      while (true) {
+      while (!phoneVerificationAlreadyCompleted) {
         try {
           callbackTimeoutMs = typeof getOAuthFlowStepTimeoutMs === 'function'
             ? await getOAuthFlowStepTimeoutMs(LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS, {
@@ -182,11 +201,13 @@
           }
 
           if (elapsedMs >= LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS) {
-            rejectStep9(new Error(`${Math.round(LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS / 1000)} 秒内未捕获到 localhost 回调跳转，步骤 ${visibleStep} 的点击可能被拦截了。`));
+            rejectStep9(new Error(phoneVerificationAlreadyCompleted
+              ? `${Math.round(LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS / 1000)} 秒内未捕获到手机号验证后的 localhost 回调跳转。`
+              : `${Math.round(LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS / 1000)} 秒内未捕获到 localhost 回调跳转，步骤 ${visibleStep} 的点击可能被拦截了。`));
             return;
           }
 
-          if (typeof getOAuthFlowRemainingMs === 'function') {
+          if (!phoneVerificationAlreadyCompleted && typeof getOAuthFlowRemainingMs === 'function') {
             try {
               await getOAuthFlowRemainingMs({
                 step: visibleStep,
@@ -197,7 +218,7 @@
               rejectStep9(error);
               return;
             }
-          } else if (elapsedMs >= callbackTimeoutMs) {
+          } else if (!phoneVerificationAlreadyCompleted && elapsedMs >= callbackTimeoutMs) {
             rejectStep9(new Error(`${Math.round(callbackTimeoutMs / 1000)} 秒内未捕获到 localhost 回调跳转，步骤 ${visibleStep} 的点击可能被拦截了。`));
             return;
           }
@@ -229,11 +250,34 @@
           finalizeStep9Callback(callbackUrl);
         });
 
+        chrome.webNavigation.onBeforeNavigate.addListener(deps.getWebNavListener());
+        chrome.webNavigation.onCommitted.addListener(deps.getWebNavCommittedListener());
+        chrome.tabs.onUpdated.addListener(deps.getStep8TabUpdatedListener());
+
         (async () => {
           try {
             throwIfStep8SettledOrStopped(resolved);
             signupTabId = await getTabId('openai-auth');
             throwIfStep8SettledOrStopped(resolved);
+
+            if (phoneVerificationAlreadyCompleted) {
+              if (!signupTabId || !(await isTabAlive('openai-auth'))) {
+                throw new Error(`步骤 ${visibleStep}：手机号验证后的认证标签页已关闭，无法等待 localhost 回调。`);
+              }
+              const currentTab = await chrome.tabs.get(signupTabId);
+              const currentCallbackUrl = getStep8CallbackUrlFromTabUpdate(
+                signupTabId,
+                { url: currentTab?.url || '' },
+                currentTab,
+                signupTabId
+              );
+              if (currentCallbackUrl) {
+                finalizeStep9Callback(currentCallbackUrl);
+                return;
+              }
+              await addStepLog(visibleStep, '认证标签页仍在自动跳转，继续等待 localhost 回调...');
+              return;
+            }
 
             if (signupTabId && await isTabAlive('openai-auth')) {
               await chrome.tabs.update(signupTabId, { active: true });
@@ -244,9 +288,6 @@
             }
 
             throwIfStep8SettledOrStopped(resolved);
-            chrome.webNavigation.onBeforeNavigate.addListener(deps.getWebNavListener());
-            chrome.webNavigation.onCommitted.addListener(deps.getWebNavCommittedListener());
-            chrome.tabs.onUpdated.addListener(deps.getStep8TabUpdatedListener());
             await ensureStep8SignupPageReady(signupTabId, {
               timeoutMs: typeof getOAuthFlowStepTimeoutMs === 'function'
                 ? await getOAuthFlowStepTimeoutMs(15000, {

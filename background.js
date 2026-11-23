@@ -17620,6 +17620,7 @@ const step9Executor = self.MultiPageBackgroundStep9?.createStep9Executor({
   getStep8CallbackUrlFromTabUpdate,
   getStep8EffectLabel,
   getStepIdByKeyForState,
+  getNodeIdByStepForState,
   getTabId,
   getWebNavCommittedListener,
   getWebNavListener,
