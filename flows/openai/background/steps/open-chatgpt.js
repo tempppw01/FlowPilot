@@ -241,6 +241,7 @@
             state,
             ok: false,
             reason: getStep1ErrorMessage(result.error),
+            diagnostics: result?.diagnostics || null,
           };
         }
         if (!isAcceptedStep1EntryState(state)) {
@@ -248,6 +249,7 @@
             state,
             ok: false,
             reason: state ? `unexpected_state:${state}` : 'missing_entry_state',
+            diagnostics: result?.diagnostics || null,
           };
         }
 
@@ -283,6 +285,9 @@
 
         const landingStateLabel = landingState.state || 'unknown';
         const reasonSuffix = landingState.reason ? `，入口状态原因：${landingState.reason}` : '';
+        const diagnosticsSuffix = attempt === STEP1_OPEN_MAX_ATTEMPTS && landingState.diagnostics
+          ? `，页面诊断：${JSON.stringify(landingState.diagnostics).slice(0, 1200)}`
+          : '';
 
         if (attempt < STEP1_OPEN_MAX_ATTEMPTS) {
           await addLog(
@@ -293,7 +298,7 @@
         }
 
         throw new Error(
-          `步骤 1：打开 ChatGPT 官网后最终状态异常：URL=${landingUrl || 'unknown'}，state=${landingStateLabel}${reasonSuffix}。已连续清理 cookies 并重试 ${STEP1_OPEN_MAX_ATTEMPTS} 次，仍未进入可用的官网注册入口状态。`
+          `步骤 1：打开 ChatGPT 官网后最终状态异常：URL=${landingUrl || 'unknown'}，state=${landingStateLabel}${reasonSuffix}${diagnosticsSuffix}。已连续清理 cookies 并重试 ${STEP1_OPEN_MAX_ATTEMPTS} 次，仍未进入可用的官网注册入口状态。`
         );
       }
     }

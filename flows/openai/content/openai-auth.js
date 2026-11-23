@@ -4,7 +4,7 @@
 
 console.log('[MultiPage:openai-auth] Content script loaded on', location.href);
 
-const OPENAI_AUTH_LISTENER_SENTINEL = 'data-multipage-openai-auth-listener';
+const OPENAI_AUTH_LISTENER_SENTINEL = '__multipageOpenAiAuthListenerInstalled';
 
 function getOperationDelayRunner() {
   const rootScope = typeof window !== 'undefined' ? window : globalThis;
@@ -14,8 +14,8 @@ function getOperationDelayRunner() {
     : async (_metadata, operation) => operation();
 }
 
-if (document.documentElement.getAttribute(OPENAI_AUTH_LISTENER_SENTINEL) !== '1') {
-  document.documentElement.setAttribute(OPENAI_AUTH_LISTENER_SENTINEL, '1');
+if (!globalThis[OPENAI_AUTH_LISTENER_SENTINEL]) {
+  globalThis[OPENAI_AUTH_LISTENER_SENTINEL] = true;
 
   // Listen for commands from Background
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -37,6 +37,7 @@ if (document.documentElement.getAttribute(OPENAI_AUTH_LISTENER_SENTINEL) !== '1'
       || message.type === 'RESEND_PHONE_VERIFICATION_CODE'
       || message.type === 'CHECK_PHONE_RESEND_ERROR'
       || message.type === 'RETURN_TO_ADD_PHONE'
+      || message.type === 'ENSURE_SIGNUP_ENTRY_READY'
       || message.type === 'ENSURE_SIGNUP_PHONE_ENTRY_READY'
       || message.type === 'ENSURE_SIGNUP_PASSWORD_PAGE_READY'
     ) {
@@ -158,6 +159,8 @@ async function handleCommand(message) {
       return phoneAuthHelpers.checkPhoneResendError();
     case 'RETURN_TO_ADD_PHONE':
       return await phoneAuthHelpers.returnToAddPhone();
+    case 'ENSURE_SIGNUP_ENTRY_READY':
+      return await ensureSignupEntryReadyForStep1();
     case 'ENSURE_SIGNUP_PHONE_ENTRY_READY':
       return await ensureSignupPhoneEntryReady();
     case 'ENSURE_SIGNUP_PASSWORD_PAGE_READY':
@@ -1345,6 +1348,23 @@ async function ensureSignupPhoneEntryReady(timeout = 25000) {
 
   log(`手机号注册入口识别失败，诊断快照：${JSON.stringify(getSignupEntryDiagnostics())}`, 'warn');
   throw new Error('当前页面没有可用的手机号注册入口，也不在密码页。URL: ' + location.href);
+}
+
+async function ensureSignupEntryReadyForStep1(timeout = 10000) {
+  const snapshot = await waitForSignupEntryState({
+    timeout,
+    autoOpenEntry: false,
+    step: 1,
+    logDiagnostics: true,
+  });
+  const state = String(snapshot?.state || 'unknown');
+  const ready = ['entry_home', 'email_entry', 'phone_entry'].includes(state);
+  return {
+    ready,
+    state,
+    url: snapshot?.url || location.href,
+    ...(!ready ? { diagnostics: getSignupEntryDiagnostics() } : {}),
+  };
 }
 
 async function ensureSignupPasswordPageReady(timeout = 20000) {

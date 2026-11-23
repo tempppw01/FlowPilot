@@ -198,14 +198,13 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.match(html, /id="btn-smsbower-country-order-menu"/);
   assert.match(html, /id="row-smsbower-country-order-actions"/);
   assert.match(html, /id="display-smsbower-country-order"/);
-  assert.match(html, /id="btn-smsbower-country-mode-random"/);
-  assert.match(html, /id="btn-smsbower-country-mode-priority"/);
+  assert.match(html, /id="btn-smsbower-country-mode-manual"/);
   assert.match(html, /id="btn-smsbower-country-mode-recommended"/);
   assert.match(html, /id="btn-smsbower-country-mode-fixed"/);
   assert.match(html, /接码方式/);
   assert.doesNotMatch(html, /id="btn-smsbower-country-order-random"/);
   assert.match(html, /id="btn-smsbower-country-order-clear"/);
-  assert.match(html, /3193/);
+  assert.match(html, /3237；3408；2266/);
   assert.doesNotMatch(html, /id="input-smsbower-country-order"/);
   assert.match(html, /id="row-smsbower-provider-ids"/);
   assert.match(html, /id="input-smsbower-provider-ids"/);
@@ -253,8 +252,7 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /DEFAULT_SMSBOWER_MAX_PRICE = '0\.12'/);
   assert.match(sidepanelSource, /loadSmsBowerCountries\(\{ silent: true \}\)/);
   assert.match(sidepanelSource, /btn-smsbower-country-order-menu/);
-  assert.match(sidepanelSource, /btn-smsbower-country-mode-random/);
-  assert.match(sidepanelSource, /btn-smsbower-country-mode-priority/);
+  assert.match(sidepanelSource, /btn-smsbower-country-mode-manual/);
   assert.match(sidepanelSource, /btn-smsbower-country-mode-recommended/);
   assert.match(sidepanelSource, /btn-smsbower-country-mode-fixed/);
   assert.match(sidepanelSource, /SMSBOWER_COUNTRY_MODE_RECOMMENDED = 'recommended'/);
@@ -270,19 +268,13 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
   assert.match(sidepanelSource, /providerIds: '3193'/);
   assert.match(sidepanelSource, /getSmsBowerProviderIdsForCountryOrder\(smsBowerCountryOrderForProviderIds\)/);
   assert.match(sidepanelSource, /syncSmsBowerProviderIdsFromCountrySelection\(smsbowerCountryOrderSelection,/);
-  assert.match(sidepanelSource, /function buildRandomSmsBowerCountryOrder\(randomFn = Math\.random\)/);
+  assert.match(sidepanelSource, /inputSmsBowerProviderIds\.placeholder = '3237；3408；2266'/);
   assert.match(sidepanelSource, /async function buildSmsBowerPricePreviewLines/);
   assert.match(sidepanelSource, /action', 'getPricesV3'/);
   assert.doesNotMatch(sidepanelSource, /id !== 187/);
-  assert.match(sidepanelSource, /randomCandidateCount/);
-  assert.match(sidepanelSource, /applySmsBowerCountrySelection\(randomOrder,/);
-  assert.match(sidepanelSource, /SMSBower 已启用随机国家队列/);
-  assert.match(sidepanelSource, /forceProviderIds:\s*true/);
-  assert.match(sidepanelSource, /smsbowerRandomModeEnabled/);
-  assert.match(sidepanelSource, /smsbowerRandomMode:\s*smsBowerRandomModeValue/);
-  assert.match(sidepanelSource, /smsbowerRandomMode:\s*Boolean\(smsbowerRandomModeEnabled\)/);
-  assert.match(sidepanelSource, /setSmsBowerRandomMode\(true/);
-  assert.match(sidepanelSource, /setSmsBowerRandomMode\(false/);
+  assert.match(sidepanelSource, /手动线路 ID 请用；分隔/);
+  assert.doesNotMatch(sidepanelSource, /smsbowerRandomModeEnabled/);
+  assert.doesNotMatch(sidepanelSource, /随机模式/);
   assert.match(sidepanelSource, /function setSmsBowerCountryMode\(/);
   assert.match(sidepanelSource, /推荐模式固定使用推荐线路池/);
   assert.doesNotMatch(sidepanelSource, /let\s+smsbowerProviderIdsAutoValue\s*=\s*DEFAULT_SMSBOWER_PROVIDER_IDS/);
@@ -293,35 +285,16 @@ test('SMSBower country dropdown only exposes low-price candidates and keeps orde
 
   const api = new Function(`
 const btnSmsBowerCountryOrderMenu = { textContent: '' };
-let smsbowerRandomModeEnabled = false;
 const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = [...Array.from({ length: 28 }, (_, index) => ({ id: index + 1 })), { id: 187 }];
 function normalizeSmsBowerCountryOrderValue(value = []) { return Array.isArray(value) ? value : []; }
-function normalizeSmsBowerCountryIdValue(value) { return Number(value) || 0; }
 function getSmsBowerCountryLabelById(id) {
   return ({ 48: '荷兰', 78: '法国', 6: '印度尼西亚' }[id] || ('Country #' + id));
 }
 ${extractFunction('updateSmsBowerCountryOrderMenuSummary')}
-return {
-  btnSmsBowerCountryOrderMenu,
-  updateSmsBowerCountryOrderMenuSummary,
-  setRandomModeForTest(value) { smsbowerRandomModeEnabled = Boolean(value); },
-};
+return { btnSmsBowerCountryOrderMenu, updateSmsBowerCountryOrderMenuSummary };
 `)();
   api.updateSmsBowerCountryOrderMenuSummary([48, 78, 6]);
   assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, '荷兰 / 法国 / 印度尼西亚 (3/29)');
-  api.setRandomModeForTest(true);
-  api.updateSmsBowerCountryOrderMenuSummary([48, 78, 6]);
-  assert.equal(api.btnSmsBowerCountryOrderMenu.textContent, '随机模式 (29/29)');
-
-  const randomApi = new Function(`
-const SMSBOWER_LOW_PRICE_COUNTRY_ITEMS = [{ id: 6 }, { id: 52 }, { id: 187 }];
-function normalizeSmsBowerCountryIdValue(value) { return Number(value) || 0; }
-${extractFunction('buildRandomSmsBowerCountryOrder')}
-return { buildRandomSmsBowerCountryOrder };
-`)();
-  assert.deepStrictEqual(randomApi.buildRandomSmsBowerCountryOrder(() => 0), [52, 187, 6]);
-  assert.deepStrictEqual(randomApi.buildRandomSmsBowerCountryOrder(() => 0.99), [6, 52, 187]);
-  assert.equal(randomApi.buildRandomSmsBowerCountryOrder(() => 0.5).includes(187), true);
 });
 
 test('SMSBower country selection auto-syncs the provider IDs field unless it has been manually overridden', () => {
@@ -1887,6 +1860,11 @@ const MADAO_MODE_ROUTING_PLAN = 'routing_plan';
 const MADAO_MODE_DIRECT = 'direct';
 const DEFAULT_MADAO_MODE = MADAO_MODE_ROUTING_PLAN;
 const DEFAULT_SMSBOWER_MAX_PRICE = '0.12';
+const SMSBOWER_COUNTRY_MODE_FIXED = 'fixed';
+const SMSBOWER_COUNTRY_MODE_RECOMMENDED = 'recommended';
+const SMSBOWER_COUNTRY_MODE_MANUAL = 'manual';
+const DEFAULT_SMSBOWER_COUNTRY_ORDER = [22, 52, 73, 48, 78, 6, 33, 16, 151, 31, 95, 85, 19, 10, 269, 160, 5560, 1099, 708, 976, 2058, 3118, 18397, 43, 53, 54, 39, 46, 215, 187];
+const DEFAULT_SMSBOWER_PROVIDER_IDS = '3193';
 const SIGNUP_METHOD_EMAIL = 'email';
 const SIGNUP_METHOD_PHONE = 'phone';
 const DEFAULT_SIGNUP_METHOD = SIGNUP_METHOD_EMAIL;
@@ -1898,6 +1876,17 @@ const DEFAULT_NEX_SMS_COUNTRY_ORDER = [1];
 const DEFAULT_NEX_SMS_SERVICE_CODE = 'ot';
 const FIVE_SIM_SUPPORTED_COUNTRY_ID_SET = new Set(['indonesia', 'thailand', 'vietnam']);
 const HERO_SMS_SUPPORTED_COUNTRY_ID_SET = new Set(['6', '52', '10']);
+function normalizeSmsBowerCountryModeValue(value = '', fixedCountryId = 0) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if ([SMSBOWER_COUNTRY_MODE_FIXED, SMSBOWER_COUNTRY_MODE_RECOMMENDED, SMSBOWER_COUNTRY_MODE_MANUAL].includes(normalized)) {
+    return normalized;
+  }
+  return Number(fixedCountryId) > 0 ? SMSBOWER_COUNTRY_MODE_FIXED : SMSBOWER_COUNTRY_MODE_MANUAL;
+}
+function normalizeSmsBowerProviderIdsValue(value = '', fallback = DEFAULT_SMSBOWER_PROVIDER_IDS) {
+  const normalized = String(value || '').split(/[\s,，;；|]+/).filter((entry) => /^\d+$/.test(entry)).join(',');
+  return normalized || String(fallback || '');
+}
 const selectHeroSmsCountry = {
   value: '52',
   selectedIndex: 0,

@@ -15,6 +15,7 @@
   const COUNTRY_MODE_PRIORITY = 'priority';
   const COUNTRY_MODE_FIXED = 'fixed';
   const COUNTRY_MODE_RECOMMENDED = 'recommended';
+  const COUNTRY_MODE_MANUAL = 'manual';
   const MAX_PRICE_CAP = 0.12;
   const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
   const DEFAULT_ACQUIRE_RETRY_ROUNDS = 3;
@@ -170,14 +171,19 @@
   function resolveFixedCountryId(state = {}) {
     const configuredId = normalizeOptionalSmsBowerCountryId(state?.smsbowerFixedCountryId);
     const rawMode = String(state?.smsbowerCountryMode || '').trim().toLowerCase();
-    const mode = rawMode === COUNTRY_MODE_FIXED || rawMode === COUNTRY_MODE_PRIORITY || rawMode === COUNTRY_MODE_RECOMMENDED
+    const mode = rawMode === COUNTRY_MODE_FIXED || rawMode === COUNTRY_MODE_PRIORITY || rawMode === COUNTRY_MODE_RECOMMENDED || rawMode === COUNTRY_MODE_MANUAL
       ? rawMode
-      : (configuredId ? COUNTRY_MODE_FIXED : COUNTRY_MODE_PRIORITY);
+      : (configuredId ? COUNTRY_MODE_FIXED : COUNTRY_MODE_MANUAL);
     return mode === COUNTRY_MODE_FIXED ? configuredId : 0;
   }
 
   function isSmsBowerRecommendedMode(state = {}) {
     return String(state?.smsbowerCountryMode || '').trim().toLowerCase() === COUNTRY_MODE_RECOMMENDED;
+  }
+
+  function isSmsBowerManualMode(state = {}) {
+    const mode = String(state?.smsbowerCountryMode || '').trim().toLowerCase();
+    return mode === COUNTRY_MODE_MANUAL || mode === COUNTRY_MODE_PRIORITY;
   }
 
   function normalizeOptionalSmsBowerCountryId(value) {
@@ -404,8 +410,12 @@
 
   function resolveConfig(state = {}, deps = {}) {
     const fixedCountryId = resolveFixedCountryId(state);
-    const configuredProviderIds = normalizeSmsBowerProviderIds(state?.smsbowerProviderIds, DEFAULT_PROVIDER_IDS);
-    const isFixedUsa = fixedCountryId === DEFAULT_COUNTRY_ID;
+    const hasManualProviderIds = Boolean(state?.smsbowerProviderIdsManual) || isSmsBowerManualMode(state);
+    const configuredProviderIds = normalizeSmsBowerProviderIds(
+      state?.smsbowerProviderIds,
+      hasManualProviderIds ? '' : DEFAULT_PROVIDER_IDS
+    );
+    const isFixedUsa = fixedCountryId === DEFAULT_COUNTRY_ID && !hasManualProviderIds;
     return {
       apiKey: String(state?.smsbowerApiKey || '').trim(),
       baseUrl: state?.smsbowerBaseUrl || DEFAULT_BASE_URL,
@@ -860,7 +870,7 @@
   }
 
   function shouldUseSmsBowerRandomMode(state = {}) {
-    return Boolean(state?.smsbowerRandomMode);
+    return false;
   }
 
   function resolveSmsBowerRandomCountryCandidates(countryCandidates = [], randomFn = Math.random, successWeights = {}) {
@@ -1194,7 +1204,7 @@
   async function requestActivation(state = {}, options = {}, deps = {}) {
     const config = resolveConfig(state, deps);
     const configuredCountryCandidates = resolveCountryCandidates(state);
-    const randomMode = shouldUseSmsBowerRandomMode(state);
+    const randomMode = false;
     const recommendedMode = isSmsBowerRecommendedMode(state);
     const allCountryCandidates = recommendedMode
       ? resolveRecommendedRouteCandidates()
@@ -1244,7 +1254,8 @@
     const fixedCountryId = resolveFixedCountryId(state);
     const autoProviderIds = getProviderIdsForCountryOrder(countryCandidates)
       || (fixedCountryId ? '' : DEFAULT_PROVIDER_IDS);
-    const useManualProviderIds = Boolean(state?.smsbowerProviderIdsManual)
+    const useManualProviderIds = isSmsBowerManualMode(state)
+      || Boolean(state?.smsbowerProviderIdsManual)
       || !hasOnlyAutoSmsBowerProviderIds(config.providerIds, autoProviderIds);
     const resolvedProviderIds = useManualProviderIds
       ? config.providerIds
@@ -1259,6 +1270,9 @@
         : (getProviderIdsForCountryId(countryId) || resolvedProviderIds);
       return splitSmsBowerProviderIds(countryProviderIds);
     };
+    if (useManualProviderIds && !resolvedProviderIds) {
+      throw new Error('SMSBower 手动线路模式需要填写至少一个有效的线路 ID，并使用；分隔。');
+    }
     const hasProviderIdCandidates = countryCandidates.some((countryConfig) => (
       getCountryProviderIdAttempts(countryConfig).length > 0
     ));
@@ -1298,11 +1312,16 @@
         const countryId = normalizeSmsBowerCountryId(countryConfig?.id, DEFAULT_COUNTRY_ID);
         const countryLabel = normalizeSmsBowerCountryLabel(countryConfig?.label, `Country #${countryId}`);
         const providerIdAttempts = getCountryProviderIdAttempts(countryConfig);
-        const lineAttempts = orderSmsBowerProviderIdAttempts(
-          countryId,
-          providerIdAttempts.filter((providerId) => !isSmsBowerProviderIdBlocked(effectiveBlockedProviderIds, countryId, providerId)),
-          { randomMode, randomFn, successWeights: state?.smsbowerSuccessWeightsByCountry }
-        );
+        const availableProviderIds = providerIdAttempts.filter((providerId) => (
+          !isSmsBowerProviderIdBlocked(effectiveBlockedProviderIds, countryId, providerId)
+        ));
+        const lineAttempts = useManualProviderIds
+          ? availableProviderIds
+          : orderSmsBowerProviderIdAttempts(
+            countryId,
+            availableProviderIds,
+            { randomMode, randomFn, successWeights: state?.smsbowerSuccessWeightsByCountry }
+          );
         if (providerIdAttempts.length && !lineAttempts.length) {
           noNumbersByCountry.push(`${countryLabel} (${countryId}) all providerIds skipped after SMS timeouts: ${providerIdAttempts.join(',')}`);
           continue;

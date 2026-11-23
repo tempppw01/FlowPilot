@@ -16,6 +16,7 @@ test('step 1 cookie cleanup queries target domains and skips browsingData sweep 
     browsingDataCalls: [],
     openedSteps: [],
     completedNodes: [],
+    entryProbeMessages: [],
   };
 
   const chromeApi = {
@@ -60,7 +61,10 @@ test('step 1 cookie cleanup queries target domains and skips browsingData sweep 
       events.openedSteps.push(step);
       return 101;
     },
-    sendToContentScriptResilient: async () => ({ state: 'entry_home' }),
+    sendToContentScriptResilient: async (source, message) => {
+      events.entryProbeMessages.push({ source, message });
+      return { state: 'entry_home' };
+    },
     waitForTabStableComplete: async (tabId) => ({ id: tabId, url: 'https://chatgpt.com/' }),
     completeNodeFromBackground: async (nodeId) => {
       events.completedNodes.push(nodeId);
@@ -86,6 +90,15 @@ test('step 1 cookie cleanup queries target domains and skips browsingData sweep 
   ]);
   assert.deepStrictEqual(events.browsingDataCalls, []);
   assert.deepStrictEqual(events.openedSteps, [1]);
+  assert.deepStrictEqual(events.entryProbeMessages, [{
+    source: 'openai-auth',
+    message: {
+      type: 'ENSURE_SIGNUP_ENTRY_READY',
+      step: 1,
+      source: 'background',
+      payload: {},
+    },
+  }]);
   assert.deepStrictEqual(events.completedNodes, ['open-chatgpt']);
 });
 
@@ -324,4 +337,31 @@ test('step 1 retries when root url still resolves to logged-in-home state', asyn
   await executor.executeStep1();
 
   assert.equal(openCalls, 2);
+});
+
+test('step 1 includes page diagnostics when an open ChatGPT tab has no recognized entry state', async () => {
+  const api = loadStep1Module();
+  let openCalls = 0;
+  const diagnostics = { title: 'ChatGPT', bodyTextPreview: 'Welcome' };
+  const executor = api.createStep1Executor({
+    addLog: async () => {},
+    chrome: {},
+    openSignupEntryTab: async () => {
+      openCalls += 1;
+      return 600 + openCalls;
+    },
+    sendToContentScriptResilient: async () => ({ state: 'unknown', diagnostics }),
+    waitForTabStableComplete: async (tabId) => ({ id: tabId, url: 'https://chatgpt.com/' }),
+    completeNodeFromBackground: async () => {},
+  });
+
+  await assert.rejects(
+    () => executor.executeStep1(),
+    (error) => {
+      assert.match(error.message, /unexpected_state:unknown/);
+      assert.match(error.message, /页面诊断：\{"title":"ChatGPT","bodyTextPreview":"Welcome"\}/);
+      return true;
+    }
+  );
+  assert.equal(openCalls, 3);
 });

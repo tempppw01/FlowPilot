@@ -1864,7 +1864,7 @@
                 placeholder="dr" />
             </div>
             <div class="data-row" id="row-smsbower-country-order" style="display:none;">
-              <span class="data-label">国家优先级</span>
+              <span class="data-label">国家范围</span>
               <div class="data-inline hero-sms-country-stack">
                 <select id="select-smsbower-country-order" class="data-input mono" multiple size="6" style="display:none;"></select>
                 <div class="hero-sms-country-mainline">
@@ -1875,7 +1875,7 @@
                     <div id="smsbower-country-order-menu" class="hero-sms-country-menu-dropdown" role="listbox" aria-multiselectable="true" hidden></div>
                   </div>
                 </div>
-                <span class="data-value hero-sms-country-note">默认顺序从印度、泰国、巴西开始；印度和智利只展示低于 0.10 美元的线路。</span>
+                <span class="data-value hero-sms-country-note">手动线路按此国家范围逐一匹配；印度和智利只展示低于 0.10 美元的线路。</span>
               </div>
             </div>
             <div class="data-row" id="row-smsbower-catalog" style="display:none;">
@@ -1890,13 +1890,12 @@
               <span class="data-label">接码方式</span>
               <div class="data-inline">
                 <select id="select-smsbower-country-mode" class="data-select" hidden aria-hidden="true" tabindex="-1">
-                  <option value="priority">按顺序</option>
+                  <option value="manual">手动线路 ID</option>
                   <option value="recommended">推荐</option>
                   <option value="fixed">固定国家</option>
                 </select>
                 <div id="smsbower-country-mode-group" class="choice-group" role="group" aria-label="SMSBower 接码方式">
-                  <button id="btn-smsbower-country-mode-random" type="button" class="choice-btn" data-smsbower-country-mode="random">随机</button>
-                  <button id="btn-smsbower-country-mode-priority" type="button" class="choice-btn" data-smsbower-country-mode="priority">按顺序</button>
+                  <button id="btn-smsbower-country-mode-manual" type="button" class="choice-btn" data-smsbower-country-mode="manual">手动线路 ID</button>
                   <button id="btn-smsbower-country-mode-recommended" type="button" class="choice-btn" data-smsbower-country-mode="recommended">推荐</button>
                   <button id="btn-smsbower-country-mode-fixed" type="button" class="choice-btn" data-smsbower-country-mode="fixed">固定</button>
                 </div>
@@ -1927,8 +1926,8 @@
                   <button id="btn-smsbower-provider-menu" class="btn btn-outline btn-sm hero-sms-country-menu-btn" type="button" aria-haspopup="listbox" aria-expanded="false">自动按国家选择线路</button>
                   <div id="smsbower-provider-menu" class="hero-sms-country-menu-dropdown" role="listbox" aria-multiselectable="true" hidden></div>
                 </div>
-                <input type="text" id="input-smsbower-provider-ids" class="data-input mono" placeholder="3193" hidden aria-hidden="true" />
-                <span class="data-value hero-sms-country-note">默认随国家自动切换对应线路，USA 仅使用 3193。</span>
+                <input type="text" id="input-smsbower-provider-ids" class="data-input mono" placeholder="3237；3408；2266" hidden aria-hidden="true" />
+                <span id="display-smsbower-provider-ids-note" class="data-value hero-sms-country-note">手动线路 ID 请用；分隔，按输入顺序尝试。</span>
               </div>
             </div>
             <div class="data-row" id="row-smsbower-price-range" style="display:none;">

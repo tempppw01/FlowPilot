@@ -387,12 +387,10 @@ test('SMSBower provider continues through a randomized non-USA country queue whe
   assert.equal(activation.providerIds, '3237');
 });
 
-test('SMSBower random mode uses the full default pool, including USA, instead of the saved country subset', async () => {
+test('SMSBower ignores the legacy random flag and preserves manual country and line selection', async () => {
   const requests = [];
-  const randomValues = [0.999999, 0];
   const module = loadModule();
   const provider = module.createProvider({
-    randomFn: () => randomValues.shift() ?? 0,
     fetchImpl: async (url) => {
       const parsedUrl = new URL(url);
       requests.push(parsedUrl);
@@ -410,25 +408,25 @@ test('SMSBower random mode uses the full default pool, including USA, instead of
   const state = {
     smsbowerApiKey: 'key-1',
     smsbowerCountryOrder: [52],
-    smsbowerProviderIds: '3170',
+    smsbowerCountryMode: 'manual',
+    smsbowerProviderIds: '3237；3408',
+    smsbowerProviderIdsManual: true,
     smsbowerRandomMode: true,
   };
 
   const activation = await provider.requestActivation(state);
 
-  assert.equal(requests[0].searchParams.get('country'), '187');
-  assert.equal(requests[0].searchParams.get('providerIds'), '3193');
-  assert.equal(activation.countryId, 187);
-  assert.equal(activation.countryLabel, 'USA');
-  assert.equal(activation.providerIds, '3193');
+  assert.equal(requests[0].searchParams.get('country'), '52');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3237');
+  assert.equal(activation.countryId, 52);
+  assert.equal(activation.countryLabel, 'Thailand');
+  assert.equal(activation.providerIds, '3237');
 });
 
-test('SMSBower random mode keeps Gold provider IDs before Silver and unknown lines', async () => {
+test('SMSBower ignores random ordering and tries manual lines in input order', async () => {
   const requests = [];
-  const randomValues = [0.11, ...Array(27).fill(0), 0];
   const module = loadModule();
   const provider = module.createProvider({
-    randomFn: () => randomValues.shift() ?? 0.999999,
     fetchImpl: async (url) => {
       const parsedUrl = new URL(url);
       requests.push(parsedUrl);
@@ -444,16 +442,18 @@ test('SMSBower random mode keeps Gold provider IDs before Silver and unknown lin
 
   const activation = await provider.requestActivation({
     smsbowerApiKey: 'key-1',
+    smsbowerCountryMode: 'manual',
     smsbowerCountryOrder: [33],
-    smsbowerProviderIds: '3243,3253,3288,3160',
+    smsbowerProviderIds: '3243；3253；3288；3160',
+    smsbowerProviderIdsManual: true,
     smsbowerRandomMode: true,
   });
 
-  assert.equal(requests[0].searchParams.get('country'), '48');
-  assert.equal(requests[0].searchParams.get('providerIds'), '2442');
-  assert.equal(activation.countryId, 48);
-  assert.equal(activation.countryLabel, 'Netherlands');
-  assert.equal(activation.providerIds, '2442');
+  assert.equal(requests[0].searchParams.get('country'), '33');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3243');
+  assert.equal(activation.countryId, 33);
+  assert.equal(activation.countryLabel, 'Colombia');
+  assert.equal(activation.providerIds, '3243');
 });
 
 test('SMSBower fixed USA mode starts with the 3193 Gold line', async () => {
@@ -553,12 +553,10 @@ test('SMSBower retries a USA line when every candidate line was temporarily skip
   assert.match(logs.join('\n'), /所有候选线路均达到临时失败跳过阈值/);
 });
 
-test('SMSBower random mode weights countries and provider IDs with recent successful code records', async () => {
+test('SMSBower ignores legacy success weights when manual mode is selected', async () => {
   const requests = [];
-  const randomValues = [0.3, ...Array(27).fill(0), 0.3];
   const module = loadModule();
   const provider = module.createProvider({
-    randomFn: () => randomValues.shift() ?? 0,
     fetchImpl: async (url) => {
       const parsedUrl = new URL(url);
       requests.push(parsedUrl);
@@ -574,8 +572,10 @@ test('SMSBower random mode weights countries and provider IDs with recent succes
 
   const activation = await provider.requestActivation({
     smsbowerApiKey: 'key-1',
+    smsbowerCountryMode: 'manual',
     smsbowerCountryOrder: [52, 187],
-    smsbowerProviderIds: '3170',
+    smsbowerProviderIds: '3237；3408',
+    smsbowerProviderIdsManual: true,
     smsbowerRandomMode: true,
     smsbowerSuccessWeightsByCountry: {
       33: {
@@ -584,11 +584,11 @@ test('SMSBower random mode weights countries and provider IDs with recent succes
     },
   });
 
-  assert.equal(requests[0].searchParams.get('country'), '33');
-  assert.match(requests[0].searchParams.get('providerIds'), /^(3243|3253)$/);
-  assert.equal(activation.countryId, 33);
-  assert.equal(activation.countryLabel, 'Colombia');
-  assert.match(activation.providerIds, /^(3243|3253)$/);
+  assert.equal(requests[0].searchParams.get('country'), '52');
+  assert.equal(requests[0].searchParams.get('providerIds'), '3237');
+  assert.equal(activation.countryId, 52);
+  assert.equal(activation.countryLabel, 'Thailand');
+  assert.equal(activation.providerIds, '3237');
 });
 
 test('SMSBower provider tries the next provider ID in the same country when a line has no numbers', async () => {
@@ -701,6 +701,44 @@ test('SMSBower manual provider selection does not expand into the country auto l
   assert.equal(requests.length, 1);
   assert.equal(requests[0].searchParams.get('country'), '52');
   assert.equal(requests[0].searchParams.get('providerIds'), '3193');
+});
+
+test('SMSBower manual line mode preserves semicolon order across retries', async () => {
+  const requests = [];
+  let requestCount = 0;
+  const module = loadModule();
+  const provider = module.createProvider({
+    fetchImpl: async (url) => {
+      const request = new URL(url);
+      requests.push(request);
+      requestCount += 1;
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return requestCount === 3
+            ? 'ACCESS_NUMBER:manual-1:+66812345678'
+            : 'NO_NUMBERS';
+        },
+      };
+    },
+  });
+
+  const activation = await provider.requestActivation({
+    smsbowerApiKey: 'key-1',
+    smsbowerCountryMode: 'manual',
+    smsbowerCountryOrder: [52],
+    smsbowerProviderIds: '3237；3408；2266',
+    smsbowerProviderIdsManual: true,
+    smsbowerActivationRetryRounds: 1,
+    smsbowerNoNumbersConfirmRetries: 0,
+  });
+
+  assert.deepStrictEqual(
+    requests.map((request) => request.searchParams.get('providerIds')),
+    ['3237', '3408', '2266']
+  );
+  assert.equal(activation.providerIds, '2266');
 });
 
 test('SMSBower provider cancels activation with status 8', async () => {

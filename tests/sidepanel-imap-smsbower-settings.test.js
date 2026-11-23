@@ -29,7 +29,7 @@ test('side panel exposes IMAP helper settings and connection test', () => {
   assert.match(helperSource, /无法打开 IMAP 邮箱夹/);
 });
 
-test('side panel exposes SMSBower random, priority, and fixed country modes', () => {
+test('side panel exposes SMSBower manual-line, recommended, and fixed-country modes', () => {
   const html = fs.readFileSync('sidepanel/sidepanel.html', 'utf8');
   const source = fs.readFileSync('sidepanel/sidepanel.js', 'utf8');
 
@@ -38,8 +38,7 @@ test('side panel exposes SMSBower random, priority, and fixed country modes', ()
   assert.match(html, /id="btn-smsbower-fixed-country-menu"/);
   assert.match(html, /id="btn-smsbower-provider-menu"/);
   assert.match(html, /id="select-smsbower-country-mode"/);
-  assert.match(html, /id="btn-smsbower-country-mode-random"/);
-  assert.match(html, /id="btn-smsbower-country-mode-priority"/);
+  assert.match(html, /id="btn-smsbower-country-mode-manual"/);
   assert.match(html, /id="btn-smsbower-country-mode-fixed"/);
   assert.match(html, /id="input-smsbower-fixed-country-id"/);
   assert.match(source, /async function refreshSmsBowerCountryCatalog\(\)/);
@@ -55,7 +54,6 @@ test('side panel exposes SMSBower random, priority, and fixed country modes', ()
   assert.match(source, /function getSmsBowerProviderMenuCountryIds\(\)/);
   assert.match(source, /selectSmsBowerCountryMode\?\.value === SMSBOWER_COUNTRY_MODE_FIXED/);
   assert.match(source, /function countryCodeToFlag\(/);
-  assert.match(html, /data-smsbower-country-mode="random"/);
-  assert.match(html, /data-smsbower-country-mode="priority"/);
+  assert.match(html, /data-smsbower-country-mode="manual"/);
   assert.match(html, /data-smsbower-country-mode="fixed"/);
 });
