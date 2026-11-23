@@ -93,6 +93,14 @@
           : '正在监听 localhost 回调地址...'
       );
 
+      if (phoneVerificationAlreadyCompleted && activeState.localhostUrl) {
+        await addStepLog(visibleStep, '手机号确认时已收到 localhost 回调，跳过 OAuth 确认并继续后续回调验证。', 'ok');
+        await completeNodeFromBackground(state?.nodeId || 'confirm-oauth', {
+          localhostUrl: activeState.localhostUrl,
+        });
+        return;
+      }
+
       let callbackTimeoutMs = LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS;
       let timeoutRecoveryAttempted = false;
       while (!phoneVerificationAlreadyCompleted) {

@@ -16,6 +16,7 @@
       sendToContentScript,
       sendToContentScriptResilient,
       navigateAuthTabToAddPhone = null,
+      beginOAuthCallbackCapture = null,
       setState,
       broadcastDataUpdate = null,
       sleepWithStop,
@@ -2360,21 +2361,49 @@
       const timeoutMs = typeof getOAuthFlowStepTimeoutMs === 'function'
         ? await getOAuthFlowStepTimeoutMs(45000, { step: visibleStep, actionLabel: '提交手机验证码' })
         : 45000;
-      const result = await sendToContentScriptResilient('openai-auth', {
-        type: 'SUBMIT_PHONE_VERIFICATION_CODE',
-        source: 'background',
-        payload: {
-          code,
-          ...(signupProfile ? { signupProfile } : {}),
-        },
-      }, {
-        timeoutMs,
-        responseTimeoutMs: timeoutMs,
-        retryDelayMs: 600,
-        logMessage: '步骤 9：等待手机验证码页面就绪后填写短信验证码...',
-        logStep: visibleStep,
-        logStepKey: 'phone-verification',
-      });
+      const callbackCapture = typeof beginOAuthCallbackCapture === 'function'
+        ? await beginOAuthCallbackCapture({ tabId, visibleStep })
+        : null;
+      let result;
+      try {
+        const submitPromise = sendToContentScriptResilient('openai-auth', {
+          type: 'SUBMIT_PHONE_VERIFICATION_CODE',
+          source: 'background',
+          payload: {
+            code,
+            ...(signupProfile ? { signupProfile } : {}),
+          },
+        }, {
+          timeoutMs,
+          responseTimeoutMs: timeoutMs,
+          retryDelayMs: 600,
+          logMessage: '步骤 9：等待手机验证码页面就绪后填写短信验证码...',
+          logStep: visibleStep,
+          logStepKey: 'phone-verification',
+        });
+        result = callbackCapture?.promise
+          ? await Promise.race([
+            submitPromise,
+            callbackCapture.promise.then((localhostUrl) => ({
+              success: true,
+              callbackCaptured: true,
+              localhostUrl,
+            })),
+          ])
+          : await submitPromise;
+        if (
+          callbackCapture?.promise
+          && !result?.callbackCaptured
+          && !result?.error
+          && !result?.invalidCode
+          && !result?.returnedToAddPhone
+        ) {
+          const localhostUrl = await callbackCapture.promise;
+          result = { ...result, callbackCaptured: true, localhostUrl };
+        }
+      } finally {
+        callbackCapture?.cleanup?.();
+      }
 
       if (result?.error) {
         if (isPhoneNumberUsedError(result.error)) {
@@ -5008,7 +5037,12 @@
               phoneNumber: activation.phoneNumber,
             });
             addPhoneReentryWithSameActivation = 0;
-            await addLog('步骤 9：手机号验证已完成，等待 OAuth 授权页。', 'ok');
+            await addLog(
+              submitResult?.localhostUrl
+                ? '步骤 9：手机号验证码已确认并收到 localhost 回调。'
+                : '步骤 9：手机号验证码已确认，正在等待 localhost 回调。',
+              'ok'
+            );
             return submitResult;
           }
 

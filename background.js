@@ -10345,6 +10345,80 @@ function getStep8CallbackUrlFromTabUpdate(tabId, changeInfo, tab, signupTabId) {
   return '';
 }
 
+async function beginOAuthCallbackCapture({ tabId, visibleStep = 9 } = {}) {
+  const authTabId = Number.isInteger(tabId) ? tabId : await getTabId('openai-auth');
+  if (!Number.isInteger(authTabId)) {
+    throw new Error(`步骤 ${visibleStep}：缺少认证页标签页，无法监听手机号验证后的 OAuth 回调。`);
+  }
+
+  let settled = false;
+  let timeoutId = null;
+  let resolveCapture;
+  let rejectCapture;
+  const promise = new Promise((resolve, reject) => {
+    resolveCapture = resolve;
+    rejectCapture = reject;
+  });
+  const cleanup = () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    chrome.webNavigation.onBeforeNavigate.removeListener(onNavigation);
+    chrome.webNavigation.onCommitted.removeListener(onNavigation);
+    chrome.tabs.onUpdated.removeListener(onTabUpdated);
+  };
+  const finish = async (url) => {
+    if (settled || !url) return;
+    settled = true;
+    cleanup();
+    try {
+      await setState({ localhostUrl: url, oauthFlowDeadlineAt: null, oauthFlowDeadlineSourceUrl: null });
+      broadcastDataUpdate({ localhostUrl: url });
+      await addLog(`步骤 ${visibleStep}：手机号验证后已捕获 localhost 回调。`, 'ok', {
+        step: visibleStep,
+        stepKey: 'phone-verification',
+      });
+      resolveCapture(url);
+    } catch (error) {
+      rejectCapture(error);
+    }
+  };
+  const onNavigation = (details) => {
+    const url = getStep8CallbackUrlFromNavigation(details, authTabId);
+    if (url) void finish(url);
+  };
+  const onTabUpdated = (updatedTabId, changeInfo, tab) => {
+    const url = getStep8CallbackUrlFromTabUpdate(updatedTabId, changeInfo, tab, authTabId);
+    if (url) void finish(url);
+  };
+
+  chrome.webNavigation.onBeforeNavigate.addListener(onNavigation);
+  chrome.webNavigation.onCommitted.addListener(onNavigation);
+  chrome.tabs.onUpdated.addListener(onTabUpdated);
+  timeoutId = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    rejectCapture(new Error(`步骤 ${visibleStep}：等待手机号验证后的 localhost 回调超时。`));
+  }, 240000);
+
+  const currentTab = await chrome.tabs.get(authTabId).catch(() => null);
+  const currentUrl = getStep8CallbackUrlFromTabUpdate(
+    authTabId,
+    { url: currentTab?.url || '' },
+    currentTab,
+    authTabId
+  );
+  if (currentUrl) void finish(currentUrl);
+
+  return {
+    promise,
+    cleanup: () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+    },
+  };
+}
+
 function getSourceLabel(source) {
   if (typeof loggingStatus !== 'undefined' && loggingStatus?.getSourceLabel) {
     return loggingStatus.getSourceLabel(source);
@@ -14876,6 +14950,7 @@ const phoneVerificationHelpers = self.MultiPageBackgroundPhoneVerification?.crea
   DEFAULT_PHONE_CODE_POLL_ROUNDS,
   readAuthTabSnapshot,
   ensureStep8SignupPageReady,
+  beginOAuthCallbackCapture,
   navigateAuthTabToAddPhone: async (tabId, options = {}) => {
     const visibleStep = Math.floor(Number(options.visibleStep || options.step) || 0) || 9;
     const requestedTimeoutMs = Number(options.timeoutMs);
